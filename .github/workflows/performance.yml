@@ -1,0 +1,24 @@
+name: Performance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    uses: moritzbrantner/reusable-workflows/.github/workflows/performance-validation.yml@main
+    with:
+      node_version: "24"
+      bun_version: "1.3.14"
+      install_command: bun install --frozen-lockfile
+      build_command: bun run build
+      benchmark_command: node_modules/vitest/vitest.mjs bench --passWithNoTests --run
+    secrets: inherit
