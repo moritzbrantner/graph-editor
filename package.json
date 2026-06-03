@@ -42,6 +42,8 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts --format esm --dts --clean --out-dir dist",
+    "build:examples": "vite build --config examples/workbench/vite.config.ts --outDir ../../dist-examples --emptyOutDir",
+    "dev:examples": "vite --config examples/workbench/vite.config.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --format=github",

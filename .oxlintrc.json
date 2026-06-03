@@ -23,5 +23,12 @@
     "unicorn/prefer-string-starts-ends-with": "off",
     "typescript/no-explicit-any": "off"
   },
-  "ignorePatterns": ["node_modules/**", "dist/**", ".turbo/**", "coverage/**", "test-results/**"]
+  "ignorePatterns": [
+    "node_modules/**",
+    "dist/**",
+    "dist-examples/**",
+    ".turbo/**",
+    "coverage/**",
+    "test-results/**"
+  ]
 }
