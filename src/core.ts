@@ -773,6 +773,23 @@ export function addGraphEditorEdge<
   return normalizeGraphEditorDocument({ ...document, edges: [...document.edges, edge] });
 }
 
+export function updateGraphEditorEdge<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  edgeId: string,
+  patch: Partial<GraphEditorEdge<TEdgeData>>,
+) {
+  return normalizeGraphEditorDocument({
+    ...document,
+    edges: document.edges.map((edge) =>
+      edge.id === edgeId ? { ...edge, ...patch, id: edge.id } : edge,
+    ),
+  });
+}
+
 export function removeGraphEditorEdge<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,

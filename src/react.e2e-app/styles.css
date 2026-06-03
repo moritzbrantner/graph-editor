@@ -1,0 +1,22 @@
+@import "@moritzbrantner/ui/atlas/styles.css";
+
+@source "../**/*.{ts,tsx}";
+@source "./**/*.{ts,tsx}";
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

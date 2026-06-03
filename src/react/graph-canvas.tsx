@@ -85,6 +85,7 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   nodes: GraphCanvasNodeData[];
   edges: GraphCanvasEdge[];
   onNodesChange?: (nodes: GraphCanvasNodeData[]) => void;
+  onNodesChangeEnd?: (nodes: GraphCanvasNodeData[]) => void;
   onEdgesChange?: (edges: GraphCanvasEdge[]) => void;
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
@@ -115,6 +116,7 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   surfaceHeight?: number | string;
   canvasSize?: { width: number; height: number };
   showMiniMap?: boolean;
+  showToolbar?: boolean;
   showPortColumnHeaders?: boolean;
   toolbarLabel?: React.ReactNode;
   measurePorts?: "auto" | "dom" | "deterministic";
@@ -234,6 +236,7 @@ function GraphCanvas({
   nodes,
   edges,
   onNodesChange,
+  onNodesChangeEnd,
   onEdgesChange,
   selectedNodeId,
   selectedEdgeId,
@@ -260,6 +263,7 @@ function GraphCanvas({
   surfaceHeight = "32rem",
   canvasSize,
   showMiniMap = true,
+  showToolbar = true,
   showPortColumnHeaders = true,
   toolbarLabel = "Workflow",
   measurePorts = "auto",
@@ -508,6 +512,17 @@ function GraphCanvas({
       removeEdge(selectedEdge, "edge-delete");
     }
   };
+
+  const finishNodeDrag = React.useCallback(() => {
+    if (!dragState) {
+      return;
+    }
+
+    const nextNodes = pendingDragNodesRef.current ?? nodes;
+    pendingDragNodesRef.current = null;
+    onNodesChangeEnd?.(nextNodes);
+    setDragState(null);
+  }, [dragState, nodes, onNodesChangeEnd]);
 
   const getConnectionDragCandidate = (
     event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>,
@@ -927,17 +942,19 @@ function GraphCanvas({
       onKeyDown={handleKeyDown}
       {...props}
     >
-      <GraphCanvasToolbar
-        zoom={currentZoom}
-        minZoom={minZoom}
-        maxZoom={maxZoom}
-        readOnly={readOnly}
-        selectedLabel={selectedGroupId ?? selectedNode?.label ?? selectedEdge?.id}
-        toolbarLabel={toolbarLabel}
-        onZoomChange={commitZoom}
-        onFitView={fitView}
-        onDeleteSelection={deleteSelection}
-      />
+      {showToolbar ? (
+        <GraphCanvasToolbar
+          zoom={currentZoom}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
+          readOnly={readOnly}
+          selectedLabel={selectedGroupId ?? selectedNode?.label ?? selectedEdge?.id}
+          toolbarLabel={toolbarLabel}
+          onZoomChange={commitZoom}
+          onFitView={fitView}
+          onDeleteSelection={deleteSelection}
+        />
+      ) : null}
       <div
         data-slot="workflow-builder-surface"
         tabIndex={0}
@@ -946,15 +963,15 @@ function GraphCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={(event) => {
           completeConnectionDragFromPointer(event);
-          setDragState(null);
+          finishNodeDrag();
         }}
-        onPointerLeave={() => setDragState(null)}
+        onPointerLeave={finishNodeDrag}
         onMouseMove={handlePointerMove}
         onMouseUp={(event) => {
           completeConnectionDragFromPointer(event);
-          setDragState(null);
+          finishNodeDrag();
         }}
-        onMouseLeave={() => setDragState(null)}
+        onMouseLeave={finishNodeDrag}
       >
         <div
           ref={viewportRef}

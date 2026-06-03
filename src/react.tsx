@@ -18,6 +18,22 @@ export {
   type GraphCanvasViewport,
 } from "./react/graph-canvas";
 export {
+  getGraphWorkbenchCommandFromKeyboardEvent,
+  getGraphWorkbenchShortcutLabel,
+  graphWorkbenchCommandShortcuts,
+  isGraphWorkbenchEditableTarget,
+  type GraphWorkbenchAction,
+  type GraphWorkbenchCommandId,
+} from "./react/workbench-commands";
+export {
+  createGraphWorkbenchHistory,
+  defaultGraphWorkbenchMaxHistory,
+  pushGraphWorkbenchHistory,
+  redoGraphWorkbenchHistory,
+  undoGraphWorkbenchHistory,
+  type GraphWorkbenchHistoryState,
+} from "./react/workbench-history";
+export {
   GraphInputOnlyNode,
   GraphNode,
   GraphOutputOnlyNode,
@@ -70,5 +86,6 @@ export {
   GraphWorkbenchPalette,
   GraphWorkbenchToolbar,
   type GraphWorkbenchController,
+  type GraphWorkbenchInspectorSchema,
   type GraphWorkbenchProps,
 } from "./react/workbench";

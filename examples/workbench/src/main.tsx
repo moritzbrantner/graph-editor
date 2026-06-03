@@ -7,8 +7,6 @@ import {
   ListChecksIcon,
   NetworkIcon,
   PlusIcon,
-  RotateCcwIcon,
-  SaveIcon,
   Trash2Icon,
   WorkflowIcon,
 } from "lucide-react";
@@ -17,9 +15,7 @@ import {
   GraphWorkbench,
   type GraphEditorDocument,
   type GraphEditorNodeTemplate,
-  type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
-import { layoutGraphEditorDocument } from "@moritzbrantner/graph-editor/layout";
 import {
   OrgChart,
   insertOrgChartNode,
@@ -241,122 +237,8 @@ function WorkflowExample() {
         className="h-[calc(100vh-8.5rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
         onDocumentChange={setDocument}
         onViewportChange={(viewport) => setDocument((current) => ({ ...current, viewport }))}
-        renderToolbar={(controller) => (
-          <WorkflowToolbar
-            controller={
-              controller as GraphWorkbenchController<
-                WorkflowNodeData,
-                Record<string, never>,
-                WorkflowPortType
-              >
-            }
-            onReset={() => setDocument(initialWorkflowDocument)}
-            onLayout={() =>
-              setDocument(
-                (current) =>
-                  layoutGraphEditorDocument(current, {
-                    direction: "right",
-                    nodeSeparation: 80,
-                    rankSeparation: 120,
-                  }).document,
-              )
-            }
-          />
-        )}
-        renderInspector={(controller) => (
-          <WorkflowInspector
-            controller={
-              controller as GraphWorkbenchController<
-                WorkflowNodeData,
-                Record<string, never>,
-                WorkflowPortType
-              >
-            }
-          />
-        )}
       />
     </section>
-  );
-}
-
-function WorkflowToolbar({
-  controller,
-  onLayout,
-  onReset,
-}: {
-  controller: GraphWorkbenchController<WorkflowNodeData, Record<string, never>, WorkflowPortType>;
-  onLayout: () => void;
-  onReset: () => void;
-}) {
-  const hasSelection =
-    controller.selection.nodeIds.length > 0 || controller.selection.edgeIds.length > 0;
-
-  return (
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-        <WorkflowIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-        Workflow editor
-        <span className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
-          {controller.document.nodes.length} nodes
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <IconTextButton type="button" onClick={onLayout}>
-          <NetworkIcon className="size-4" aria-hidden="true" />
-          Layout
-        </IconTextButton>
-        <IconTextButton type="button" onClick={onReset}>
-          <RotateCcwIcon className="size-4" aria-hidden="true" />
-          Reset
-        </IconTextButton>
-        <IconTextButton
-          type="button"
-          disabled={!hasSelection}
-          onClick={controller.actions.deleteSelection}
-        >
-          <Trash2Icon className="size-4" aria-hidden="true" />
-          Delete
-        </IconTextButton>
-      </div>
-    </div>
-  );
-}
-
-function WorkflowInspector({
-  controller,
-}: {
-  controller: GraphWorkbenchController<WorkflowNodeData, Record<string, never>, WorkflowPortType>;
-}) {
-  const node = controller.selectedNode;
-  const edge = controller.selectedEdge;
-
-  return (
-    <aside className="min-h-0 overflow-auto border-l pl-3 max-xl:border-l-0 max-xl:border-t max-xl:pt-3">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-        <SaveIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-        Inspector
-      </div>
-      {node ? (
-        <div className="grid gap-3 text-sm">
-          <Property label="Label" value={node.label} />
-          <Property label="Kind" value={node.kind ?? "node"} />
-          <Property label="Owner" value={node.data?.owner ?? "Unassigned"} />
-          {node.data?.setting ? <Property label="Rule" value={node.data.setting} /> : null}
-          <PortList label="Inputs" ports={node.inputs ?? []} />
-          <PortList label="Outputs" ports={node.outputs ?? []} />
-        </div>
-      ) : edge ? (
-        <div className="grid gap-3 text-sm">
-          <Property label="Edge" value={edge.id} />
-          <Property label="From" value={`${edge.sourceNodeId}.${edge.sourcePortId}`} />
-          <Property label="To" value={`${edge.targetNodeId}.${edge.targetPortId}`} />
-        </div>
-      ) : (
-        <p className="text-sm leading-6 text-muted-foreground">
-          Select a node or connection to inspect its ports and metadata.
-        </p>
-      )}
-    </aside>
   );
 }
 
@@ -902,43 +784,6 @@ function ItemList({
           </IconOnlyButton>
         </div>
       ))}
-    </div>
-  );
-}
-
-function Property({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1 rounded-md border bg-card px-3 py-2">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="break-words text-sm">{value}</div>
-    </div>
-  );
-}
-
-function PortList({
-  label,
-  ports,
-}: {
-  label: string;
-  ports: Array<{ id: string; label: string; type?: WorkflowPortType }>;
-}) {
-  return (
-    <div className="grid gap-1">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      {ports.length ? (
-        <div className="grid gap-1">
-          {ports.map((port) => (
-            <div key={port.id} className="rounded-md border bg-card px-3 py-2 text-sm">
-              {port.label}
-              {port.type ? (
-                <span className="ml-2 text-xs text-muted-foreground">{port.type}</span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-sm text-muted-foreground">None</div>
-      )}
     </div>
   );
 }

@@ -1,27 +1,92 @@
 "use client";
 
 import * as React from "react";
-
-import { Button, Input, cn } from "@moritzbrantner/ui";
 import {
-  addGraphEditorNode,
-  connectGraphEditorNodes,
+  ClipboardPasteIcon,
+  CopyIcon,
+  DownloadIcon,
+  FileUpIcon,
+  GroupIcon,
+  Maximize2Icon,
+  MinusIcon,
+  NetworkIcon,
+  PanelLeftIcon,
+  PanelRightIcon,
+  PlusIcon,
+  Redo2Icon,
+  Rows3Icon,
+  Trash2Icon,
+  Undo2Icon,
+  WorkflowIcon,
+} from "lucide-react";
+
+import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
+import {
+  copyGraphEditorSelection,
+  createGraphEditorGroup,
+  duplicateGraphEditorSelection,
+  graphEditorClipboardFormat,
+  normalizeGraphEditorDocument,
   normalizeGraphEditorSelection,
+  pasteGraphEditorClipboardPayload,
   removeGraphEditorSelection,
+  ungroupGraphEditorGroup,
+  updateGraphEditorEdge,
+  updateGraphEditorNode,
+  validateGraphEditorDocument,
+  type GraphEditorClipboardPayload,
   type GraphEditorDocument,
+  type GraphEditorDocumentDiagnostic,
   type GraphEditorEdge,
   type GraphEditorNode,
   type GraphEditorNodeTemplate,
   type GraphEditorSelectionState,
   type GraphEditorViewport,
 } from "../core";
+import { layoutGraphEditorDocument } from "../layout";
+import { getGraphNodeSize } from "./graph-node";
+import {
+  InspectorPanel,
+  type InspectorFieldValue,
+  type InspectorPanelSectionData,
+} from "./inspector-panel";
 import { GraphCanvas, type GraphCanvasConnection, type GraphCanvasSelection } from "./graph-canvas";
+import {
+  getGraphWorkbenchCommandFromKeyboardEvent,
+  getGraphWorkbenchShortcutLabel,
+  type GraphWorkbenchAction,
+  type GraphWorkbenchCommandId,
+} from "./workbench-commands";
+import {
+  createGraphWorkbenchHistory,
+  pushGraphWorkbenchHistory,
+  redoGraphWorkbenchHistory,
+  undoGraphWorkbenchHistory,
+  type GraphWorkbenchHistoryState,
+} from "./workbench-history";
 import {
   createGraphWorkbenchPaletteCategoryGroups,
   filterGraphWorkbenchPaletteTemplates,
   type GraphWorkbenchPaletteCategoryGroup,
   type GraphWorkbenchPaletteItem,
 } from "./palette-model";
+
+export type GraphWorkbenchInspectorSchema<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+> = {
+  getNodeSections?: (node: GraphEditorNode<TNodeData, TPortType>) => InspectorPanelSectionData[];
+  getEdgeSections?: (edge: GraphEditorEdge<TEdgeData>) => InspectorPanelSectionData[];
+  applyNodeValues?: (
+    node: GraphEditorNode<TNodeData, TPortType>,
+    values: Record<string, InspectorFieldValue>,
+  ) => Partial<GraphEditorNode<TNodeData, TPortType>>;
+  applyEdgeValues?: (
+    edge: GraphEditorEdge<TEdgeData>,
+    values: Record<string, InspectorFieldValue>,
+  ) => Partial<GraphEditorEdge<TEdgeData>>;
+};
 
 export type GraphWorkbenchController<
   TNodeData = Record<string, unknown>,
@@ -33,12 +98,24 @@ export type GraphWorkbenchController<
   selection: GraphEditorSelectionState;
   selectedNode?: GraphEditorNode<TNodeData, TPortType>;
   selectedEdge?: GraphEditorEdge<TEdgeData>;
+  diagnostics: GraphEditorDocumentDiagnostic[];
+  selectedDiagnostics: GraphEditorDocumentDiagnostic[];
+  history: GraphWorkbenchHistoryState<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
   palette: {
     groups: Array<GraphWorkbenchPaletteCategoryGroup<TNodeData>>;
     items: ReadonlyArray<GraphWorkbenchPaletteItem<TNodeData>>;
     filteredItems: ReadonlyArray<GraphWorkbenchPaletteItem<TNodeData>>;
     searchValue: string;
     setSearchValue: (value: string) => void;
+  };
+  view: {
+    showPalette: boolean;
+    showInspector: boolean;
+    showMiniMap: boolean;
+    setShowPalette: (show: boolean) => void;
+    setShowInspector: (show: boolean) => void;
+    setShowMiniMap: (show: boolean) => void;
+    setZoom: (zoom: number) => void;
   };
   actions: {
     addTemplateNode: (
@@ -47,8 +124,25 @@ export type GraphWorkbenchController<
     ) => void;
     deleteSelection: () => void;
     setSelection: (selection: GraphEditorSelectionState) => void;
-    updateDocument: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
+    updateDocument: (
+      document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+      options?: GraphWorkbenchCommitOptions,
+    ) => void;
+    undo: () => void;
+    redo: () => void;
+    copySelection: () => Promise<void>;
+    pasteSelection: () => Promise<void>;
+    duplicateSelection: () => void;
+    selectAll: () => void;
+    fitView: () => void;
+    autoLayout: () => void;
+    groupSelection: () => void;
+    ungroupSelection: () => void;
+    importJson: (file?: File) => Promise<void>;
+    exportJson: () => void;
+    runCommand: (commandId: GraphWorkbenchCommandId | string) => void | Promise<void>;
   };
+  commands: GraphWorkbenchAction[];
 };
 
 export type GraphWorkbenchProps<
@@ -64,9 +158,15 @@ export type GraphWorkbenchProps<
   readOnly?: boolean;
   className?: string;
   showMiniMap?: boolean;
+  history?: "internal" | "external" | false;
+  maxHistory?: number;
+  inspectorSchema?: GraphWorkbenchInspectorSchema<TNodeData, TEdgeData, TPortType>;
   onDocumentChange?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
   onSelectionStateChange?: (selection: GraphEditorSelectionState) => void;
   onViewportChange?: (viewport: GraphEditorViewport) => void;
+  onImportDocument?: (file: File) => Promise<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
+  onExportDocument?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
+  onCommand?: (commandId: string) => void;
   renderToolbar?: (
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
   ) => React.ReactNode;
@@ -76,9 +176,19 @@ export type GraphWorkbenchProps<
   renderInspector?: (
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
   ) => React.ReactNode;
+  renderContextPad?: (
+    controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
+  ) => React.ReactNode;
+};
+
+type GraphWorkbenchCommitOptions = {
+  history?: boolean;
+  drag?: "move" | "end";
 };
 
 const emptySelection: GraphEditorSelectionState = { nodeIds: [], edgeIds: [] };
+const graphWorkbenchJsonMimeType = "application/json";
+const graphWorkbenchDefaultZoom = 0.9;
 
 export function GraphWorkbench<
   TNodeData = Record<string, unknown>,
@@ -93,16 +203,40 @@ export function GraphWorkbench<
   readOnly = false,
   className,
   showMiniMap = true,
+  history: historyMode = "internal",
+  maxHistory = 100,
+  inspectorSchema,
   onDocumentChange,
   onSelectionStateChange,
   onViewportChange,
+  onImportDocument,
+  onExportDocument,
+  onCommand,
   renderToolbar,
   renderPalette,
   renderInspector,
+  renderContextPad,
 }: GraphWorkbenchProps<TNodeData, TEdgeData, TPortType>) {
   const [internalSelection, setInternalSelection] =
     React.useState<GraphEditorSelectionState>(emptySelection);
   const [searchValue, setSearchValue] = React.useState("");
+  const [showPalette, setShowPalette] = React.useState(true);
+  const [showInspector, setShowInspector] = React.useState(true);
+  const [internalShowMiniMap, setShowMiniMap] = React.useState(showMiniMap);
+  const [clipboardPayload, setClipboardPayload] = React.useState<GraphEditorClipboardPayload<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  > | null>(null);
+  const [historyState, setHistoryState] = React.useState(() =>
+    createGraphWorkbenchHistory(document),
+  );
+  const workbenchRef = React.useRef<HTMLDivElement>(null);
+  const dragHistoryBaseRef = React.useRef<GraphEditorDocument<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  > | null>(null);
   const externalSelectionProvided =
     selectedNodeIds !== undefined ||
     selectedEdgeIds !== undefined ||
@@ -120,6 +254,19 @@ export function GraphWorkbench<
   );
   const selectedNode = document.nodes.find((node) => node.id === selection.nodeIds.at(-1));
   const selectedEdge = document.edges.find((edge) => edge.id === selection.edgeIds.at(-1));
+  const diagnostics = React.useMemo(() => validateGraphEditorDocument(document), [document]);
+  const selectedDiagnostics = React.useMemo(
+    () =>
+      diagnostics.filter(
+        (diagnostic) =>
+          (selectedNode &&
+            (diagnostic.nodeId === selectedNode.id ||
+              diagnostic.sourceNodeId === selectedNode.id ||
+              diagnostic.targetNodeId === selectedNode.id)) ||
+          (selectedEdge && diagnostic.edgeId === selectedEdge.id),
+      ),
+    [diagnostics, selectedEdge, selectedNode],
+  );
   const filteredItems = React.useMemo(
     () => filterGraphWorkbenchPaletteTemplates(nodeTemplates, searchValue),
     [nodeTemplates, searchValue],
@@ -129,55 +276,487 @@ export function GraphWorkbench<
     [filteredItems],
   );
 
-  const commitSelection = (nextSelection: GraphEditorSelectionState) => {
-    const normalized = normalizeGraphEditorSelection(document, nextSelection);
-    if (!externalSelectionProvided) {
-      setInternalSelection(normalized);
-    }
-    onSelectionStateChange?.(normalized);
-  };
-  const updateDocument = (nextDocument: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => {
-    onDocumentChange?.(nextDocument);
-  };
-  const controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> = {
-    document,
-    readOnly,
-    selection,
-    selectedNode,
-    selectedEdge,
-    palette: {
-      groups,
-      items: nodeTemplates,
-      filteredItems,
-      searchValue,
-      setSearchValue,
+  React.useEffect(() => {
+    setHistoryState((current) =>
+      current.present === document ? current : { ...current, present: document },
+    );
+  }, [document]);
+
+  React.useEffect(() => {
+    setShowMiniMap(showMiniMap);
+  }, [showMiniMap]);
+
+  const commitSelection = React.useCallback(
+    (nextSelection: GraphEditorSelectionState) => {
+      const normalized = normalizeGraphEditorSelection(document, nextSelection);
+      if (!externalSelectionProvided) {
+        setInternalSelection(normalized);
+      }
+      onSelectionStateChange?.(normalized);
     },
-    actions: {
-      addTemplateNode(template, position = { x: 80, y: 80 }) {
-        const existingIds = new Set(document.nodes.map((node) => node.id));
-        let id = template.id;
-        let index = 2;
-        while (existingIds.has(id)) {
-          id = `${template.id}-${index}`;
-          index += 1;
+    [document, externalSelectionProvided, onSelectionStateChange],
+  );
+
+  const commitDocument = React.useCallback(
+    (
+      nextDocument: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+      options: GraphWorkbenchCommitOptions = {},
+    ) => {
+      const withHistory = historyMode !== false && options.history !== false;
+
+      if (options.drag === "move") {
+        dragHistoryBaseRef.current ??= document;
+        onDocumentChange?.(nextDocument);
+        return;
+      }
+
+      if (options.drag === "end") {
+        const baseDocument = dragHistoryBaseRef.current;
+        dragHistoryBaseRef.current = null;
+
+        if (
+          withHistory &&
+          baseDocument &&
+          !graphWorkbenchDocumentsEqual(baseDocument, nextDocument)
+        ) {
+          setHistoryState((current) =>
+            pushGraphWorkbenchHistory({ ...current, present: baseDocument }, nextDocument, {
+              maxHistory,
+              equals: graphWorkbenchDocumentsEqual,
+            }),
+          );
         }
-        updateDocument(
-          addGraphEditorNode(document, {
+        onDocumentChange?.(nextDocument);
+        return;
+      }
+
+      if (withHistory) {
+        setHistoryState((current) =>
+          pushGraphWorkbenchHistory(current, nextDocument, {
+            maxHistory,
+            equals: graphWorkbenchDocumentsEqual,
+          }),
+        );
+      } else {
+        setHistoryState((current) => ({ ...current, present: nextDocument }));
+      }
+      onDocumentChange?.(nextDocument);
+    },
+    [document, historyMode, maxHistory, onDocumentChange],
+  );
+
+  const getViewportCenterPosition = React.useCallback(() => {
+    const viewport = document.viewport ?? { x: 0, y: 0, zoom: graphWorkbenchDefaultZoom };
+    return {
+      x: Math.round((240 - viewport.x) / Math.max(viewport.zoom, 0.1)),
+      y: Math.round((180 - viewport.y) / Math.max(viewport.zoom, 0.1)),
+    };
+  }, [document.viewport]);
+
+  const addTemplateNode = React.useCallback(
+    (template: GraphWorkbenchPaletteItem<TNodeData>, position = getViewportCenterPosition()) => {
+      if (readOnly) {
+        return;
+      }
+
+      const existingIds = new Set(document.nodes.map((node) => node.id));
+      let id = template.id;
+      let index = 2;
+      while (existingIds.has(id)) {
+        id = `${template.id}-${index}`;
+        index += 1;
+      }
+      const nextDocument = normalizeGraphEditorDocument({
+        ...document,
+        nodes: [
+          ...document.nodes,
+          {
             ...template,
             id,
             x: position.x,
             y: position.y,
-          } as GraphEditorNode<TNodeData, TPortType>),
-        );
-      },
-      deleteSelection() {
-        updateDocument(removeGraphEditorSelection(document, selection));
-        commitSelection(emptySelection);
-      },
-      setSelection: commitSelection,
-      updateDocument,
+          } as GraphEditorNode<TNodeData, TPortType>,
+        ],
+      });
+      commitDocument(nextDocument);
+      commitSelection({ nodeIds: [id], edgeIds: [], primary: { type: "node", id } });
     },
-  };
+    [commitDocument, commitSelection, document, getViewportCenterPosition, readOnly],
+  );
+
+  const exportJson = React.useCallback(() => {
+    onExportDocument?.(document);
+
+    if (onExportDocument || typeof document === "undefined" || typeof window === "undefined") {
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(document, null, 2)], {
+      type: graphWorkbenchJsonMimeType,
+    });
+    const url = URL.createObjectURL(blob);
+    const link = window.document.createElement("a");
+    link.href = url;
+    link.download = "graph-editor-document.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [document, onExportDocument]);
+
+  const importJson = React.useCallback(
+    async (file?: File) => {
+      if (readOnly || !file) {
+        return;
+      }
+
+      const imported = onImportDocument
+        ? await onImportDocument(file)
+        : (JSON.parse(await file.text()) as GraphEditorDocument<TNodeData, TEdgeData, TPortType>);
+      const normalized = normalizeGraphEditorDocument(imported, { mode: "repair" });
+      commitDocument(normalized);
+      commitSelection(emptySelection);
+    },
+    [commitDocument, commitSelection, onImportDocument, readOnly],
+  );
+
+  const copySelection = React.useCallback(async () => {
+    const payload = copyGraphEditorSelection(document, selection);
+    setClipboardPayload(payload);
+
+    if (payload.nodes.length === 0 && payload.edges.length === 0) {
+      return;
+    }
+
+    const text = JSON.stringify(payload);
+    try {
+      await navigator.clipboard?.writeText(text);
+    } catch {
+      // The in-memory fallback still enables paste in the current session.
+    }
+  }, [document, selection]);
+
+  const readClipboardPayload = React.useCallback(async () => {
+    try {
+      const text = await navigator.clipboard?.readText();
+      const payload = text ? JSON.parse(text) : null;
+      if (payload?.format === graphEditorClipboardFormat) {
+        return payload as GraphEditorClipboardPayload<TNodeData, TEdgeData, TPortType>;
+      }
+    } catch {
+      return clipboardPayload;
+    }
+
+    return clipboardPayload;
+  }, [clipboardPayload]);
+
+  const pasteSelection = React.useCallback(async () => {
+    if (readOnly) {
+      return;
+    }
+
+    const payload = await readClipboardPayload();
+    if (!payload) {
+      return;
+    }
+
+    const result = pasteGraphEditorClipboardPayload(document, payload);
+    commitDocument(result.document);
+    commitSelection({
+      nodeIds: result.nodeIds,
+      edgeIds: result.edgeIds,
+      ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
+      primary:
+        result.nodeIds.length > 0
+          ? { type: "node", id: result.nodeIds.at(-1)! }
+          : result.edgeIds.length > 0
+            ? { type: "edge", id: result.edgeIds.at(-1)! }
+            : undefined,
+    });
+  }, [commitDocument, commitSelection, document, readClipboardPayload, readOnly]);
+
+  const duplicateSelection = React.useCallback(() => {
+    if (readOnly || selection.nodeIds.length === 0) {
+      return;
+    }
+
+    const result = duplicateGraphEditorSelection(document, selection);
+    commitDocument(result.document);
+    commitSelection({
+      nodeIds: result.nodeIds,
+      edgeIds: result.edgeIds,
+      ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
+      primary: result.nodeIds.length > 0 ? { type: "node", id: result.nodeIds.at(-1)! } : undefined,
+    });
+  }, [commitDocument, commitSelection, document, readOnly, selection]);
+
+  const fitView = React.useCallback(() => {
+    const bounds = getGraphWorkbenchDocumentBounds(document);
+    const viewport = {
+      x: Math.round(48 - bounds.x * graphWorkbenchDefaultZoom),
+      y: Math.round(48 - bounds.y * graphWorkbenchDefaultZoom),
+      zoom: graphWorkbenchDefaultZoom,
+    };
+    const nextDocument = { ...document, viewport };
+    commitDocument(nextDocument, { history: false });
+    onViewportChange?.(viewport);
+  }, [commitDocument, document, onViewportChange]);
+
+  const setZoom = React.useCallback(
+    (zoom: number) => {
+      const safeZoom = Math.min(Math.max(zoom, 0.5), 1.75);
+      const viewport = { ...(document.viewport ?? { x: 0, y: 0, zoom: 1 }), zoom: safeZoom };
+      const nextDocument = { ...document, viewport };
+      commitDocument(nextDocument, { history: false });
+      onViewportChange?.(viewport);
+    },
+    [commitDocument, document, onViewportChange],
+  );
+
+  const deleteSelection = React.useCallback(() => {
+    if (readOnly) {
+      return;
+    }
+    commitDocument(removeGraphEditorSelection(document, selection));
+    commitSelection(emptySelection);
+  }, [commitDocument, commitSelection, document, readOnly, selection]);
+
+  const groupSelection = React.useCallback(() => {
+    if (readOnly || selection.nodeIds.length < 1) {
+      return;
+    }
+
+    const nextDocument = createGraphEditorGroup(document, { nodeIds: selection.nodeIds });
+    commitDocument(nextDocument);
+  }, [commitDocument, document, readOnly, selection.nodeIds]);
+
+  const ungroupSelection = React.useCallback(() => {
+    if (readOnly || !selection.groupIds?.length) {
+      return;
+    }
+
+    const nextDocument = selection.groupIds.reduce(
+      (currentDocument, groupId) => ungroupGraphEditorGroup(currentDocument, groupId),
+      document,
+    );
+    commitDocument(nextDocument);
+    commitSelection({ nodeIds: selection.nodeIds, edgeIds: selection.edgeIds });
+  }, [commitDocument, commitSelection, document, readOnly, selection]);
+
+  const autoLayout = React.useCallback(() => {
+    if (readOnly) {
+      return;
+    }
+
+    commitDocument(
+      layoutGraphEditorDocument(document, {
+        direction: "right",
+        nodeSeparation: 80,
+        rankSeparation: 120,
+      }).document,
+    );
+  }, [commitDocument, document, readOnly]);
+
+  const undo = React.useCallback(() => {
+    if (historyMode === false || !historyState.canUndo) {
+      return;
+    }
+
+    setHistoryState((current) => {
+      const next = undoGraphWorkbenchHistory(current);
+      onDocumentChange?.(next.present);
+      return next;
+    });
+  }, [historyMode, historyState.canUndo, onDocumentChange]);
+
+  const redo = React.useCallback(() => {
+    if (historyMode === false || !historyState.canRedo) {
+      return;
+    }
+
+    setHistoryState((current) => {
+      const next = redoGraphWorkbenchHistory(current);
+      onDocumentChange?.(next.present);
+      return next;
+    });
+  }, [historyMode, historyState.canRedo, onDocumentChange]);
+
+  const actionsRef = React.useRef<Record<string, () => void | Promise<void>>>({});
+  const runCommand = React.useCallback(
+    (commandId: GraphWorkbenchCommandId | string) => {
+      onCommand?.(commandId);
+      return actionsRef.current[commandId]?.();
+    },
+    [onCommand],
+  );
+
+  const controller = React.useMemo<
+    GraphWorkbenchController<TNodeData, TEdgeData, TPortType>
+  >(() => {
+    const controllerActions: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>["actions"] =
+      {
+        addTemplateNode,
+        deleteSelection,
+        setSelection: commitSelection,
+        updateDocument: commitDocument,
+        undo,
+        redo,
+        copySelection,
+        pasteSelection,
+        duplicateSelection,
+        selectAll() {
+          commitSelection({
+            nodeIds: document.nodes.map((node) => node.id),
+            edgeIds: [],
+            primary: document.nodes.at(-1)
+              ? { type: "node", id: document.nodes.at(-1)!.id }
+              : undefined,
+          });
+        },
+        fitView,
+        autoLayout,
+        groupSelection,
+        ungroupSelection,
+        importJson,
+        exportJson,
+        runCommand,
+      };
+    const commands = createGraphWorkbenchActions({
+      actions: controllerActions,
+      canPaste: Boolean(clipboardPayload),
+      canRedo: historyState.canRedo,
+      canUndo: historyState.canUndo,
+      hasSelection: selection.nodeIds.length > 0 || selection.edgeIds.length > 0,
+      nodeSelectionCount: selection.nodeIds.length,
+      readOnly,
+      selectedGroupCount: selection.groupIds?.length ?? 0,
+    });
+
+    return {
+      document,
+      readOnly,
+      selection,
+      selectedNode,
+      selectedEdge,
+      diagnostics,
+      selectedDiagnostics,
+      history: historyState,
+      palette: {
+        groups,
+        items: nodeTemplates,
+        filteredItems,
+        searchValue,
+        setSearchValue,
+      },
+      view: {
+        showPalette,
+        showInspector,
+        showMiniMap: internalShowMiniMap,
+        setShowPalette,
+        setShowInspector,
+        setShowMiniMap,
+        setZoom,
+      },
+      actions: controllerActions,
+      commands,
+    };
+  }, [
+    addTemplateNode,
+    autoLayout,
+    clipboardPayload,
+    commitDocument,
+    commitSelection,
+    copySelection,
+    deleteSelection,
+    diagnostics,
+    document,
+    duplicateSelection,
+    exportJson,
+    filteredItems,
+    fitView,
+    groupSelection,
+    groups,
+    historyState,
+    importJson,
+    internalShowMiniMap,
+    nodeTemplates,
+    pasteSelection,
+    readOnly,
+    redo,
+    runCommand,
+    searchValue,
+    selectedDiagnostics,
+    selectedEdge,
+    selectedNode,
+    selection,
+    setZoom,
+    showInspector,
+    showPalette,
+    undo,
+    ungroupSelection,
+  ]);
+
+  React.useEffect(() => {
+    actionsRef.current = Object.fromEntries(
+      controller.commands.map((command) => [command.id, command.run]),
+    );
+  }, [controller.commands]);
+
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Escape") {
+        commitSelection(emptySelection);
+        return;
+      }
+
+      const commandId = getGraphWorkbenchCommandFromKeyboardEvent(event);
+      if (!commandId) {
+        return;
+      }
+
+      const command = controller.commands.find((candidate) => candidate.id === commandId);
+      if (!command || command.disabled) {
+        return;
+      }
+
+      event.preventDefault();
+      void command.run();
+    },
+    [commitSelection, controller.commands],
+  );
+
+  React.useEffect(() => {
+    const workbench = workbenchRef.current;
+
+    if (!workbench || typeof window === "undefined") {
+      return;
+    }
+
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      const activeElement = window.document.activeElement;
+      if (activeElement !== window.document.body && !workbench.contains(activeElement)) {
+        return;
+      }
+
+      const commandId = getGraphWorkbenchCommandFromKeyboardEvent(event);
+      if (!commandId) {
+        return;
+      }
+
+      const command = controller.commands.find((candidate) => candidate.id === commandId);
+      if (!command || command.disabled) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void command.run();
+    };
+
+    window.document.addEventListener("keydown", handleDocumentKeyDown, true);
+
+    return () => {
+      window.document.removeEventListener("keydown", handleDocumentKeyDown, true);
+    };
+  }, [controller.commands]);
 
   const canvasSelection = selectedNode
     ? ({ type: "node", id: selectedNode.id, node: selectedNode } as GraphCanvasSelection)
@@ -186,12 +765,26 @@ export function GraphWorkbench<
       : null;
 
   return (
-    <div className={cn("grid min-h-0 grid-cols-[16rem_minmax(0,1fr)_20rem] gap-3", className)}>
-      {renderPalette ? (
-        renderPalette(controller)
-      ) : (
-        <GraphWorkbenchPalette controller={controller as any} />
+    <div
+      ref={workbenchRef}
+      data-slot="graph-workbench"
+      className={cn(
+        "grid min-h-0 grid-cols-[16rem_minmax(0,1fr)_20rem] gap-3 outline-none max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:grid-cols-1",
+        !showPalette && "grid-cols-[minmax(0,1fr)_20rem] max-xl:grid-cols-[minmax(0,1fr)]",
+        !showInspector && "grid-cols-[16rem_minmax(0,1fr)] max-xl:grid-cols-[14rem_minmax(0,1fr)]",
+        !showPalette && !showInspector && "grid-cols-1",
+        className,
       )}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      {showPalette ? (
+        renderPalette ? (
+          renderPalette(controller)
+        ) : (
+          <GraphWorkbenchPalette controller={controller as any} />
+        )
+      ) : null}
       <div className="min-h-0">
         {renderToolbar ? (
           renderToolbar(controller)
@@ -201,15 +794,21 @@ export function GraphWorkbench<
         <GraphWorkbenchCanvas
           controller={controller}
           canvasSelection={canvasSelection}
-          showMiniMap={showMiniMap}
+          showMiniMap={internalShowMiniMap}
           onViewportChange={onViewportChange}
+          renderContextPad={renderContextPad}
         />
       </div>
-      {renderInspector ? (
-        renderInspector(controller)
-      ) : (
-        <GraphWorkbenchInspector controller={controller as any} />
-      )}
+      {showInspector ? (
+        renderInspector ? (
+          renderInspector(controller)
+        ) : (
+          <GraphWorkbenchInspector
+            controller={controller as any}
+            inspectorSchema={inspectorSchema as any}
+          />
+        )
+      ) : null}
     </div>
   );
 }
@@ -223,77 +822,224 @@ export function GraphWorkbenchCanvas<
   canvasSelection,
   showMiniMap = true,
   onViewportChange,
+  renderContextPad,
 }: {
   controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
   canvasSelection?: GraphCanvasSelection;
   showMiniMap?: boolean;
   onViewportChange?: (viewport: GraphEditorViewport) => void;
+  renderContextPad?: (
+    controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
+  ) => React.ReactNode;
 }) {
   return (
-    <GraphCanvas
-      nodes={controller.document.nodes as any}
-      edges={controller.document.edges as any}
-      readOnly={controller.readOnly}
-      selectedNodeId={canvasSelection?.type === "node" ? canvasSelection.id : null}
-      selectedEdgeId={canvasSelection?.type === "edge" ? canvasSelection.id : null}
-      showMiniMap={showMiniMap}
-      viewport={controller.document.viewport}
-      onViewportChange={onViewportChange}
-      onNodesChange={(nodes) =>
-        controller.actions.updateDocument({ ...controller.document, nodes: nodes as any })
-      }
-      onEdgesChange={(edges) =>
-        controller.actions.updateDocument({ ...controller.document, edges: edges as any })
-      }
-      onConnectionComplete={(connection: GraphCanvasConnection) => {
-        controller.actions.updateDocument(connectGraphEditorNodes(controller.document, connection));
+    <div
+      className="relative min-h-0"
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("application/x-graph-workbench-template")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }
       }}
-      onSelectionChange={(selection) => {
-        controller.actions.setSelection(
-          selection?.type === "node"
-            ? { nodeIds: [selection.id], edgeIds: [], primary: { type: "node", id: selection.id } }
-            : selection?.type === "edge"
-              ? {
-                  nodeIds: [],
-                  edgeIds: [selection.id],
-                  primary: { type: "edge", id: selection.id },
-                }
-              : emptySelection,
+      onDrop={(event) => {
+        const templateId = event.dataTransfer.getData("application/x-graph-workbench-template");
+        const template = controller.palette.items.find((item) => item.id === templateId);
+        if (!template) {
+          return;
+        }
+
+        event.preventDefault();
+        const surface = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+          "[data-slot='workflow-builder-surface']",
         );
+        const surfaceRect = surface?.getBoundingClientRect();
+        const viewport = controller.document.viewport ?? { x: 0, y: 0, zoom: 1 };
+        const fallback = { x: 80, y: 80 };
+        const position = surfaceRect
+          ? {
+              x: Math.round((event.clientX - surfaceRect.left - viewport.x) / viewport.zoom),
+              y: Math.round((event.clientY - surfaceRect.top - viewport.y) / viewport.zoom),
+            }
+          : fallback;
+
+        controller.actions.addTemplateNode(template, position);
       }}
-    />
+    >
+      <GraphCanvas
+        nodes={controller.document.nodes as any}
+        edges={controller.document.edges as any}
+        readOnly={controller.readOnly}
+        selectedNodeId={canvasSelection?.type === "node" ? canvasSelection.id : null}
+        selectedEdgeId={canvasSelection?.type === "edge" ? canvasSelection.id : null}
+        showMiniMap={showMiniMap}
+        showToolbar={false}
+        viewport={controller.document.viewport}
+        onViewportChange={(viewport) => {
+          controller.actions.updateDocument(
+            { ...controller.document, viewport },
+            { history: false },
+          );
+          onViewportChange?.(viewport);
+        }}
+        onNodesChange={(nodes) =>
+          controller.actions.updateDocument(
+            { ...controller.document, nodes: nodes as any },
+            { history: false, drag: "move" },
+          )
+        }
+        onNodesChangeEnd={(nodes) =>
+          controller.actions.updateDocument(
+            { ...controller.document, nodes: nodes as any },
+            { drag: "end" },
+          )
+        }
+        onEdgesChange={(edges) =>
+          controller.actions.updateDocument({ ...controller.document, edges: edges as any })
+        }
+        onConnectionComplete={(connection: GraphCanvasConnection) => {
+          controller.actions.updateDocument(
+            connectGraphWorkbenchNodes(controller.document, connection),
+          );
+        }}
+        onSelectionChange={(selection) => {
+          controller.actions.setSelection(
+            selection?.type === "node"
+              ? {
+                  nodeIds: [selection.id],
+                  edgeIds: [],
+                  primary: { type: "node", id: selection.id },
+                }
+              : selection?.type === "edge"
+                ? {
+                    nodeIds: [],
+                    edgeIds: [selection.id],
+                    primary: { type: "edge", id: selection.id },
+                  }
+                : emptySelection,
+          );
+        }}
+      />
+      {renderContextPad ? (
+        renderContextPad(controller)
+      ) : (
+        <GraphWorkbenchContextPad controller={controller as any} />
+      )}
+    </div>
   );
 }
 
 export function GraphWorkbenchToolbar({ controller }: { controller: GraphWorkbenchController }) {
+  const importInputRef = React.useRef<HTMLInputElement>(null);
+  const zoom = controller.document.viewport?.zoom ?? 1;
+
   return (
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <div className="text-sm font-medium">Graph</div>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={controller.readOnly}
-        onClick={() => controller.actions.deleteSelection()}
-      >
-        Delete
-      </Button>
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+        <WorkflowIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        Graph
+        <Badge variant="secondary">{controller.document.nodes.length} nodes</Badge>
+        {controller.diagnostics.length > 0 ? (
+          <Badge variant="destructive">{controller.diagnostics.length} issues</Badge>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            void controller.actions.importJson(file);
+            event.currentTarget.value = "";
+          }}
+        />
+        <GraphWorkbenchIconButton
+          label="Import JSON"
+          disabled={controller.readOnly}
+          onClick={() => importInputRef.current?.click()}
+        >
+          <FileUpIcon />
+        </GraphWorkbenchIconButton>
+        <GraphWorkbenchIconButton label="Export JSON" onClick={controller.actions.exportJson}>
+          <DownloadIcon />
+        </GraphWorkbenchIconButton>
+        <Separator orientation="vertical" className="h-6" />
+        <GraphWorkbenchCommandButton controller={controller} commandId="undo">
+          <Undo2Icon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="redo">
+          <Redo2Icon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="copy">
+          <CopyIcon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="paste">
+          <ClipboardPasteIcon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="delete">
+          <Trash2Icon />
+        </GraphWorkbenchCommandButton>
+        <Separator orientation="vertical" className="h-6" />
+        <GraphWorkbenchCommandButton controller={controller} commandId="auto-layout">
+          <NetworkIcon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="fit-view">
+          <Maximize2Icon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchIconButton
+          label="Zoom out"
+          disabled={zoom <= 0.5}
+          onClick={() => controller.view.setZoom(zoom - 0.1)}
+        >
+          <MinusIcon />
+        </GraphWorkbenchIconButton>
+        <span className="min-w-10 text-center text-xs text-muted-foreground">
+          {Math.round(zoom * 100)}%
+        </span>
+        <GraphWorkbenchIconButton
+          label="Zoom in"
+          disabled={zoom >= 1.75}
+          onClick={() => controller.view.setZoom(zoom + 0.1)}
+        >
+          <PlusIcon />
+        </GraphWorkbenchIconButton>
+        <Separator orientation="vertical" className="h-6" />
+        <GraphWorkbenchIconButton
+          label={controller.view.showPalette ? "Hide palette" : "Show palette"}
+          onClick={() => controller.view.setShowPalette(!controller.view.showPalette)}
+        >
+          <PanelLeftIcon />
+        </GraphWorkbenchIconButton>
+        <GraphWorkbenchIconButton
+          label={controller.view.showInspector ? "Hide inspector" : "Show inspector"}
+          onClick={() => controller.view.setShowInspector(!controller.view.showInspector)}
+        >
+          <PanelRightIcon />
+        </GraphWorkbenchIconButton>
+      </div>
     </div>
   );
 }
 
 export function GraphWorkbenchPalette({ controller }: { controller: GraphWorkbenchController }) {
   return (
-    <aside className="min-h-0 overflow-auto border-r pr-3">
+    <aside className="min-h-0 overflow-auto border-r pr-3 max-lg:border-r-0 max-lg:border-b max-lg:pb-3">
       <Input
         value={controller.palette.searchValue}
         placeholder="Search nodes"
         onChange={(event) => controller.palette.setSearchValue(event.target.value)}
       />
-      <div className="mt-3 grid gap-3">
-        {controller.palette.groups.map((group) => (
-          <GraphWorkbenchPaletteGroup key={group.id} group={group} controller={controller} />
-        ))}
+      <div className="mt-3 grid gap-3" onDragOver={(event) => event.preventDefault()}>
+        {controller.palette.groups.length > 0 ? (
+          controller.palette.groups.map((group) => (
+            <GraphWorkbenchPaletteGroup key={group.id} group={group} controller={controller} />
+          ))
+        ) : (
+          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            No nodes match the current search.
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -316,6 +1062,11 @@ function GraphWorkbenchPaletteGroup({
             type="button"
             variant="outline"
             disabled={controller.readOnly}
+            draggable={!controller.readOnly}
+            onDragStart={(event) => {
+              event.dataTransfer.setData("application/x-graph-workbench-template", template.id);
+              event.dataTransfer.effectAllowed = "copy";
+            }}
             onClick={() => controller.actions.addTemplateNode(template)}
           >
             {template.label}
@@ -329,14 +1080,122 @@ function GraphWorkbenchPaletteGroup({
   );
 }
 
-export function GraphWorkbenchInspector({ controller }: { controller: GraphWorkbenchController }) {
-  const selection = controller.selectedNode ?? controller.selectedEdge;
-  const label =
-    selection && "label" in selection ? (selection as { label: string }).label : undefined;
+export function GraphWorkbenchInspector({
+  controller,
+  inspectorSchema,
+}: {
+  controller: GraphWorkbenchController;
+  inspectorSchema?: GraphWorkbenchInspectorSchema;
+}) {
+  const node = controller.selectedNode;
+  const edge = controller.selectedEdge;
+  const selection = node ?? edge;
+  const title = node ? node.label : edge ? edge.id : "No selection";
+  const description = node
+    ? (node.kind ?? "Node")
+    : edge
+      ? `${edge.sourceNodeId}.${edge.sourcePortId} -> ${edge.targetNodeId}.${edge.targetPortId}`
+      : "Select a node or connection to edit its properties.";
+  const sections = node
+    ? (inspectorSchema?.getNodeSections?.(node) ?? getDefaultNodeInspectorSections(node))
+    : edge
+      ? (inspectorSchema?.getEdgeSections?.(edge) ?? getDefaultEdgeInspectorSections(edge))
+      : [];
+
   return (
-    <aside className="min-h-0 overflow-auto border-l pl-3">
-      <div className="text-sm font-medium">{label ?? selection?.id ?? "No selection"}</div>
+    <aside className="min-h-0 overflow-auto border-l pl-3 max-xl:border-l-0 max-xl:border-t max-xl:pt-3">
+      <InspectorPanel
+        key={selection ? `${"label" in selection ? "node" : "edge"}:${selection.id}` : "empty"}
+        title={title}
+        description={description}
+        sections={sections}
+        readOnly={controller.readOnly || !selection}
+        validationMessages={Object.fromEntries(
+          controller.selectedDiagnostics.map((diagnostic, index) => [
+            index === 0 ? "label" : `diagnostic-${index}`,
+            diagnostic.message,
+          ]),
+        )}
+        onApply={(values) => {
+          if (node) {
+            const patch =
+              inspectorSchema?.applyNodeValues?.(node, values) ??
+              getDefaultNodeInspectorPatch(values);
+            controller.actions.updateDocument(
+              updateGraphEditorNode(controller.document, node.id, patch as any),
+            );
+          }
+          if (edge) {
+            const patch =
+              inspectorSchema?.applyEdgeValues?.(edge, values) ??
+              getDefaultEdgeInspectorPatch(values);
+            controller.actions.updateDocument(
+              updateGraphEditorEdge(controller.document, edge.id, patch as any),
+            );
+          }
+        }}
+      />
     </aside>
+  );
+}
+
+export function GraphWorkbenchContextPad({ controller }: { controller: GraphWorkbenchController }) {
+  const node = controller.selectedNode;
+
+  if (!node) {
+    return null;
+  }
+
+  const viewport = controller.document.viewport ?? { x: 0, y: 0, zoom: 1 };
+  const nodeSize = getGraphNodeSize(node as any);
+  const style: React.CSSProperties = {
+    left: viewport.x + (node.x + nodeSize.width + 12) * viewport.zoom,
+    top: viewport.y + node.y * viewport.zoom,
+  };
+
+  return (
+    <div
+      data-slot="graph-workbench-context-pad"
+      className="absolute z-10 flex items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
+      style={style}
+    >
+      <GraphWorkbenchIconButton
+        label="Append node"
+        disabled={controller.readOnly || controller.palette.filteredItems.length === 0}
+        onClick={() => {
+          const template = controller.palette.filteredItems[0];
+          if (!template) {
+            return;
+          }
+          controller.actions.addTemplateNode(template, {
+            x: node.x + nodeSize.width + 120,
+            y: node.y,
+          });
+        }}
+      >
+        <PlusIcon />
+      </GraphWorkbenchIconButton>
+      <GraphWorkbenchCommandButton controller={controller} commandId="duplicate">
+        <CopyIcon />
+      </GraphWorkbenchCommandButton>
+      <GraphWorkbenchIconButton
+        label={node.minimized ? "Expand node" : "Minimize node"}
+        disabled={controller.readOnly}
+        onClick={() =>
+          controller.actions.updateDocument(
+            updateGraphEditorNode(controller.document, node.id, { minimized: !node.minimized }),
+          )
+        }
+      >
+        <Rows3Icon />
+      </GraphWorkbenchIconButton>
+      <GraphWorkbenchCommandButton controller={controller} commandId="group-selection">
+        <GroupIcon />
+      </GraphWorkbenchCommandButton>
+      <GraphWorkbenchCommandButton controller={controller} commandId="delete">
+        <Trash2Icon />
+      </GraphWorkbenchCommandButton>
+    </div>
   );
 }
 
@@ -344,4 +1203,378 @@ export function GraphWorkbenchOverlayPanel({ children, className }: React.Compon
   return (
     <div className={cn("rounded-md border bg-white p-3 shadow-sm", className)}>{children}</div>
   );
+}
+
+function GraphWorkbenchCommandButton({
+  controller,
+  commandId,
+  children,
+}: {
+  controller: GraphWorkbenchController;
+  commandId: GraphWorkbenchCommandId;
+  children: React.ReactNode;
+}) {
+  const command = controller.commands.find((candidate) => candidate.id === commandId);
+
+  return (
+    <GraphWorkbenchIconButton
+      label={String(command?.label ?? commandId)}
+      disabled={command?.disabled}
+      onClick={() => void command?.run()}
+    >
+      {children}
+    </GraphWorkbenchIconButton>
+  );
+}
+
+function GraphWorkbenchIconButton({
+  label,
+  children,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function createGraphWorkbenchActions<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({
+  actions,
+  canPaste,
+  canRedo,
+  canUndo,
+  hasSelection,
+  nodeSelectionCount,
+  readOnly,
+  selectedGroupCount,
+}: {
+  actions: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>["actions"];
+  canPaste: boolean;
+  canRedo: boolean;
+  canUndo: boolean;
+  hasSelection: boolean;
+  nodeSelectionCount: number;
+  readOnly: boolean;
+  selectedGroupCount: number;
+}): GraphWorkbenchAction[] {
+  return [
+    {
+      id: "undo",
+      label: "Undo",
+      shortcut: getGraphWorkbenchShortcutLabel("undo"),
+      disabled: !canUndo,
+      run: actions.undo,
+    },
+    {
+      id: "redo",
+      label: "Redo",
+      shortcut: getGraphWorkbenchShortcutLabel("redo"),
+      disabled: !canRedo,
+      run: actions.redo,
+    },
+    {
+      id: "copy",
+      label: "Copy",
+      shortcut: getGraphWorkbenchShortcutLabel("copy"),
+      disabled: !hasSelection,
+      run: actions.copySelection,
+    },
+    {
+      id: "paste",
+      label: "Paste",
+      shortcut: getGraphWorkbenchShortcutLabel("paste"),
+      disabled: readOnly || !canPaste,
+      run: actions.pasteSelection,
+    },
+    {
+      id: "duplicate",
+      label: "Duplicate",
+      shortcut: getGraphWorkbenchShortcutLabel("duplicate"),
+      disabled: readOnly || nodeSelectionCount === 0,
+      run: actions.duplicateSelection,
+    },
+    {
+      id: "delete",
+      label: "Delete",
+      shortcut: getGraphWorkbenchShortcutLabel("delete"),
+      destructive: true,
+      disabled: readOnly || !hasSelection,
+      run: actions.deleteSelection,
+    },
+    {
+      id: "select-all",
+      label: "Select all",
+      shortcut: getGraphWorkbenchShortcutLabel("select-all"),
+      disabled: false,
+      run: actions.selectAll,
+    },
+    {
+      id: "fit-view",
+      label: "Fit view",
+      disabled: false,
+      run: actions.fitView,
+    },
+    {
+      id: "auto-layout",
+      label: "Auto layout",
+      disabled: readOnly,
+      run: actions.autoLayout,
+    },
+    {
+      id: "export-json",
+      label: "Export JSON",
+      disabled: false,
+      run: actions.exportJson,
+    },
+    {
+      id: "import-json",
+      label: "Import JSON",
+      disabled: readOnly,
+      run: () => actions.importJson(),
+    },
+    {
+      id: "group-selection",
+      label: "Group selection",
+      disabled: readOnly || nodeSelectionCount < 1,
+      run: actions.groupSelection,
+    },
+    {
+      id: "ungroup-selection",
+      label: "Ungroup selection",
+      disabled: readOnly || selectedGroupCount < 1,
+      run: actions.ungroupSelection,
+    },
+  ];
+}
+
+function getDefaultNodeInspectorSections(node: GraphEditorNode): InspectorPanelSectionData[] {
+  return [
+    {
+      id: "general",
+      title: "General",
+      defaultOpen: true,
+      fields: [
+        { id: "label", label: "Label", type: "text", value: node.label },
+        {
+          id: "description",
+          label: "Description",
+          type: "textarea",
+          value: node.description ?? "",
+        },
+        { id: "kind", label: "Kind", type: "text", value: node.kind ?? "" },
+        { id: "category", label: "Category", type: "text", value: node.category ?? "" },
+      ],
+    },
+    {
+      id: "presentation",
+      title: "Presentation",
+      fields: [
+        { id: "tone", label: "Tone", type: "text", value: node.tone ?? "" },
+        { id: "status", label: "Status", type: "text", value: node.status ?? "" },
+        {
+          id: "variant",
+          label: "Variant",
+          type: "select",
+          value: node.variant ?? "default",
+          options: [
+            { label: "Default", value: "default" },
+            { label: "Compact", value: "compact" },
+          ],
+        },
+        { id: "minimized", label: "Minimized", type: "boolean", value: Boolean(node.minimized) },
+      ],
+    },
+    {
+      id: "data",
+      title: "Data",
+      defaultOpen: false,
+      fields: [
+        {
+          id: "data",
+          label: "Data",
+          type: "code",
+          readOnly: true,
+          value: JSON.stringify(node.data ?? {}, null, 2),
+        },
+        {
+          id: "metadata",
+          label: "Metadata",
+          type: "code",
+          readOnly: true,
+          value: JSON.stringify(node.metadata ?? {}, null, 2),
+        },
+      ],
+    },
+  ];
+}
+
+function getDefaultEdgeInspectorSections(edge: GraphEditorEdge): InspectorPanelSectionData[] {
+  return [
+    {
+      id: "connection",
+      title: "Connection",
+      defaultOpen: true,
+      fields: [
+        {
+          id: "sourceNodeId",
+          label: "Source node",
+          type: "text",
+          readOnly: true,
+          value: edge.sourceNodeId,
+        },
+        {
+          id: "sourcePortId",
+          label: "Source port",
+          type: "text",
+          readOnly: true,
+          value: edge.sourcePortId,
+        },
+        {
+          id: "targetNodeId",
+          label: "Target node",
+          type: "text",
+          readOnly: true,
+          value: edge.targetNodeId,
+        },
+        {
+          id: "targetPortId",
+          label: "Target port",
+          type: "text",
+          readOnly: true,
+          value: edge.targetPortId,
+        },
+      ],
+    },
+    {
+      id: "presentation",
+      title: "Presentation",
+      fields: [
+        { id: "status", label: "Status", type: "text", value: edge.status ?? "" },
+        { id: "color", label: "Color", type: "color", value: edge.color ?? "#000000" },
+      ],
+    },
+    {
+      id: "data",
+      title: "Data",
+      defaultOpen: false,
+      fields: [
+        {
+          id: "data",
+          label: "Data",
+          type: "code",
+          readOnly: true,
+          value: JSON.stringify(edge.data ?? {}, null, 2),
+        },
+        {
+          id: "metadata",
+          label: "Metadata",
+          type: "code",
+          readOnly: true,
+          value: JSON.stringify(edge.metadata ?? {}, null, 2),
+        },
+      ],
+    },
+  ];
+}
+
+function getDefaultNodeInspectorPatch(values: Record<string, InspectorFieldValue>) {
+  return {
+    label: String(values.label ?? ""),
+    description: optionalString(values.description),
+    kind: optionalString(values.kind),
+    category: optionalString(values.category),
+    tone: optionalString(values.tone),
+    status: optionalString(values.status),
+    variant: values.variant === "compact" ? "compact" : "default",
+    minimized: Boolean(values.minimized),
+  };
+}
+
+function getDefaultEdgeInspectorPatch(values: Record<string, InspectorFieldValue>) {
+  return {
+    status: optionalString(values.status),
+    color: optionalString(values.color),
+  };
+}
+
+function optionalString(value: InspectorFieldValue) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? text : undefined;
+}
+
+function getGraphWorkbenchDocumentBounds(document: GraphEditorDocument<any, any, any>) {
+  if (document.nodes.length === 0) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+
+  const boxes = document.nodes.map((node) => {
+    const size = getGraphNodeSize(node as any);
+    return {
+      x: node.x,
+      y: node.y,
+      width: size.width,
+      height: size.height,
+    };
+  });
+  const minX = Math.min(...boxes.map((box) => box.x));
+  const minY = Math.min(...boxes.map((box) => box.y));
+  const maxX = Math.max(...boxes.map((box) => box.x + box.width));
+  const maxY = Math.max(...boxes.map((box) => box.y + box.height));
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+function graphWorkbenchDocumentsEqual<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  left: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  right: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function connectGraphWorkbenchNodes<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  connection: GraphCanvasConnection,
+) {
+  const id = `edge-${connection.sourceNodeId}-${connection.sourcePortId}-${connection.targetNodeId}-${connection.targetPortId}`;
+
+  if (document.edges.some((edge) => edge.id === id)) {
+    return document;
+  }
+
+  return normalizeGraphEditorDocument({
+    ...document,
+    edges: [...document.edges, { id, ...connection } as GraphEditorEdge<TEdgeData>],
+  });
 }
