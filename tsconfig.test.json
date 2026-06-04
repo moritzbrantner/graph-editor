@@ -19,6 +19,7 @@
     "src/.storybook/**/*.ts",
     "src/react.e2e-app/**/*.ts",
     "src/react.e2e-app/**/*.tsx",
+    "examples/workbench/src/**/*.ts",
     "examples/workbench/src/**/*.tsx",
     "examples/workbench/src/**/*.d.ts"
   ],

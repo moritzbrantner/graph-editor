@@ -6,7 +6,16 @@ delete env.FORCE_COLOR;
 const command = process.platform === "win32" ? "bunx.cmd" : "bunx";
 const child = spawn(
   command,
-  ["vite", "--host", "127.0.0.1", "--port", "4174", "--strictPort", "src/react.e2e-app"],
+  [
+    "vite",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "4174",
+    "--strictPort",
+    "--config",
+    "examples/workbench/vite.config.ts",
+  ],
   {
     env,
     stdio: "inherit",

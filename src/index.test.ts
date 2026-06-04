@@ -1,7 +1,10 @@
-import { describe, expect, test } from "vitest";
+import * as React from "react";
+import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, test } from "vitest";
 
 import {
   GraphCanvas,
+  GraphWorkbench,
   GraphNode,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
@@ -15,7 +18,19 @@ import {
   undoGraphWorkbenchHistory,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
+  validateGraphEditorDocument,
+  type GraphEditorConnectionInput,
+  type GraphEditorConnectionValidity,
+  type GraphEditorDocument,
+  type GraphEditorEdge,
+  type GraphEditorNodeTemplate,
+  type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
+import { workbenchExamples } from "../examples/workbench/src/workbench-examples";
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("@moritzbrantner/graph-editor", () => {
   test("exposes React graph primitives", () => {
@@ -236,4 +251,239 @@ describe("@moritzbrantner/graph-editor", () => {
       }),
     ).toBeNull();
   });
+
+  test("validates cycle connections according to connection options", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        {
+          id: "source",
+          label: "Source",
+          x: 0,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+          outputs: [{ id: "out", label: "Out" }],
+        },
+        {
+          id: "target",
+          label: "Target",
+          x: 240,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+          outputs: [{ id: "out", label: "Out" }],
+        },
+      ],
+      edges: [
+        {
+          id: "source-target",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+    const cycleConnection = {
+      sourceNodeId: "target",
+      sourcePortId: "out",
+      targetNodeId: "source",
+      targetPortId: "in",
+    };
+
+    expect(validateGraphEditorConnection(document, cycleConnection)).toEqual({
+      valid: false,
+      reason: "cycle",
+    });
+    expect(validateGraphEditorConnection(document, cycleConnection, { allowCycles: true })).toEqual(
+      {
+        valid: true,
+      },
+    );
+  });
+
+  test("supports custom port compatibility checks", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        {
+          id: "source",
+          label: "Source",
+          x: 0,
+          y: 0,
+          outputs: [{ id: "out", label: "Out", type: "payload" }],
+        },
+        {
+          id: "target",
+          label: "Target",
+          x: 240,
+          y: 0,
+          inputs: [{ id: "in", label: "In", type: "payload" }],
+        },
+      ],
+      edges: [],
+    });
+
+    expect(
+      validateGraphEditorConnection(
+        document,
+        {
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+        { arePortsCompatible: () => false },
+      ),
+    ).toEqual({ valid: false, reason: "type-mismatch" });
+  });
+
+  test("appends and connects a compatible template node", async () => {
+    const { controller, getDocument } = renderWorkbenchHarness({
+      initialDocument: appendSourceDocument,
+      templates: [appendPayloadTemplate],
+    });
+
+    await act(async () => {
+      controller.current?.actions.appendTemplateNode(undefined, "source");
+    });
+
+    expect(getDocument().nodes).toHaveLength(2);
+    expect(getDocument().edges).toHaveLength(1);
+    expect(getDocument().edges[0]).toMatchObject({
+      sourceNodeId: "source",
+      sourcePortId: "out",
+      targetNodeId: "transform-template",
+      targetPortId: "in",
+    });
+  });
+
+  test("uses custom workbench edge creation during append", async () => {
+    const { controller, getDocument } = renderWorkbenchHarness({
+      initialDocument: appendSourceDocument,
+      templates: [appendPayloadTemplate],
+      createEdge(connection) {
+        return {
+          id: "custom-edge",
+          ...connection,
+          data: { label: "custom" },
+        };
+      },
+    });
+
+    await act(async () => {
+      controller.current?.actions.appendTemplateNode(undefined, "source");
+    });
+
+    expect(getDocument().edges[0]).toMatchObject({
+      id: "custom-edge",
+      sourceNodeId: "source",
+      sourcePortId: "out",
+      targetNodeId: "transform-template",
+      targetPortId: "in",
+      data: { label: "custom" },
+    });
+  });
+
+  test("does not append a template node when no compatible input exists", async () => {
+    const { controller, getDocument } = renderWorkbenchHarness({
+      initialDocument: appendSourceDocument,
+      templates: [appendMetricTemplate],
+    });
+
+    await act(async () => {
+      controller.current?.actions.appendTemplateNode(undefined, "source");
+    });
+
+    expect(getDocument().nodes).toHaveLength(1);
+    expect(getDocument().edges).toHaveLength(0);
+  });
+
+  test("ships valid workbench example graph fixtures", () => {
+    for (const example of workbenchExamples) {
+      const nodeIds = example.document.nodes.map((node) => node.id);
+      const edgeIds = example.document.edges.map((edge) => edge.id);
+
+      expect(example.nodeTemplates.length, example.id).toBeGreaterThan(0);
+      expect(new Set(nodeIds).size, example.id).toBe(nodeIds.length);
+      expect(new Set(edgeIds).size, example.id).toBe(edgeIds.length);
+      expect(validateGraphEditorDocument(example.document), example.id).toEqual([]);
+    }
+  });
 });
+
+type AppendPortType = "payload" | "metric";
+type AppendNodeData = Record<string, never>;
+type AppendEdgeData = { label?: string };
+
+const appendSourceDocument: GraphEditorDocument<AppendNodeData, AppendEdgeData, AppendPortType> = {
+  nodes: [
+    {
+      id: "source",
+      label: "Source",
+      x: 0,
+      y: 0,
+      outputs: [{ id: "out", label: "Out", type: "payload" }],
+    },
+  ],
+  edges: [],
+};
+
+const appendPayloadTemplate: GraphEditorNodeTemplate<AppendNodeData, AppendPortType> = {
+  id: "transform-template",
+  label: "Transform",
+  inputs: [{ id: "in", label: "In", type: "payload" }],
+  outputs: [{ id: "out", label: "Out", type: "payload" }],
+};
+
+const appendMetricTemplate: GraphEditorNodeTemplate<AppendNodeData, AppendPortType> = {
+  id: "metric-template",
+  label: "Metric",
+  inputs: [{ id: "in", label: "In", type: "metric" }],
+};
+
+function renderWorkbenchHarness({
+  initialDocument,
+  templates,
+  createEdge,
+}: {
+  initialDocument: GraphEditorDocument<AppendNodeData, AppendEdgeData, AppendPortType>;
+  templates: Array<GraphEditorNodeTemplate<AppendNodeData, AppendPortType>>;
+  createEdge?: (
+    connection: GraphEditorConnectionInput,
+    context: {
+      document: GraphEditorDocument<AppendNodeData, AppendEdgeData, AppendPortType>;
+      validity: GraphEditorConnectionValidity;
+    },
+  ) => GraphEditorEdge<AppendEdgeData>;
+}) {
+  const controller: {
+    current: GraphWorkbenchController<AppendNodeData, AppendEdgeData, AppendPortType> | null;
+  } = { current: null };
+  let latestDocument = initialDocument;
+
+  function Harness() {
+    const [document, setDocument] = React.useState(initialDocument);
+
+    return React.createElement(GraphWorkbench<AppendNodeData, AppendEdgeData, AppendPortType>, {
+      document,
+      nodeTemplates: templates,
+      createEdge,
+      onDocumentChange(nextDocument) {
+        latestDocument = nextDocument;
+        setDocument(nextDocument);
+      },
+      renderToolbar: () => null,
+      renderPalette: () => null,
+      renderInspector: () => null,
+      renderContextPad(nextController) {
+        controller.current = nextController;
+        return null;
+      },
+    });
+  }
+
+  render(React.createElement(Harness));
+
+  return {
+    controller,
+    getDocument: () => latestDocument,
+  };
+}

@@ -53,9 +53,11 @@ type GraphCanvasConnectionValidityInput = {
 type GraphCanvasConnectionValidity = {
   valid: boolean;
   reason?:
+    | "cycle"
     | "duplicate"
     | "input-occupied"
     | "kind-mismatch"
+    | "missing-node"
     | "missing-port"
     | "self-connection"
     | "type-mismatch";
@@ -109,7 +111,7 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
     connection: Pick<GraphCanvasConnection, "sourceNodeId" | "sourcePortId">,
   ) => void;
   onConnectionCancel?: () => void;
-  onConnectionComplete?: (connection: GraphCanvasConnection) => void;
+  onConnectionComplete?: (connection: GraphCanvasConnection) => boolean | void;
   onConnectionDisconnect?: (edge: GraphCanvasEdge, reason: GraphCanvasDisconnectReason) => void;
   minZoom?: number;
   maxZoom?: number;
@@ -336,6 +338,17 @@ function GraphCanvas({
       ),
     [layoutOptions, nodeById, portPoints, visibleEdges],
   );
+
+  React.useEffect(() => {
+    return () => {
+      pendingDragNodesRef.current = null;
+      if (dragFrameRef.current !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+    };
+  }, []);
+
   const scheduleDraggedNodesChange = React.useCallback(
     (nextNodes: GraphCanvasNodeData[], immediate = false) => {
       if (immediate) {
@@ -448,14 +461,16 @@ function GraphCanvas({
         return false;
       }
 
-      onEdgesChange?.([
-        ...edges,
-        {
-          id: `edge-${connection.sourceNodeId}-${connection.sourcePortId}-${connection.targetNodeId}-${connection.targetPortId}`,
-          ...connection,
-        },
-      ]);
-      onConnectionComplete?.(connection);
+      const handled = onConnectionComplete?.(connection) === true;
+      if (!handled) {
+        onEdgesChange?.([
+          ...edges,
+          {
+            id: `edge-${connection.sourceNodeId}-${connection.sourcePortId}-${connection.targetNodeId}-${connection.targetPortId}`,
+            ...connection,
+          },
+        ]);
+      }
       return true;
     },
     [edges, getConnectionValidity, onConnectionComplete, onEdgesChange],

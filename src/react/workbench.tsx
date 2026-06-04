@@ -22,6 +22,7 @@ import {
 
 import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
 import {
+  addGraphEditorEdge,
   copyGraphEditorSelection,
   createGraphEditorGroup,
   duplicateGraphEditorSelection,
@@ -33,8 +34,12 @@ import {
   ungroupGraphEditorGroup,
   updateGraphEditorEdge,
   updateGraphEditorNode,
+  validateGraphEditorConnection,
   validateGraphEditorDocument,
   type GraphEditorClipboardPayload,
+  type GraphEditorConnectionInput,
+  type GraphEditorConnectionValidationOptions,
+  type GraphEditorConnectionValidity,
   type GraphEditorDocument,
   type GraphEditorDocumentDiagnostic,
   type GraphEditorEdge,
@@ -44,7 +49,7 @@ import {
   type GraphEditorViewport,
 } from "../core";
 import { layoutGraphEditorDocument } from "../layout";
-import { getGraphNodeSize } from "./graph-node";
+import { getGraphNodePortTypeSource, getGraphNodeSize } from "./graph-node";
 import {
   InspectorPanel,
   type InspectorFieldValue,
@@ -122,6 +127,10 @@ export type GraphWorkbenchController<
       template: GraphWorkbenchPaletteItem<TNodeData>,
       position?: { x: number; y: number },
     ) => void;
+    appendTemplateNode: (
+      template?: GraphWorkbenchPaletteItem<TNodeData>,
+      sourceNodeId?: string,
+    ) => void;
     deleteSelection: () => void;
     setSelection: (selection: GraphEditorSelectionState) => void;
     updateDocument: (
@@ -167,6 +176,18 @@ export type GraphWorkbenchProps<
   onImportDocument?: (file: File) => Promise<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
   onExportDocument?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
   onCommand?: (commandId: string) => void;
+  connectionValidationOptions?: GraphEditorConnectionValidationOptions<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  >;
+  createEdge?: (
+    connection: GraphEditorConnectionInput,
+    context: {
+      document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+      validity: GraphEditorConnectionValidity;
+    },
+  ) => GraphEditorEdge<TEdgeData>;
   renderToolbar?: (
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
   ) => React.ReactNode;
@@ -212,6 +233,8 @@ export function GraphWorkbench<
   onImportDocument,
   onExportDocument,
   onCommand,
+  connectionValidationOptions,
+  createEdge,
   renderToolbar,
   renderPalette,
   renderInspector,
@@ -359,13 +382,7 @@ export function GraphWorkbench<
         return;
       }
 
-      const existingIds = new Set(document.nodes.map((node) => node.id));
-      let id = template.id;
-      let index = 2;
-      while (existingIds.has(id)) {
-        id = `${template.id}-${index}`;
-        index += 1;
-      }
+      const id = createGraphWorkbenchNodeId(template.id, document);
       const nextDocument = normalizeGraphEditorDocument({
         ...document,
         nodes: [
@@ -382,6 +399,114 @@ export function GraphWorkbench<
       commitSelection({ nodeIds: [id], edgeIds: [], primary: { type: "node", id } });
     },
     [commitDocument, commitSelection, document, getViewportCenterPosition, readOnly],
+  );
+
+  const getConnectionValidity = React.useCallback(
+    (
+      sourceDocument: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+      connection: GraphEditorConnectionInput,
+      options: Partial<
+        GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType>
+      > = {},
+    ) =>
+      validateGraphEditorConnection(
+        sourceDocument,
+        connection,
+        createGraphWorkbenchConnectionValidationOptions(connectionValidationOptions, options),
+      ),
+    [connectionValidationOptions],
+  );
+
+  const connectDocument = React.useCallback(
+    (
+      sourceDocument: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+      connection: GraphEditorConnectionInput,
+      options: Partial<
+        GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType>
+      > = {},
+    ) => {
+      const validity = getConnectionValidity(sourceDocument, connection, options);
+
+      if (!validity.valid) {
+        return { document: sourceDocument, connected: false };
+      }
+
+      const edge =
+        createEdge?.(connection, { document: sourceDocument, validity }) ??
+        ({
+          id: createGraphWorkbenchEdgeId(sourceDocument, connection),
+          ...connection,
+        } as GraphEditorEdge<TEdgeData>);
+
+      return {
+        document: addGraphEditorEdge(sourceDocument, edge),
+        connected: true,
+      };
+    },
+    [createEdge, getConnectionValidity],
+  );
+
+  const appendTemplateNode = React.useCallback(
+    (template?: GraphWorkbenchPaletteItem<TNodeData>, sourceNodeId?: string) => {
+      if (readOnly) {
+        return;
+      }
+
+      const sourceNode =
+        document.nodes.find((node) => node.id === sourceNodeId) ?? selectedNode ?? null;
+      if (!sourceNode || !sourceNode.outputs?.length) {
+        return;
+      }
+
+      const templates = template ? [template] : filteredItems;
+      for (const candidateTemplate of templates) {
+        if (!candidateTemplate.inputs?.length) {
+          continue;
+        }
+
+        const id = createGraphWorkbenchNodeId(candidateTemplate.id, document);
+        const sourceSize = getGraphNodeSize(sourceNode as any);
+        const nextNode = {
+          ...candidateTemplate,
+          id,
+          x: sourceNode.x + sourceSize.width + 120,
+          y: sourceNode.y,
+        } as GraphEditorNode<TNodeData, TPortType>;
+        const documentWithNode = normalizeGraphEditorDocument({
+          ...document,
+          nodes: [...document.nodes, nextNode],
+        });
+        const connection = getFirstValidGraphWorkbenchConnection(
+          documentWithNode,
+          sourceNode.id,
+          nextNode.id,
+          getConnectionValidity,
+        );
+
+        if (!connection) {
+          continue;
+        }
+
+        const result = connectDocument(documentWithNode, connection);
+        if (!result.connected) {
+          continue;
+        }
+
+        commitDocument(result.document);
+        commitSelection({ nodeIds: [id], edgeIds: [], primary: { type: "node", id } });
+        return;
+      }
+    },
+    [
+      commitDocument,
+      commitSelection,
+      connectDocument,
+      document,
+      filteredItems,
+      getConnectionValidity,
+      readOnly,
+      selectedNode,
+    ],
   );
 
   const exportJson = React.useCallback(() => {
@@ -594,6 +719,7 @@ export function GraphWorkbench<
     const controllerActions: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>["actions"] =
       {
         addTemplateNode,
+        appendTemplateNode,
         deleteSelection,
         setSelection: commitSelection,
         updateDocument: commitDocument,
@@ -660,6 +786,7 @@ export function GraphWorkbench<
     };
   }, [
     addTemplateNode,
+    appendTemplateNode,
     autoLayout,
     clipboardPayload,
     commitDocument,
@@ -796,6 +923,8 @@ export function GraphWorkbench<
           canvasSelection={canvasSelection}
           showMiniMap={internalShowMiniMap}
           onViewportChange={onViewportChange}
+          connectionValidationOptions={connectionValidationOptions}
+          createEdge={createEdge}
           renderContextPad={renderContextPad}
         />
       </div>
@@ -822,12 +951,26 @@ export function GraphWorkbenchCanvas<
   canvasSelection,
   showMiniMap = true,
   onViewportChange,
+  connectionValidationOptions,
+  createEdge,
   renderContextPad,
 }: {
   controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
   canvasSelection?: GraphCanvasSelection;
   showMiniMap?: boolean;
   onViewportChange?: (viewport: GraphEditorViewport) => void;
+  connectionValidationOptions?: GraphEditorConnectionValidationOptions<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  >;
+  createEdge?: (
+    connection: GraphEditorConnectionInput,
+    context: {
+      document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+      validity: GraphEditorConnectionValidity;
+    },
+  ) => GraphEditorEdge<TEdgeData>;
   renderContextPad?: (
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
   ) => React.ReactNode;
@@ -896,10 +1039,25 @@ export function GraphWorkbenchCanvas<
         onEdgesChange={(edges) =>
           controller.actions.updateDocument({ ...controller.document, edges: edges as any })
         }
+        isConnectionValid={(connection) =>
+          validateGraphEditorConnection(
+            controller.document,
+            connection,
+            createGraphWorkbenchConnectionValidationOptions(connectionValidationOptions, {
+              ignoreEdgeId: connection.ignoreEdgeId,
+            }),
+          )
+        }
         onConnectionComplete={(connection: GraphCanvasConnection) => {
           controller.actions.updateDocument(
-            connectGraphWorkbenchNodes(controller.document, connection),
+            connectGraphWorkbenchNodes(
+              controller.document,
+              connection,
+              connectionValidationOptions,
+              createEdge,
+            ),
           );
+          return true;
         }}
         onSelectionChange={(selection) => {
           controller.actions.setSelection(
@@ -1162,16 +1320,7 @@ export function GraphWorkbenchContextPad({ controller }: { controller: GraphWork
       <GraphWorkbenchIconButton
         label="Append node"
         disabled={controller.readOnly || controller.palette.filteredItems.length === 0}
-        onClick={() => {
-          const template = controller.palette.filteredItems[0];
-          if (!template) {
-            return;
-          }
-          controller.actions.addTemplateNode(template, {
-            x: node.x + nodeSize.width + 120,
-            y: node.y,
-          });
-        }}
+        onClick={() => controller.actions.appendTemplateNode(undefined, node.id)}
       >
         <PlusIcon />
       </GraphWorkbenchIconButton>
@@ -1566,15 +1715,118 @@ function connectGraphWorkbenchNodes<
 >(
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   connection: GraphCanvasConnection,
+  connectionValidationOptions?: GraphEditorConnectionValidationOptions<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  >,
+  createEdge?: (
+    connection: GraphEditorConnectionInput,
+    context: {
+      document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+      validity: GraphEditorConnectionValidity;
+    },
+  ) => GraphEditorEdge<TEdgeData>,
 ) {
-  const id = `edge-${connection.sourceNodeId}-${connection.sourcePortId}-${connection.targetNodeId}-${connection.targetPortId}`;
+  const validity = validateGraphEditorConnection(
+    document,
+    connection,
+    createGraphWorkbenchConnectionValidationOptions(connectionValidationOptions),
+  );
 
-  if (document.edges.some((edge) => edge.id === id)) {
+  if (!validity.valid) {
     return document;
   }
 
-  return normalizeGraphEditorDocument({
-    ...document,
-    edges: [...document.edges, { id, ...connection } as GraphEditorEdge<TEdgeData>],
-  });
+  const edge =
+    createEdge?.(connection, { document, validity }) ??
+    ({
+      id: createGraphWorkbenchEdgeId(document, connection),
+      ...connection,
+    } as GraphEditorEdge<TEdgeData>);
+
+  return addGraphEditorEdge(document, edge);
+}
+
+function createGraphWorkbenchConnectionValidationOptions<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  options: GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType> | undefined,
+  overrides: Partial<GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType>> = {},
+): GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType> {
+  return {
+    ...options,
+    ...overrides,
+    arePortsCompatible:
+      overrides.arePortsCompatible ??
+      options?.arePortsCompatible ??
+      ((sourcePort, targetPort) => {
+        const sourceType = getGraphNodePortTypeSource(sourcePort as any);
+        const targetType = getGraphNodePortTypeSource(targetPort as any);
+
+        return !sourceType || !targetType || sourceType === targetType;
+      }),
+  };
+}
+
+function getFirstValidGraphWorkbenchConnection<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  sourceNodeId: string,
+  targetNodeId: string,
+  getConnectionValidity: (
+    document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    connection: GraphEditorConnectionInput,
+  ) => GraphEditorConnectionValidity,
+) {
+  const sourceNode = document.nodes.find((node) => node.id === sourceNodeId);
+  const targetNode = document.nodes.find((node) => node.id === targetNodeId);
+
+  for (const sourcePort of sourceNode?.outputs ?? []) {
+    for (const targetPort of targetNode?.inputs ?? []) {
+      const connection = {
+        sourceNodeId,
+        sourcePortId: sourcePort.id,
+        targetNodeId,
+        targetPortId: targetPort.id,
+      };
+      if (getConnectionValidity(document, connection).valid) {
+        return connection;
+      }
+    }
+  }
+
+  return null;
+}
+
+function createGraphWorkbenchNodeId(baseId: string, document: GraphEditorDocument<any, any, any>) {
+  return createGraphWorkbenchUniqueId(baseId, new Set(document.nodes.map((node) => node.id)));
+}
+
+function createGraphWorkbenchEdgeId(
+  document: GraphEditorDocument<any, any, any>,
+  connection: GraphEditorConnectionInput,
+) {
+  return createGraphWorkbenchUniqueId(
+    `edge-${connection.sourceNodeId}-${connection.sourcePortId}-${connection.targetNodeId}-${connection.targetPortId}`,
+    new Set(document.edges.map((edge) => edge.id)),
+  );
+}
+
+function createGraphWorkbenchUniqueId(baseId: string, existingIds: ReadonlySet<string>) {
+  const sanitized = baseId.trim() || "item";
+  if (!existingIds.has(sanitized)) {
+    return sanitized;
+  }
+
+  let index = 2;
+  while (existingIds.has(`${sanitized}-${index}`)) {
+    index += 1;
+  }
+  return `${sanitized}-${index}`;
 }

@@ -7,14 +7,16 @@ import {
   ListChecksIcon,
   NetworkIcon,
   PlusIcon,
+  RefreshCwIcon,
   Trash2Icon,
   WorkflowIcon,
 } from "lucide-react";
 
 import {
   GraphWorkbench,
-  type GraphEditorDocument,
-  type GraphEditorNodeTemplate,
+  normalizeGraphEditorDocument,
+  validateGraphEditorDocument,
+  type GraphWorkbenchInspectorSchema,
 } from "@moritzbrantner/graph-editor";
 import {
   OrgChart,
@@ -34,147 +36,19 @@ import {
   type RelationshipMapNode,
   type RelationshipMapTone,
 } from "@moritzbrantner/diagrams/relationship-map";
+import {
+  cloneWorkbenchExampleDocument,
+  defaultWorkbenchExample,
+  workbenchExamples,
+  type WorkflowEdgeData,
+  type WorkflowNodeData,
+  type WorkflowPortType,
+} from "./workbench-examples";
 
 import "./styles.css";
 
 type ExampleView = "workflow" | "diagrams";
 type DiagramKind = "relationship" | "process" | "org";
-type WorkflowPortType = "event" | "payload" | "text" | "decision";
-type WorkflowNodeData = {
-  owner: string;
-  setting?: string;
-};
-
-const workflowTemplates: Array<GraphEditorNodeTemplate<WorkflowNodeData, WorkflowPortType>> = [
-  {
-    id: "trigger-template",
-    label: "Event trigger",
-    categoryPath: ["Workflow", "Inputs"],
-    description: "Starts a workflow from an external signal.",
-    kind: "trigger",
-    tone: "info",
-    packageLabel: "workflow-editor",
-    outputs: [{ id: "event", label: "Event", type: "event", color: "#2563eb" }],
-    data: { owner: "Ops" },
-  },
-  {
-    id: "transform-template",
-    label: "Transform data",
-    categoryPath: ["Workflow", "Actions"],
-    description: "Maps payload fields into a normalized shape.",
-    kind: "action",
-    inputs: [{ id: "input", label: "Payload", type: "payload", color: "#0f766e" }],
-    outputs: [{ id: "output", label: "Payload", type: "payload", color: "#0f766e" }],
-    data: { owner: "Platform" },
-  },
-  {
-    id: "decision-template",
-    label: "Decision",
-    categoryPath: ["Workflow", "Logic"],
-    description: "Routes work based on a boolean condition.",
-    kind: "decision",
-    tone: "warning",
-    inputs: [{ id: "input", label: "Payload", type: "payload", color: "#0f766e" }],
-    outputs: [
-      { id: "yes", label: "Yes", type: "decision", color: "#16a34a" },
-      { id: "no", label: "No", type: "decision", color: "#ca8a04" },
-    ],
-    data: { owner: "Product", setting: "priority > high" },
-  },
-  {
-    id: "message-template",
-    label: "Send message",
-    categoryPath: ["Workflow", "Outputs"],
-    description: "Publishes an update to a downstream channel.",
-    kind: "output",
-    tone: "success",
-    inputs: [{ id: "body", label: "Text", type: "text", color: "#7c3aed" }],
-    data: { owner: "Support" },
-  },
-];
-
-const initialWorkflowDocument: GraphEditorDocument<
-  WorkflowNodeData,
-  Record<string, never>,
-  WorkflowPortType
-> = {
-  nodes: [
-    {
-      id: "lead-created",
-      label: "Lead created",
-      description: "CRM event",
-      kind: "trigger",
-      packageLabel: "workflow-editor",
-      tone: "info",
-      x: 40,
-      y: 120,
-      outputs: [{ id: "event", label: "Event", type: "event", color: "#2563eb" }],
-      data: { owner: "Sales" },
-    },
-    {
-      id: "normalize",
-      label: "Normalize record",
-      description: "Prepare assignment data",
-      kind: "action",
-      x: 360,
-      y: 92,
-      inputs: [{ id: "input", label: "Payload", type: "event", color: "#2563eb" }],
-      outputs: [{ id: "output", label: "Payload", type: "payload", color: "#0f766e" }],
-      data: { owner: "Platform" },
-    },
-    {
-      id: "route",
-      label: "Route account",
-      description: "Choose enterprise or standard follow-up.",
-      kind: "decision",
-      tone: "warning",
-      x: 680,
-      y: 88,
-      inputs: [{ id: "input", label: "Payload", type: "payload", color: "#0f766e" }],
-      outputs: [
-        { id: "enterprise", label: "Enterprise", type: "decision", color: "#16a34a" },
-        { id: "standard", label: "Standard", type: "decision", color: "#ca8a04" },
-      ],
-      data: { owner: "Revenue", setting: "employeeCount > 500" },
-    },
-    {
-      id: "notify",
-      label: "Notify owner",
-      description: "Create an assignment message.",
-      kind: "output",
-      tone: "success",
-      x: 1000,
-      y: 120,
-      inputs: [{ id: "body", label: "Decision", type: "decision", color: "#16a34a" }],
-      data: { owner: "Sales" },
-    },
-  ],
-  edges: [
-    {
-      id: "lead-created-normalize",
-      sourceNodeId: "lead-created",
-      sourcePortId: "event",
-      targetNodeId: "normalize",
-      targetPortId: "input",
-    },
-    {
-      id: "normalize-route",
-      sourceNodeId: "normalize",
-      sourcePortId: "output",
-      targetNodeId: "route",
-      targetPortId: "input",
-    },
-    {
-      id: "route-notify",
-      sourceNodeId: "route",
-      sourcePortId: "enterprise",
-      targetNodeId: "notify",
-      targetPortId: "body",
-      status: "success",
-    },
-  ],
-  viewport: { x: 40, y: 40, zoom: 0.82 },
-};
 
 const relationshipTones: RelationshipMapTone[] = [
   "default",
@@ -193,6 +67,151 @@ const processTones: ProcessMapTone[] = [
   "muted",
 ];
 const processStatuses: ProcessMapStatus[] = ["pending", "active", "done", "blocked", "warning"];
+const workflowTones = ["", "neutral", "info", "success", "warning", "error"];
+const workflowStatuses = ["", "idle", "running", "success", "warning", "error"];
+
+const workflowInspectorSchema: GraphWorkbenchInspectorSchema<
+  WorkflowNodeData,
+  WorkflowEdgeData,
+  WorkflowPortType
+> = {
+  getNodeSections(node) {
+    return [
+      {
+        id: "general",
+        title: "General",
+        defaultOpen: true,
+        fields: [
+          { id: "label", label: "Label", type: "text", value: node.label },
+          {
+            id: "description",
+            label: "Description",
+            type: "textarea",
+            value: node.description ?? "",
+          },
+          { id: "owner", label: "Owner", type: "text", value: node.data?.owner ?? "" },
+          { id: "setting", label: "Setting", type: "text", value: node.data?.setting ?? "" },
+        ],
+      },
+      {
+        id: "presentation",
+        title: "Presentation",
+        fields: [
+          {
+            id: "tone",
+            label: "Tone",
+            type: "select",
+            value: node.tone ?? "",
+            options: workflowTones.map((value) => ({
+              label: value || "Default",
+              value,
+            })),
+          },
+          {
+            id: "status",
+            label: "Status",
+            type: "select",
+            value: node.status ?? "",
+            options: workflowStatuses.map((value) => ({
+              label: value || "Default",
+              value,
+            })),
+          },
+          { id: "minimized", label: "Minimized", type: "boolean", value: Boolean(node.minimized) },
+        ],
+      },
+      {
+        id: "data",
+        title: "Data",
+        defaultOpen: false,
+        fields: [
+          {
+            id: "data",
+            label: "Data",
+            type: "code",
+            readOnly: true,
+            value: JSON.stringify(node.data ?? {}, null, 2),
+          },
+          {
+            id: "metadata",
+            label: "Metadata",
+            type: "code",
+            readOnly: true,
+            value: JSON.stringify(node.metadata ?? {}, null, 2),
+          },
+        ],
+      },
+    ];
+  },
+  getEdgeSections(edge) {
+    return [
+      {
+        id: "general",
+        title: "Connection",
+        defaultOpen: true,
+        fields: [
+          { id: "label", label: "Label", type: "text", value: edge.data?.label ?? "" },
+          {
+            id: "status",
+            label: "Status",
+            type: "select",
+            value: edge.status ?? "",
+            options: workflowStatuses.map((value) => ({
+              label: value || "Default",
+              value,
+            })),
+          },
+          { id: "color", label: "Color", type: "color", value: edge.color ?? "#000000" },
+        ],
+      },
+      {
+        id: "data",
+        title: "Data",
+        defaultOpen: false,
+        fields: [
+          {
+            id: "data",
+            label: "Data",
+            type: "code",
+            readOnly: true,
+            value: JSON.stringify(edge.data ?? {}, null, 2),
+          },
+          {
+            id: "metadata",
+            label: "Metadata",
+            type: "code",
+            readOnly: true,
+            value: JSON.stringify(edge.metadata ?? {}, null, 2),
+          },
+        ],
+      },
+    ];
+  },
+  applyNodeValues(node, values) {
+    return {
+      label: String(values.label ?? ""),
+      description: optionalText(values.description),
+      tone: optionalText(values.tone),
+      status: optionalText(values.status),
+      minimized: Boolean(values.minimized),
+      data: {
+        ...(node.data ?? { owner: "" }),
+        owner: String(values.owner ?? ""),
+        setting: optionalText(values.setting),
+      },
+    };
+  },
+  applyEdgeValues(edge, values) {
+    return {
+      status: optionalText(values.status),
+      color: optionalText(values.color),
+      data: {
+        ...(edge.data ?? {}),
+        label: optionalText(values.label),
+      },
+    };
+  },
+};
 
 function App() {
   const [view, setView] = React.useState<ExampleView>("workflow");
@@ -227,16 +246,101 @@ function App() {
 }
 
 function WorkflowExample() {
-  const [document, setDocument] = React.useState(initialWorkflowDocument);
+  const [exampleId, setExampleId] = React.useState(defaultWorkbenchExample.id);
+  const selectedExample =
+    workbenchExamples.find((example) => example.id === exampleId) ?? defaultWorkbenchExample;
+  const [document, setDocument] = React.useState(() =>
+    normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)),
+  );
+  const categories = React.useMemo(
+    () => Array.from(new Set(workbenchExamples.map((example) => example.category))),
+    [],
+  );
+  const pristineDocument = React.useMemo(
+    () => normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)),
+    [selectedExample],
+  );
+  const diagnostics = React.useMemo(() => validateGraphEditorDocument(document), [document]);
+  const dirty = !areDocumentsEqual(document, pristineDocument);
+
+  const selectExample = (nextExampleId: string) => {
+    const nextExample = workbenchExamples.find((example) => example.id === nextExampleId);
+    if (!nextExample || nextExample.id === selectedExample.id) {
+      return;
+    }
+    if (
+      dirty &&
+      typeof window !== "undefined" &&
+      !window.confirm("Replace the current graph with the selected example?")
+    ) {
+      return;
+    }
+    setExampleId(nextExample.id);
+    setDocument(normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(nextExample)));
+  };
+
+  const selectCategory = (category: string) => {
+    const nextExample = workbenchExamples.find((example) => example.category === category);
+    if (nextExample) {
+      selectExample(nextExample.id);
+    }
+  };
+
+  const resetExample = () => {
+    setDocument(normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)));
+  };
+  const commitWorkbenchDocument = React.useCallback((nextDocument: typeof document) => {
+    if (typeof window === "undefined" || typeof window.queueMicrotask !== "function") {
+      setDocument(nextDocument);
+      return;
+    }
+    window.queueMicrotask(() => setDocument(nextDocument));
+  }, []);
 
   return (
     <section className="grid gap-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div className="grid min-w-64 gap-1">
+          <div className="text-sm font-semibold">{selectedExample.label}</div>
+          <div className="text-xs leading-5 text-muted-foreground">
+            {selectedExample.description}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <SelectField
+            label="Category"
+            value={selectedExample.category}
+            values={categories}
+            onChange={selectCategory}
+          />
+          <SelectField
+            label="Graph"
+            value={selectedExample.id}
+            values={workbenchExamples.map((example) => example.id)}
+            labels={Object.fromEntries(
+              workbenchExamples.map((example) => [example.id, example.label]),
+            )}
+            onChange={selectExample}
+          />
+          <IconTextButton type="button" disabled={!dirty} onClick={resetExample}>
+            <RefreshCwIcon className="size-4" aria-hidden="true" />
+            Reset
+          </IconTextButton>
+          <MetricBadge label={`${document.nodes.length} nodes`} />
+          <MetricBadge label={`${document.edges.length} edges`} />
+          {diagnostics.length > 0 ? (
+            <MetricBadge tone="error" label={`${diagnostics.length} issues`} />
+          ) : (
+            <MetricBadge tone="success" label="Valid" />
+          )}
+        </div>
+      </div>
       <GraphWorkbench
         document={document}
-        nodeTemplates={workflowTemplates}
-        className="h-[calc(100vh-8.5rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
-        onDocumentChange={setDocument}
-        onViewportChange={(viewport) => setDocument((current) => ({ ...current, viewport }))}
+        nodeTemplates={selectedExample.nodeTemplates}
+        inspectorSchema={workflowInspectorSchema}
+        className="h-[calc(100vh-12rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
+        onDocumentChange={commitWorkbenchDocument}
       />
     </section>
   );
@@ -711,6 +815,27 @@ function PanelTitle({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+function MetricBadge({
+  label,
+  tone = "default",
+}: {
+  label: string;
+  tone?: "default" | "success" | "error";
+}) {
+  return (
+    <span
+      className={cx(
+        "inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-medium",
+        tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+        tone === "error" && "border-red-200 bg-red-50 text-red-700",
+        tone === "default" && "bg-card text-muted-foreground",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 function FieldLabel({
   label,
   value,
@@ -736,11 +861,13 @@ function SelectField({
   label,
   value,
   values,
+  labels,
   onChange,
 }: {
   label: string;
   value: string;
   values: readonly string[];
+  labels?: Record<string, string>;
   onChange: (value: string) => void;
 }) {
   return (
@@ -753,7 +880,7 @@ function SelectField({
       >
         {values.map((item) => (
           <option key={item} value={item}>
-            {item}
+            {labels?.[item] ?? item}
           </option>
         ))}
       </select>
@@ -806,6 +933,15 @@ function createId(label: string, existingIds: readonly string[]) {
     index += 1;
   }
   return id;
+}
+
+function optionalText(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? text : undefined;
+}
+
+function areDocumentsEqual(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function cx(...classes: Array<string | false | null | undefined>) {
