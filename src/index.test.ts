@@ -8,14 +8,11 @@ import {
   GraphNode,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
-  createGraphWorkbenchHistory,
   duplicateGraphEditorSelection,
   getGraphWorkbenchCommandFromKeyboardEvent,
+  graphEditorDocumentAdapter,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
-  pushGraphWorkbenchHistory,
-  redoGraphWorkbenchHistory,
-  undoGraphWorkbenchHistory,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
   validateGraphEditorDocument,
@@ -26,6 +23,13 @@ import {
   type GraphEditorNodeTemplate,
   type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
+import {
+  commitEditorSnapshotHistory,
+  createEditorSnapshotHistory,
+  redoEditorSnapshotHistory,
+  serializeEditorDocument,
+  undoEditorSnapshotHistory,
+} from "@moritzbrantner/editor-core";
 import { workbenchExamples } from "../examples/workbench/src/workbench-examples";
 
 afterEach(() => {
@@ -84,20 +88,35 @@ describe("@moritzbrantner/graph-editor", () => {
       edges: [],
     };
 
-    const history = pushGraphWorkbenchHistory(
-      pushGraphWorkbenchHistory(createGraphWorkbenchHistory(first), second, { maxHistory: 1 }),
+    const history = commitEditorSnapshotHistory(
+      commitEditorSnapshotHistory(createEditorSnapshotHistory(first), second, { limit: 1 }),
       third,
-      { maxHistory: 1 },
+      { limit: 1 },
     );
 
     expect(history.past).toEqual([second]);
     expect(history.canUndo).toBe(true);
     expect(history.canRedo).toBe(false);
 
-    const undone = undoGraphWorkbenchHistory(history);
+    const undone = undoEditorSnapshotHistory(history);
     expect(undone.present).toBe(second);
     expect(undone.canRedo).toBe(true);
-    expect(redoGraphWorkbenchHistory(undone).present).toBe(third);
+    expect(redoEditorSnapshotHistory(undone).present).toBe(third);
+  });
+
+  test("serializes graph documents through the editor-core adapter", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+
+    const serialized = serializeEditorDocument(document, graphEditorDocumentAdapter, {
+      exportedAt: false,
+    });
+
+    expect(serialized.format).toBe("@moritzbrantner/graph-editor/document");
+    expect(serialized.schemaVersion).toBe(1);
+    expect(serialized.document.nodes[0]?.id).toBe("node");
   });
 
   test("updates graph edges without replacing their identity", () => {

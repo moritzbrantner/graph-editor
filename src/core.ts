@@ -1,3 +1,5 @@
+import { EditorJsonParseError, type EditorDocumentAdapter } from "@moritzbrantner/editor-core";
+
 export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = {
   id: string;
   label: string;
@@ -269,6 +271,8 @@ export type GraphEditorGraphIndex<
 
 export const graphEditorClipboardFormat = "@moritzbrantner/graph-editor/clipboard";
 export const graphEditorClipboardVersion = 1;
+export const graphEditorDocumentFormat = "@moritzbrantner/graph-editor/document";
+export const graphEditorSchemaVersion = 1;
 
 export class GraphEditorDocumentValidationError extends Error {
   override name = "GraphEditorDocumentValidationError" as const;
@@ -292,6 +296,28 @@ export function assertGraphEditorDocument<
   if (diagnostics.length > 0) {
     throw new GraphEditorDocumentValidationError(diagnostics);
   }
+}
+
+export const graphEditorDocumentAdapter: EditorDocumentAdapter<GraphEditorDocument> = {
+  format: graphEditorDocumentFormat,
+  schemaVersion: graphEditorSchemaVersion,
+  normalize: (document) => normalizeGraphEditorDocument(document),
+  read: readGraphEditorDocument,
+  validate: (document) => validateGraphEditorDocument(document),
+};
+
+export function readGraphEditorDocument(input: unknown, path = "$"): GraphEditorDocument {
+  const diagnostics = validateGraphEditorDocument(input);
+  if (diagnostics.length > 0) {
+    throw new EditorJsonParseError(
+      diagnostics.map((diagnostic) => ({
+        path: diagnostic.path === "$" ? path : diagnostic.path,
+        message: diagnostic.message,
+      })),
+    );
+  }
+
+  return input as GraphEditorDocument;
 }
 
 export function validateGraphEditorDocument(

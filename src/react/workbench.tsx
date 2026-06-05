@@ -22,6 +22,15 @@ import {
 
 import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
 import {
+  commitEditorSnapshotHistory,
+  createEditorSnapshotHistory,
+  downloadEditorJson,
+  readEditorJsonFile,
+  redoEditorSnapshotHistory,
+  undoEditorSnapshotHistory,
+  type EditorSnapshotHistory,
+} from "@moritzbrantner/editor-core";
+import {
   addGraphEditorEdge,
   copyGraphEditorSelection,
   createGraphEditorGroup,
@@ -63,13 +72,6 @@ import {
   type GraphWorkbenchCommandId,
 } from "./workbench-commands";
 import {
-  createGraphWorkbenchHistory,
-  pushGraphWorkbenchHistory,
-  redoGraphWorkbenchHistory,
-  undoGraphWorkbenchHistory,
-  type GraphWorkbenchHistoryState,
-} from "./workbench-history";
-import {
   createGraphWorkbenchPaletteCategoryGroups,
   filterGraphWorkbenchPaletteTemplates,
   type GraphWorkbenchPaletteCategoryGroup,
@@ -105,7 +107,7 @@ export type GraphWorkbenchController<
   selectedEdge?: GraphEditorEdge<TEdgeData>;
   diagnostics: GraphEditorDocumentDiagnostic[];
   selectedDiagnostics: GraphEditorDocumentDiagnostic[];
-  history: GraphWorkbenchHistoryState<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
+  history: EditorSnapshotHistory<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
   palette: {
     groups: Array<GraphWorkbenchPaletteCategoryGroup<TNodeData>>;
     items: ReadonlyArray<GraphWorkbenchPaletteItem<TNodeData>>;
@@ -208,7 +210,6 @@ type GraphWorkbenchCommitOptions = {
 };
 
 const emptySelection: GraphEditorSelectionState = { nodeIds: [], edgeIds: [] };
-const graphWorkbenchJsonMimeType = "application/json";
 const graphWorkbenchDefaultZoom = 0.9;
 
 export function GraphWorkbench<
@@ -252,7 +253,7 @@ export function GraphWorkbench<
     TPortType
   > | null>(null);
   const [historyState, setHistoryState] = React.useState(() =>
-    createGraphWorkbenchHistory(document),
+    createEditorSnapshotHistory(document),
   );
   const workbenchRef = React.useRef<HTMLDivElement>(null);
   const dragHistoryBaseRef = React.useRef<GraphEditorDocument<
@@ -343,8 +344,8 @@ export function GraphWorkbench<
           !graphWorkbenchDocumentsEqual(baseDocument, nextDocument)
         ) {
           setHistoryState((current) =>
-            pushGraphWorkbenchHistory({ ...current, present: baseDocument }, nextDocument, {
-              maxHistory,
+            commitEditorSnapshotHistory({ ...current, present: baseDocument }, nextDocument, {
+              limit: maxHistory,
               equals: graphWorkbenchDocumentsEqual,
             }),
           );
@@ -355,8 +356,8 @@ export function GraphWorkbench<
 
       if (withHistory) {
         setHistoryState((current) =>
-          pushGraphWorkbenchHistory(current, nextDocument, {
-            maxHistory,
+          commitEditorSnapshotHistory(current, nextDocument, {
+            limit: maxHistory,
             equals: graphWorkbenchDocumentsEqual,
           }),
         );
@@ -516,15 +517,7 @@ export function GraphWorkbench<
       return;
     }
 
-    const blob = new Blob([JSON.stringify(document, null, 2)], {
-      type: graphWorkbenchJsonMimeType,
-    });
-    const url = URL.createObjectURL(blob);
-    const link = window.document.createElement("a");
-    link.href = url;
-    link.download = "graph-editor-document.json";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadEditorJson(document, { filename: "graph-editor-document.json" });
   }, [document, onExportDocument]);
 
   const importJson = React.useCallback(
@@ -535,7 +528,7 @@ export function GraphWorkbench<
 
       const imported = onImportDocument
         ? await onImportDocument(file)
-        : (JSON.parse(await file.text()) as GraphEditorDocument<TNodeData, TEdgeData, TPortType>);
+        : await readEditorJsonFile<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>(file);
       const normalized = normalizeGraphEditorDocument(imported, { mode: "repair" });
       commitDocument(normalized);
       commitSelection(emptySelection);
@@ -686,7 +679,7 @@ export function GraphWorkbench<
     }
 
     setHistoryState((current) => {
-      const next = undoGraphWorkbenchHistory(current);
+      const next = undoEditorSnapshotHistory(current);
       onDocumentChange?.(next.present);
       return next;
     });
@@ -698,7 +691,7 @@ export function GraphWorkbench<
     }
 
     setHistoryState((current) => {
-      const next = redoGraphWorkbenchHistory(current);
+      const next = redoEditorSnapshotHistory(current);
       onDocumentChange?.(next.present);
       return next;
     });

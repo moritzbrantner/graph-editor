@@ -26,14 +26,6 @@ export {
   type GraphWorkbenchCommandId,
 } from "./react/workbench-commands";
 export {
-  createGraphWorkbenchHistory,
-  defaultGraphWorkbenchMaxHistory,
-  pushGraphWorkbenchHistory,
-  redoGraphWorkbenchHistory,
-  undoGraphWorkbenchHistory,
-  type GraphWorkbenchHistoryState,
-} from "./react/workbench-history";
-export {
   GraphInputOnlyNode,
   GraphNode,
   GraphOutputOnlyNode,

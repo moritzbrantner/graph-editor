@@ -1,4 +1,10 @@
 import type * as React from "react";
+import {
+  formatEditorShortcutLabel,
+  getEditorCommandIdFromKeyboardEvent,
+  isEditorEditableTarget,
+  type EditorCommandDefinition,
+} from "@moritzbrantner/editor-core/hotkeys";
 
 export type GraphWorkbenchCommandId =
   | "undo"
@@ -47,56 +53,22 @@ export const graphWorkbenchCommandShortcuts: Record<GraphWorkbenchCommandId, str
 };
 
 export function getGraphWorkbenchShortcutLabel(commandId: GraphWorkbenchCommandId) {
-  return graphWorkbenchCommandShortcuts[commandId][0];
+  return formatEditorShortcutLabel(graphWorkbenchCommandShortcuts[commandId][0] ?? "");
 }
 
 export function getGraphWorkbenchCommandFromKeyboardEvent(
   event: GraphWorkbenchShortcutEvent,
 ): GraphWorkbenchCommandId | null {
-  if (isGraphWorkbenchEditableTarget(event.target)) {
-    return null;
-  }
-
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  const mod = event.metaKey || event.ctrlKey;
-
-  if (mod && !event.altKey && key === "z") {
-    return event.shiftKey ? "redo" : "undo";
-  }
-  if (mod && !event.altKey && key === "y") {
-    return "redo";
-  }
-  if (mod && !event.altKey && !event.shiftKey && key === "c") {
-    return "copy";
-  }
-  if (mod && !event.altKey && !event.shiftKey && key === "v") {
-    return "paste";
-  }
-  if (mod && !event.altKey && !event.shiftKey && key === "d") {
-    return "duplicate";
-  }
-  if (mod && !event.altKey && !event.shiftKey && key === "a") {
-    return "select-all";
-  }
-  if (!mod && !event.altKey && !event.shiftKey && (key === "Delete" || key === "Backspace")) {
-    return "delete";
-  }
-
-  return null;
+  return getEditorCommandIdFromKeyboardEvent(event, graphWorkbenchCommandDefinitions);
 }
 
 export function isGraphWorkbenchEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const tagName = target.tagName.toLowerCase();
-
-  return (
-    tagName === "input" ||
-    tagName === "select" ||
-    tagName === "textarea" ||
-    target.isContentEditable ||
-    Boolean(target.closest("[contenteditable='true']"))
-  );
+  return isEditorEditableTarget(target);
 }
+
+const graphWorkbenchCommandDefinitions: Array<EditorCommandDefinition<GraphWorkbenchCommandId>> =
+  Object.entries(graphWorkbenchCommandShortcuts).map(([id, hotkeys]) => ({
+    id: id as GraphWorkbenchCommandId,
+    label: id,
+    hotkeys,
+  }));
