@@ -53,6 +53,7 @@
     "pack:check": "bun pm pack --dry-run",
     "smoke:package": "node scripts/smoke-package-exports.mjs",
     "test": "$(dirname $(command -v npm))/node node_modules/vitest/vitest.mjs run",
+    "bench": "node_modules/vitest/vitest.mjs bench --passWithNoTests --run",
     "verify": "bun run format:check && bun run lint && bun run check-types && bun run test && bun run build && bun run smoke:package && bun run pack:check"
   },
   "dependencies": {
