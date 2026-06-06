@@ -8,8 +8,11 @@ import {
   GraphNode,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
+  createGraphEditorGraphAdapter,
   duplicateGraphEditorSelection,
+  editorSelectionToGraphEditorSelection,
   getGraphWorkbenchCommandFromKeyboardEvent,
+  graphEditorSelectionToEditorSelection,
   graphEditorDocumentAdapter,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
@@ -24,8 +27,11 @@ import {
   type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
 import {
+  createEditorEntitySelection,
+  createEditorGraphIndexes,
   commitEditorSnapshotHistory,
   createEditorSnapshotHistory,
+  getEditorSelectedEntityIds,
   redoEditorSnapshotHistory,
   serializeEditorDocument,
   undoEditorSnapshotHistory,
@@ -117,6 +123,88 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(serialized.format).toBe("@moritzbrantner/graph-editor/document");
     expect(serialized.schemaVersion).toBe(1);
     expect(serialized.document.nodes[0]?.id).toBe("node");
+  });
+
+  test("projects graph documents through the editor-core graph adapter", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        {
+          id: "source",
+          label: "Source",
+          kind: "workflow",
+          x: 0,
+          y: 0,
+          outputs: [{ id: "out", label: "Out" }],
+        },
+        {
+          id: "target",
+          label: "Target",
+          x: 240,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+
+    const adapter = createGraphEditorGraphAdapter();
+    const indexes = createEditorGraphIndexes(adapter.getEdges(document));
+
+    expect(adapter.getNodes(document)[0]?.type).toBe("workflow");
+    expect(adapter.getPorts?.(adapter.getNodes(document)[0]!)?.[0]).toMatchObject({
+      id: "out",
+      direction: "output",
+    });
+    expect(indexes.outgoingEdgesByNodeId.get("source")?.[0]).toMatchObject({
+      id: "edge-1",
+      sourceId: "source",
+      targetId: "target",
+      properties: document.edges[0],
+    });
+  });
+
+  test("converts graph selections to editor-core entity selections", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 0 },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+      groups: [{ id: "group-1", label: "Group", nodeIds: ["source", "target"] }],
+    });
+
+    const editorSelection = graphEditorSelectionToEditorSelection({
+      nodeIds: ["source"],
+      edgeIds: ["edge-1"],
+      groupIds: ["group-1"],
+    });
+    const graphSelection = editorSelectionToGraphEditorSelection(
+      document,
+      createEditorEntitySelection(["missing", "edge-1", "target"], "edge-1"),
+    );
+
+    expect(getEditorSelectedEntityIds(editorSelection)).toEqual(["source", "edge-1", "group-1"]);
+    expect(graphSelection).toEqual({
+      nodeIds: ["target"],
+      edgeIds: ["edge-1"],
+      primary: { type: "edge", id: "edge-1" },
+    });
   });
 
   test("updates graph edges without replacing their identity", () => {

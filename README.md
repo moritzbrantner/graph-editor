@@ -2,6 +2,9 @@
 
 Generic graph document utilities and React primitives for node graph editors.
 
+Built on `@moritzbrantner/editor-core` for shared document serialization, history, hotkeys,
+viewport math, graph adapters, indexing, and entity selection primitives.
+
 ## Install
 
 ```sh

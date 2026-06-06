@@ -1,6 +1,26 @@
-import { EditorJsonParseError, type EditorDocumentAdapter } from "@moritzbrantner/editor-core";
+import {
+  EditorJsonParseError,
+  createEditorEntitySelection,
+  createEditorGraphIndexes,
+  createEditorViewportState,
+  getEditorSelectedEntityIds,
+  getEditorSelectionPrimaryEntityId,
+  normalizeEditorSelection,
+  type EditorDocumentAdapter,
+  type EditorEntityBase,
+  type EditorEntityId,
+  type EditorGraphAdapter,
+  type EditorGraphConnection,
+  type EditorGraphEdge,
+  type EditorGraphPort,
+  type EditorSelection,
+  type EditorViewportState,
+} from "@moritzbrantner/editor-core";
 
-export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = {
+export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = Omit<
+  EditorGraphPort,
+  "label"
+> & {
   id: string;
   label: string;
   kind?: string;
@@ -14,8 +34,11 @@ export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unkn
 };
 
 export type GraphEditorNode<TNodeData = Record<string, unknown>, TPortType = unknown> = {
-  id: string;
+  id: EditorEntityId;
   label: string;
+  type?: EditorEntityBase["type"];
+  parentId?: EditorEntityBase["parentId"];
+  order?: EditorEntityBase["order"];
   description?: string;
   kind?: string;
   category?: string;
@@ -36,11 +59,12 @@ export type GraphEditorNode<TNodeData = Record<string, unknown>, TPortType = unk
 };
 
 export type GraphEditorEdge<TEdgeData = Record<string, unknown>> = {
-  id: string;
-  sourceNodeId: string;
-  sourcePortId: string;
-  targetNodeId: string;
-  targetPortId: string;
+  id: EditorEntityId;
+  sourceNodeId: EditorEntityId;
+  sourcePortId: NonNullable<EditorGraphConnection["sourcePortId"]>;
+  targetNodeId: EditorEntityId;
+  targetPortId: NonNullable<EditorGraphConnection["targetPortId"]>;
+  type?: EditorGraphEdge["type"];
   color?: string;
   status?: "idle" | "running" | "success" | "error" | "warning" | string;
   data?: TEdgeData;
@@ -48,18 +72,17 @@ export type GraphEditorEdge<TEdgeData = Record<string, unknown>> = {
 };
 
 export type GraphEditorGroup<TGroupData = Record<string, unknown>> = {
-  id: string;
+  id: EditorEntityId;
   label: string;
-  nodeIds: string[];
+  nodeIds: EditorEntityId[];
+  type?: EditorEntityBase["type"];
+  parentId?: EditorEntityBase["parentId"];
+  order?: EditorEntityBase["order"];
   minimized?: boolean;
   data?: TGroupData;
 };
 
-export type GraphEditorViewport = {
-  x: number;
-  y: number;
-  zoom: number;
-};
+export type GraphEditorViewport = EditorViewportState;
 
 export type GraphEditorDocument<
   TNodeData = Record<string, unknown>,
@@ -90,10 +113,10 @@ export type GraphEditorSelectionState = {
 };
 
 export type GraphEditorConnectionInput = {
-  sourceNodeId: string;
-  sourcePortId: string;
-  targetNodeId: string;
-  targetPortId: string;
+  sourceNodeId: EditorGraphConnection["sourceId"];
+  sourcePortId: NonNullable<EditorGraphConnection["sourcePortId"]>;
+  targetNodeId: EditorGraphConnection["targetId"];
+  targetPortId: NonNullable<EditorGraphConnection["targetPortId"]>;
 };
 
 export type GraphEditorConnectionInvalidReason =
@@ -170,11 +193,11 @@ export type GraphEditorDocumentContext<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 > = {
-  nodeById: ReadonlyMap<string, GraphEditorNode<TNodeData, TPortType>>;
-  edgeById: ReadonlyMap<string, GraphEditorEdge<TEdgeData>>;
-  adjacencyByNodeId: ReadonlyMap<string, readonly string[]>;
-  incomingEdgesByNodeId: ReadonlyMap<string, readonly GraphEditorEdge<TEdgeData>[]>;
-  outgoingEdgesByNodeId: ReadonlyMap<string, readonly GraphEditorEdge<TEdgeData>[]>;
+  nodeById: ReadonlyMap<EditorEntityId, GraphEditorNode<TNodeData, TPortType>>;
+  edgeById: ReadonlyMap<EditorEntityId, GraphEditorEdge<TEdgeData>>;
+  adjacencyByNodeId: ReadonlyMap<EditorEntityId, readonly EditorEntityId[]>;
+  incomingEdgesByNodeId: ReadonlyMap<EditorEntityId, readonly GraphEditorEdge<TEdgeData>[]>;
+  outgoingEdgesByNodeId: ReadonlyMap<EditorEntityId, readonly GraphEditorEdge<TEdgeData>[]>;
   getInputPort(nodeId: string, portId: string): GraphEditorPort<TPortType> | null;
   getOutputPort(nodeId: string, portId: string): GraphEditorPort<TPortType> | null;
   getIncomingEdgeToPort(nodeId: string, portId: string): GraphEditorEdge<TEdgeData> | null;
@@ -269,10 +292,42 @@ export type GraphEditorGraphIndex<
   }): GraphEditorSubgraph<TNodeData, TEdgeData, TPortType>;
 };
 
+export type GraphEditorFoundationNode<
+  TNodeData = Record<string, unknown>,
+  TPortType = unknown,
+> = GraphEditorNode<TNodeData, TPortType> & EditorEntityBase;
+
+export type GraphEditorFoundationEdge<TEdgeData = Record<string, unknown>> = EditorGraphEdge & {
+  sourceNodeId: EditorEntityId;
+  sourcePortId: string;
+  targetNodeId: EditorEntityId;
+  targetPortId: string;
+  properties: GraphEditorEdge<TEdgeData>;
+};
+
 export const graphEditorClipboardFormat = "@moritzbrantner/graph-editor/clipboard";
 export const graphEditorClipboardVersion = 1;
 export const graphEditorDocumentFormat = "@moritzbrantner/graph-editor/document";
 export const graphEditorSchemaVersion = 1;
+
+export function createGraphEditorGraphAdapter<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(): EditorGraphAdapter<
+  GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  GraphEditorFoundationNode<TNodeData, TPortType>,
+  GraphEditorFoundationEdge<TEdgeData>
+> {
+  return {
+    getNodes: (document) => document.nodes.map(toEditorGraphNode),
+    getEdges: (document) => document.edges.map(toEditorGraphEdge),
+    getPorts: (node) => [
+      ...(node.inputs ?? []).map((port) => toEditorGraphPort(port, "input" as const)),
+      ...(node.outputs ?? []).map((port) => toEditorGraphPort(port, "output" as const)),
+    ],
+  };
+}
 
 export class GraphEditorDocumentValidationError extends Error {
   override name = "GraphEditorDocumentValidationError" as const;
@@ -570,8 +625,11 @@ export function normalizeGraphEditorDocument<
     ...(groups.length > 0 ? { groups } : {}),
     viewport: document.viewport
       ? {
-          x: Number.isFinite(document.viewport.x) ? document.viewport.x : 0,
-          y: Number.isFinite(document.viewport.y) ? document.viewport.y : 0,
+          ...createEditorViewportState({
+            x: Number.isFinite(document.viewport.x) ? document.viewport.x : 0,
+            y: Number.isFinite(document.viewport.y) ? document.viewport.y : 0,
+            zoom: document.viewport.zoom,
+          }),
           zoom: clamp(document.viewport.zoom, 0.1, 4, 1),
         }
       : undefined,
@@ -586,19 +644,34 @@ export function createGraphEditorDocumentContext<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType> {
   const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
-  const edgeById = new Map(document.edges.map((edge) => [edge.id, edge]));
-  const adjacencyByNodeId = new Map<string, string[]>();
-  const incomingEdgesByNodeId = new Map<string, GraphEditorEdge<TEdgeData>[]>();
-  const outgoingEdgesByNodeId = new Map<string, GraphEditorEdge<TEdgeData>[]>();
+  const editorGraphIndexes = createEditorGraphIndexes(document.edges.map(toEditorGraphEdge));
+  const edgeById = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>>();
+  const adjacencyByNodeId = new Map<EditorEntityId, EditorEntityId[]>();
+  const incomingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
+  const outgoingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
   for (const node of document.nodes) {
     adjacencyByNodeId.set(node.id, []);
     incomingEdgesByNodeId.set(node.id, []);
     outgoingEdgesByNodeId.set(node.id, []);
   }
-  for (const edge of document.edges) {
-    adjacencyByNodeId.get(edge.sourceNodeId)?.push(edge.targetNodeId);
-    outgoingEdgesByNodeId.get(edge.sourceNodeId)?.push(edge);
-    incomingEdgesByNodeId.get(edge.targetNodeId)?.push(edge);
+  for (const edge of editorGraphIndexes.edgesById.values()) {
+    edgeById.set(edge.id, edge.properties);
+  }
+  for (const [nodeId, edges] of editorGraphIndexes.outgoingEdgesByNodeId) {
+    adjacencyByNodeId.set(
+      nodeId,
+      edges.map((edge) => edge.targetId),
+    );
+    outgoingEdgesByNodeId.set(
+      nodeId,
+      edges.map((edge) => edge.properties),
+    );
+  }
+  for (const [nodeId, edges] of editorGraphIndexes.incomingEdgesByNodeId) {
+    incomingEdgesByNodeId.set(
+      nodeId,
+      edges.map((edge) => edge.properties),
+    );
   }
 
   const context: GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType> = {
@@ -971,25 +1044,34 @@ export function normalizeGraphEditorSelection<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   selection: GraphEditorSelectionState,
 ): GraphEditorSelectionState {
+  const editorSelection = normalizeEditorSelection(
+    graphEditorSelectionToEditorSelection(selection),
+    (id) =>
+      document.nodes.some((node) => node.id === id) ||
+      document.edges.some((edge) => edge.id === id) ||
+      (document.groups ?? []).some((group) => group.id === id),
+  );
+  const selectedIds = new Set(getEditorSelectedEntityIds(editorSelection));
   const nodeIds = orderedUnique(
     document.nodes.map((node) => node.id),
-    selection.nodeIds,
+    document.nodes.map((node) => node.id).filter((id) => selectedIds.has(id)),
   );
   const edgeIds = orderedUnique(
     document.edges.map((edge) => edge.id),
-    selection.edgeIds,
+    document.edges.map((edge) => edge.id).filter((id) => selectedIds.has(id)),
   );
   const groupIds = orderedUnique(
     (document.groups ?? []).map((group) => group.id),
-    selection.groupIds ?? [],
+    (document.groups ?? []).map((group) => group.id).filter((id) => selectedIds.has(id)),
   );
+  const primaryId = getEditorSelectionPrimaryEntityId(editorSelection);
   const primary =
-    selection.primary?.type === "node" && nodeIds.includes(selection.primary.id)
-      ? selection.primary
-      : selection.primary?.type === "edge" && edgeIds.includes(selection.primary.id)
-        ? selection.primary
-        : selection.primary?.type === "group" && groupIds.includes(selection.primary.id)
-          ? selection.primary
+    primaryId && nodeIds.includes(primaryId)
+      ? ({ type: "node", id: primaryId } as const)
+      : primaryId && edgeIds.includes(primaryId)
+        ? ({ type: "edge", id: primaryId } as const)
+        : primaryId && groupIds.includes(primaryId)
+          ? ({ type: "group", id: primaryId } as const)
           : groupIds.length > 0
             ? ({ type: "group", id: groupIds.at(-1)! } as const)
             : nodeIds.length > 0
@@ -1003,6 +1085,40 @@ export function normalizeGraphEditorSelection<
     ...(groupIds.length > 0 ? { groupIds } : {}),
     ...(primary ? { primary } : {}),
   };
+}
+
+export function graphEditorSelectionToEditorSelection(
+  selection: GraphEditorSelectionState | null | undefined,
+): EditorSelection {
+  if (!selection) {
+    return { kind: "empty" };
+  }
+  const anchorId =
+    selection.primary?.id ??
+    selection.groupIds?.at(-1) ??
+    selection.nodeIds.at(-1) ??
+    selection.edgeIds.at(-1);
+  return createEditorEntitySelection(
+    [...selection.nodeIds, ...selection.edgeIds, ...(selection.groupIds ?? [])],
+    anchorId,
+  );
+}
+
+export function editorSelectionToGraphEditorSelection<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  selection: EditorSelection | null | undefined,
+): GraphEditorSelectionState {
+  const selectedIds = new Set(getEditorSelectedEntityIds(selection ?? null));
+  return normalizeGraphEditorSelection(document, {
+    nodeIds: document.nodes.map((node) => node.id).filter((id) => selectedIds.has(id)),
+    edgeIds: document.edges.map((edge) => edge.id).filter((id) => selectedIds.has(id)),
+    groupIds: (document.groups ?? []).map((group) => group.id).filter((id) => selectedIds.has(id)),
+    primary: getGraphEditorPrimarySelectionItem(document, selection ?? null) ?? undefined,
+  });
 }
 
 export function copyGraphEditorSelection<
@@ -1126,6 +1242,7 @@ export function createGraphEditorGraphIndex<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 >(document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) {
+  const editorGraphIndexes = createEditorGraphIndexes(document.edges.map(toEditorGraphEdge));
   const nodes = document.nodes.map(
     (node, index): GraphEditorIndexedNode<TNodeData, TPortType> => ({
       id: node.id,
@@ -1146,7 +1263,12 @@ export function createGraphEditorGraphIndex<
         properties: edge,
       }),
     )
-    .filter((edge) => nodeLookup.has(edge.source) && nodeLookup.has(edge.target));
+    .filter(
+      (edge) =>
+        editorGraphIndexes.edgesById.has(edge.id) &&
+        nodeLookup.has(edge.source) &&
+        nodeLookup.has(edge.target),
+    );
   const edgeLookup = new Map(edges.map((edge) => [edge.id, edge]));
   return {
     getEdgeById(edgeId: string) {
@@ -1259,6 +1381,65 @@ export function topologicallySortGraphEditorNodes<
     visit(node);
   }
   return sorted;
+}
+
+function toEditorGraphNode<TNodeData, TPortType>(
+  node: GraphEditorNode<TNodeData, TPortType>,
+): GraphEditorFoundationNode<TNodeData, TPortType> {
+  return {
+    ...node,
+    type: node.type ?? node.kind ?? "graph-node",
+  };
+}
+
+function toEditorGraphEdge<TEdgeData>(
+  edge: GraphEditorEdge<TEdgeData>,
+): GraphEditorFoundationEdge<TEdgeData> {
+  return {
+    ...edge,
+    id: edge.id,
+    sourceId: edge.sourceNodeId,
+    sourceNodeId: edge.sourceNodeId,
+    sourcePortId: edge.sourcePortId,
+    targetId: edge.targetNodeId,
+    targetNodeId: edge.targetNodeId,
+    targetPortId: edge.targetPortId,
+    properties: edge,
+  };
+}
+
+function toEditorGraphPort<TPortType>(
+  port: GraphEditorPort<TPortType>,
+  direction: NonNullable<EditorGraphPort["direction"]>,
+): EditorGraphPort {
+  return {
+    ...port,
+    direction,
+  };
+}
+
+function getGraphEditorPrimarySelectionItem<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  selection: EditorSelection | null,
+): GraphEditorSelectionItem | null {
+  const primaryId = getEditorSelectionPrimaryEntityId(selection);
+  if (!primaryId) {
+    return null;
+  }
+  if (document.nodes.some((node) => node.id === primaryId)) {
+    return { type: "node", id: primaryId };
+  }
+  if (document.edges.some((edge) => edge.id === primaryId)) {
+    return { type: "edge", id: primaryId };
+  }
+  if ((document.groups ?? []).some((group) => group.id === primaryId)) {
+    return { type: "group", id: primaryId };
+  }
+  return null;
 }
 
 function normalizeGraphEditorGroups(
