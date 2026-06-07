@@ -6,7 +6,11 @@ import {
   type GraphEditorDocument,
   type GraphEditorNode,
 } from "./core";
-import { getGraphNodeSize } from "./react/graph-node";
+import {
+  getGraphEditorNodeSize,
+  type GraphEditorNodeLayoutOptions,
+  type GraphEditorNodeSize,
+} from "./node-metrics";
 
 export type GraphEditorLayoutDirection = "right" | "down";
 
@@ -21,6 +25,8 @@ export type GraphEditorLayoutOptions<TNodeData = Record<string, unknown>> = {
   marginX?: number;
   marginY?: number;
 };
+
+export { getGraphEditorNodeSize, type GraphEditorNodeLayoutOptions, type GraphEditorNodeSize };
 
 export type GraphEditorLayoutResult<
   TNodeData = Record<string, unknown>,
@@ -63,7 +69,7 @@ export function layoutGraphEditorDocument<
   graph.setDefaultEdgeLabel(() => ({}));
 
   for (const node of nodes) {
-    const measured = getGraphNodeSize(node as any);
+    const measured = getGraphEditorNodeSize(node);
     graph.setNode(node.id, {
       width: resolveDimension(options.nodeWidth, node, measured.width, defaultNodeWidth),
       height: resolveDimension(options.nodeHeight, node, measured.height, defaultNodeHeight),

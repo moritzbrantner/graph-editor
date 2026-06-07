@@ -51,11 +51,13 @@ export default defineConfig({
       ],
     },
     coverage: {
-      provider: "v8",
+      provider: "istanbul",
       reporter: ["text", "json-summary", "html"],
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.test.{ts,tsx}",
+        "src/**/*.bench.{ts,tsx}",
+        "src/**/*.benchmark.{ts,tsx}",
         "src/**/*.stories.{ts,tsx}",
         "src/.storybook/**",
         "src/**/*.e2e.*",

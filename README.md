@@ -11,6 +11,17 @@ viewport math, graph adapters, indexing, and entity selection primitives.
 bun add @moritzbrantner/graph-editor
 ```
 
+## Local Development
+
+```sh
+bun install --frozen-lockfile
+bun run verify
+bun run dev:examples
+```
+
+Use `bun run verify:full` before larger releases. It runs the fast checks, coverage, example build,
+and Playwright e2e suite.
+
 ## Main APIs
 
 - `GraphCanvas` and `GraphNode` for controlled React graph editing primitives.
@@ -22,6 +33,7 @@ bun add @moritzbrantner/graph-editor
 - `createGraphEditorCommands(...)` and shortcut helpers for generic graph editor command menus.
 - `copyGraphEditorSelection(...)`, `pasteGraphEditorClipboardPayload(...)`, and selection helpers.
 - `layoutGraphEditorDocument(...)` for deterministic Dagre-powered layout.
+- `getGraphEditorNodeSize(...)` for headless deterministic node measurement.
 
 ## Layers
 
@@ -52,6 +64,143 @@ const next = applyGraphEditorOperation(
   }),
 );
 ```
+
+## Quickstarts
+
+### Core
+
+```ts
+import {
+  normalizeGraphEditorDocument,
+  validateGraphEditorDocument,
+} from "@moritzbrantner/graph-editor/core";
+
+const document = normalizeGraphEditorDocument({
+  nodes: [{ id: "source", label: "Source", x: 0, y: 0 }],
+  edges: [],
+});
+
+const diagnostics = validateGraphEditorDocument(document);
+```
+
+### Operations
+
+```ts
+import { createGraphEditorAddNodeOperation } from "@moritzbrantner/graph-editor/operations";
+
+const operation = createGraphEditorAddNodeOperation({
+  node: { id: "node-1", label: "Node 1", x: 0, y: 0 },
+});
+```
+
+### Runtime
+
+```ts
+import {
+  applyGraphEditorOperation,
+  createGraphEditorRuntime,
+} from "@moritzbrantner/graph-editor/runtime";
+import { createGraphEditorAddNodeOperation } from "@moritzbrantner/graph-editor/operations";
+
+let runtime = createGraphEditorRuntime({ initialDocument: { nodes: [], edges: [] } });
+runtime = applyGraphEditorOperation(
+  runtime,
+  createGraphEditorAddNodeOperation({
+    node: { id: "node-1", label: "Node 1", x: 0, y: 0 },
+  }),
+);
+```
+
+### Commands
+
+```ts
+import { createGraphEditorCommands } from "@moritzbrantner/graph-editor/commands";
+
+const commands = createGraphEditorCommands({
+  context: {
+    document: { nodes: [], edges: [] },
+    selection: { nodeIds: [], edgeIds: [] },
+    readOnly: false,
+  },
+  actions: {
+    undo() {},
+    redo() {},
+    copy() {},
+    paste() {},
+    duplicate() {},
+    delete() {},
+    "select-all"() {},
+    "fit-view"() {},
+    "auto-layout"() {},
+    "export-json"() {},
+    "import-json"() {},
+    "group-selection"() {},
+    "ungroup-selection"() {},
+  },
+});
+```
+
+### Layout
+
+```ts
+import {
+  getGraphEditorNodeSize,
+  layoutGraphEditorDocument,
+} from "@moritzbrantner/graph-editor/layout";
+
+const result = layoutGraphEditorDocument(document, { direction: "right" });
+const size = getGraphEditorNodeSize(result.document.nodes[0]);
+```
+
+### React
+
+```tsx
+import { GraphWorkbench } from "@moritzbrantner/graph-editor/react";
+
+export function Editor() {
+  return (
+    <GraphWorkbench
+      document={{ nodes: [], edges: [] }}
+      nodeTemplates={[{ id: "task", label: "Task", inputs: [], outputs: [] }]}
+      onDocumentChange={(nextDocument) => console.log(nextDocument)}
+    />
+  );
+}
+```
+
+### Controlled Workbench
+
+```tsx
+import * as React from "react";
+import {
+  GraphWorkbench,
+  createGraphEditorRuntime,
+  type GraphEditorRuntimeState,
+} from "@moritzbrantner/graph-editor";
+
+export function ControlledEditor() {
+  const [runtime, setRuntime] = React.useState<GraphEditorRuntimeState>(() =>
+    createGraphEditorRuntime({ initialDocument: { nodes: [], edges: [] } }),
+  );
+
+  return <GraphWorkbench runtime={runtime} onRuntimeChange={setRuntime} />;
+}
+```
+
+## Document Invariants
+
+- Node IDs, edge IDs, and group IDs must be non-empty strings and unique within their collection.
+- Edges must reference existing source and target nodes.
+- If a source node declares `outputs`, the edge `sourcePortId` must exist in those outputs.
+- If a target node declares `inputs`, the edge `targetPortId` must exist in those inputs.
+- Nodes without declared port arrays remain valid for loose graph models.
+- Self edges and cycles are invalid by default; use `allowSelfEdges` or `allowCycles` when the
+  host graph model intentionally permits them.
+- Groups may only contain existing node IDs, and each node may appear at most once in a group.
+- `normalizeGraphEditorDocument(document, { mode: "repair" })` drops recoverably invalid edges and
+  groups while preserving valid nodes.
+- Clipboard payloads use `@moritzbrantner/graph-editor/clipboard` with version `1`; consumers should
+  treat other formats or versions as unsupported.
 
 This package intentionally does not include workflow templates, typed workflow semantics,
 persistence backends, sharing UI, collaboration, or a document-library editor shell. Persistence

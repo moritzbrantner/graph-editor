@@ -8,6 +8,7 @@ import {
   FileUpIcon,
   GroupIcon,
   Maximize2Icon,
+  MapIcon,
   MinusIcon,
   NetworkIcon,
   PanelLeftIcon,
@@ -45,6 +46,7 @@ import {
   type GraphEditorEdge,
   type GraphEditorNode,
   type GraphEditorNodeTemplate,
+  type GraphEditorPort,
   type GraphEditorSelectionState,
   type GraphEditorViewport,
 } from "../core";
@@ -59,13 +61,19 @@ import {
   type GraphEditorRuntimeState,
 } from "../runtime";
 import { type GraphEditorOperation } from "../operations";
-import { getGraphNodePortTypeSource, getGraphNodeSize } from "./graph-node";
+import { getGraphEditorNodeSize } from "../node-metrics";
 import {
   InspectorPanel,
   type InspectorFieldValue,
   type InspectorPanelSectionData,
 } from "./inspector-panel";
-import { GraphCanvas, type GraphCanvasConnection, type GraphCanvasSelection } from "./graph-canvas";
+import {
+  GraphCanvas,
+  type GraphCanvasConnection,
+  type GraphCanvasEdge,
+  type GraphCanvasNodeData,
+  type GraphCanvasSelection,
+} from "./graph-canvas";
 import {
   getGraphWorkbenchCommandFromKeyboardEvent,
   getGraphWorkbenchShortcutLabel,
@@ -567,7 +575,7 @@ export function GraphWorkbench<
         }
 
         const id = createGraphWorkbenchNodeId(candidateTemplate.id, document);
-        const sourceSize = getGraphNodeSize(sourceNode as any);
+        const sourceSize = getGraphEditorNodeSize(sourceNode);
         const nextNode = {
           ...candidateTemplate,
           id,
@@ -758,7 +766,20 @@ export function GraphWorkbench<
     const nextDocument = createGraphEditorGroup<TNodeData, TEdgeData, TPortType>(document, {
       nodeIds: selection.nodeIds,
     });
-    commitDocument(nextDocument);
+    const previousGroupIds = new Set((document.groups ?? []).map((group) => group.id));
+    const group = (nextDocument.groups ?? []).find(
+      (candidate) => !previousGroupIds.has(candidate.id),
+    );
+    commitDocument(nextDocument, {
+      selectionAfter: group
+        ? {
+            nodeIds: group.nodeIds,
+            edgeIds: [],
+            groupIds: [group.id],
+            primary: { type: "group", id: group.id },
+          }
+        : selection,
+    });
   }, [commitDocument, document, readOnly, selection.nodeIds]);
 
   const ungroupSelection = React.useCallback(() => {
@@ -1021,14 +1042,14 @@ export function GraphWorkbench<
         renderPalette ? (
           renderPalette(controller)
         ) : (
-          <GraphWorkbenchPalette controller={controller as any} />
+          <GraphWorkbenchPalette controller={controller} />
         )
       ) : null}
       <div className="min-h-0">
         {renderToolbar ? (
           renderToolbar(controller)
         ) : (
-          <GraphWorkbenchToolbar controller={controller as any} />
+          <GraphWorkbenchToolbar controller={controller} />
         )}
         <GraphWorkbenchCanvas
           controller={controller}
@@ -1044,10 +1065,7 @@ export function GraphWorkbench<
         renderInspector ? (
           renderInspector(controller)
         ) : (
-          <GraphWorkbenchInspector
-            controller={controller as any}
-            inspectorSchema={inspectorSchema as any}
-          />
+          <GraphWorkbenchInspector controller={controller} inspectorSchema={inspectorSchema} />
         )
       ) : null}
     </div>
@@ -1087,6 +1105,28 @@ export function GraphWorkbenchCanvas<
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
   ) => React.ReactNode;
 }) {
+  const canvasNodes = controller.document.nodes as unknown as GraphCanvasNodeData[];
+  const canvasEdges = controller.document.edges as unknown as GraphCanvasEdge[];
+
+  const updateCanvasNodes = (
+    nodes: GraphCanvasNodeData[],
+    options: GraphWorkbenchCommitOptions,
+  ) => {
+    controller.actions.updateDocument(
+      {
+        ...controller.document,
+        nodes: nodes as unknown as GraphEditorDocument<TNodeData, TEdgeData, TPortType>["nodes"],
+      },
+      options,
+    );
+  };
+  const updateCanvasEdges = (edges: GraphCanvasEdge[]) => {
+    controller.actions.updateDocument({
+      ...controller.document,
+      edges: edges as unknown as GraphEditorDocument<TNodeData, TEdgeData, TPortType>["edges"],
+    });
+  };
+
   return (
     <div
       className="relative min-h-0"
@@ -1121,8 +1161,8 @@ export function GraphWorkbenchCanvas<
       }}
     >
       <GraphCanvas
-        nodes={controller.document.nodes as any}
-        edges={controller.document.edges as any}
+        nodes={canvasNodes}
+        edges={canvasEdges}
         readOnly={controller.readOnly}
         selectedNodeId={canvasSelection?.type === "node" ? canvasSelection.id : null}
         selectedEdgeId={canvasSelection?.type === "edge" ? canvasSelection.id : null}
@@ -1136,21 +1176,9 @@ export function GraphWorkbenchCanvas<
           );
           onViewportChange?.(viewport);
         }}
-        onNodesChange={(nodes) =>
-          controller.actions.updateDocument(
-            { ...controller.document, nodes: nodes as any },
-            { history: false, drag: "move" },
-          )
-        }
-        onNodesChangeEnd={(nodes) =>
-          controller.actions.updateDocument(
-            { ...controller.document, nodes: nodes as any },
-            { drag: "end" },
-          )
-        }
-        onEdgesChange={(edges) =>
-          controller.actions.updateDocument({ ...controller.document, edges: edges as any })
-        }
+        onNodesChange={(nodes) => updateCanvasNodes(nodes, { history: false, drag: "move" })}
+        onNodesChangeEnd={(nodes) => updateCanvasNodes(nodes, { drag: "end" })}
+        onEdgesChange={updateCanvasEdges}
         isConnectionValid={(connection) =>
           validateGraphEditorConnection(
             controller.document,
@@ -1192,13 +1220,17 @@ export function GraphWorkbenchCanvas<
       {renderContextPad ? (
         renderContextPad(controller)
       ) : (
-        <GraphWorkbenchContextPad controller={controller as any} />
+        <GraphWorkbenchContextPad controller={controller} />
       )}
     </div>
   );
 }
 
-export function GraphWorkbenchToolbar({ controller }: { controller: GraphWorkbenchController }) {
+export function GraphWorkbenchToolbar<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const zoom = controller.document.viewport?.zoom ?? 1;
 
@@ -1250,6 +1282,12 @@ export function GraphWorkbenchToolbar({ controller }: { controller: GraphWorkben
         <GraphWorkbenchCommandButton controller={controller} commandId="delete">
           <Trash2Icon />
         </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="group-selection">
+          <GroupIcon />
+        </GraphWorkbenchCommandButton>
+        <GraphWorkbenchCommandButton controller={controller} commandId="ungroup-selection">
+          <Rows3Icon />
+        </GraphWorkbenchCommandButton>
         <Separator orientation="vertical" className="h-6" />
         <GraphWorkbenchCommandButton controller={controller} commandId="auto-layout">
           <NetworkIcon />
@@ -1287,12 +1325,22 @@ export function GraphWorkbenchToolbar({ controller }: { controller: GraphWorkben
         >
           <PanelRightIcon />
         </GraphWorkbenchIconButton>
+        <GraphWorkbenchIconButton
+          label={controller.view.showMiniMap ? "Hide minimap" : "Show minimap"}
+          onClick={() => controller.view.setShowMiniMap(!controller.view.showMiniMap)}
+        >
+          <MapIcon />
+        </GraphWorkbenchIconButton>
       </div>
     </div>
   );
 }
 
-export function GraphWorkbenchPalette({ controller }: { controller: GraphWorkbenchController }) {
+export function GraphWorkbenchPalette<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   return (
     <aside className="min-h-0 overflow-auto border-r pr-3 max-lg:border-r-0 max-lg:border-b max-lg:pb-3">
       <Input
@@ -1315,12 +1363,16 @@ export function GraphWorkbenchPalette({ controller }: { controller: GraphWorkben
   );
 }
 
-function GraphWorkbenchPaletteGroup({
+function GraphWorkbenchPaletteGroup<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({
   group,
   controller,
 }: {
-  group: GraphWorkbenchPaletteCategoryGroup;
-  controller: GraphWorkbenchController;
+  group: GraphWorkbenchPaletteCategoryGroup<TNodeData>;
+  controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
 }) {
   return (
     <section>
@@ -1350,12 +1402,16 @@ function GraphWorkbenchPaletteGroup({
   );
 }
 
-export function GraphWorkbenchInspector({
+export function GraphWorkbenchInspector<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({
   controller,
   inspectorSchema,
 }: {
-  controller: GraphWorkbenchController;
-  inspectorSchema?: GraphWorkbenchInspectorSchema;
+  controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
+  inspectorSchema?: GraphWorkbenchInspectorSchema<TNodeData, TEdgeData, TPortType>;
 }) {
   const node = controller.selectedNode;
   const edge = controller.selectedEdge;
@@ -1392,7 +1448,7 @@ export function GraphWorkbenchInspector({
               inspectorSchema?.applyNodeValues?.(node, values) ??
               getDefaultNodeInspectorPatch(values);
             controller.actions.updateDocument(
-              updateGraphEditorNode(controller.document, node.id, patch as any),
+              updateGraphEditorNode(controller.document, node.id, patch),
             );
           }
           if (edge) {
@@ -1400,7 +1456,7 @@ export function GraphWorkbenchInspector({
               inspectorSchema?.applyEdgeValues?.(edge, values) ??
               getDefaultEdgeInspectorPatch(values);
             controller.actions.updateDocument(
-              updateGraphEditorEdge(controller.document, edge.id, patch as any),
+              updateGraphEditorEdge(controller.document, edge.id, patch),
             );
           }
         }}
@@ -1409,7 +1465,11 @@ export function GraphWorkbenchInspector({
   );
 }
 
-export function GraphWorkbenchContextPad({ controller }: { controller: GraphWorkbenchController }) {
+export function GraphWorkbenchContextPad<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   const node = controller.selectedNode;
 
   if (!node) {
@@ -1417,7 +1477,7 @@ export function GraphWorkbenchContextPad({ controller }: { controller: GraphWork
   }
 
   const viewport = controller.document.viewport ?? { x: 0, y: 0, zoom: 1 };
-  const nodeSize = getGraphNodeSize(node as any);
+  const nodeSize = getGraphEditorNodeSize(node);
   const style: React.CSSProperties = {
     left: viewport.x + (node.x + nodeSize.width + 12) * viewport.zoom,
     top: viewport.y + node.y * viewport.zoom,
@@ -1466,12 +1526,16 @@ export function GraphWorkbenchOverlayPanel({ children, className }: React.Compon
   );
 }
 
-function GraphWorkbenchCommandButton({
+function GraphWorkbenchCommandButton<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>({
   controller,
   commandId,
   children,
 }: {
-  controller: GraphWorkbenchController;
+  controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
   commandId: GraphWorkbenchCommandId;
   children: React.ReactNode;
 }) {
@@ -1659,7 +1723,9 @@ function getGraphWorkbenchFallbackCommandId(
   return null;
 }
 
-function getDefaultNodeInspectorSections(node: GraphEditorNode): InspectorPanelSectionData[] {
+function getDefaultNodeInspectorSections<TNodeData = Record<string, unknown>, TPortType = unknown>(
+  node: GraphEditorNode<TNodeData, TPortType>,
+): InspectorPanelSectionData[] {
   return [
     {
       id: "general",
@@ -1720,7 +1786,9 @@ function getDefaultNodeInspectorSections(node: GraphEditorNode): InspectorPanelS
   ];
 }
 
-function getDefaultEdgeInspectorSections(edge: GraphEditorEdge): InspectorPanelSectionData[] {
+function getDefaultEdgeInspectorSections<TEdgeData = Record<string, unknown>>(
+  edge: GraphEditorEdge<TEdgeData>,
+): InspectorPanelSectionData[] {
   return [
     {
       id: "connection",
@@ -1789,7 +1857,12 @@ function getDefaultEdgeInspectorSections(edge: GraphEditorEdge): InspectorPanelS
   ];
 }
 
-function getDefaultNodeInspectorPatch(values: Record<string, InspectorFieldValue>) {
+function getDefaultNodeInspectorPatch<TNodeData = Record<string, unknown>, TPortType = unknown>(
+  values: Record<string, InspectorFieldValue>,
+): Partial<GraphEditorNode<TNodeData, TPortType>> {
+  const variant: GraphEditorNode<TNodeData, TPortType>["variant"] =
+    values.variant === "compact" ? "compact" : "default";
+
   return {
     label: String(values.label ?? ""),
     description: optionalString(values.description),
@@ -1797,12 +1870,14 @@ function getDefaultNodeInspectorPatch(values: Record<string, InspectorFieldValue
     category: optionalString(values.category),
     tone: optionalString(values.tone),
     status: optionalString(values.status),
-    variant: values.variant === "compact" ? "compact" : "default",
+    variant,
     minimized: Boolean(values.minimized),
   };
 }
 
-function getDefaultEdgeInspectorPatch(values: Record<string, InspectorFieldValue>) {
+function getDefaultEdgeInspectorPatch<TEdgeData = Record<string, unknown>>(
+  values: Record<string, InspectorFieldValue>,
+): Partial<GraphEditorEdge<TEdgeData>> {
   return {
     status: optionalString(values.status),
     color: optionalString(values.color),
@@ -1820,7 +1895,7 @@ function getGraphWorkbenchDocumentBounds(document: GraphEditorDocument<any, any,
   }
 
   const boxes = document.nodes.map((node) => {
-    const size = getGraphNodeSize(node as any);
+    const size = getGraphEditorNodeSize(node);
     return {
       x: node.x,
       y: node.y,
@@ -1925,12 +2000,30 @@ function createGraphWorkbenchConnectionValidationOptions<
       overrides.arePortsCompatible ??
       options?.arePortsCompatible ??
       ((sourcePort, targetPort) => {
-        const sourceType = getGraphNodePortTypeSource(sourcePort as any);
-        const targetType = getGraphNodePortTypeSource(targetPort as any);
+        const sourceType = getGraphWorkbenchPortTypeSource(sourcePort);
+        const targetType = getGraphWorkbenchPortTypeSource(targetPort);
 
         return !sourceType || !targetType || sourceType === targetType;
       }),
   };
+}
+
+function getGraphWorkbenchPortTypeSource(port: GraphEditorPort) {
+  if (!port.type) {
+    return undefined;
+  }
+
+  if (typeof port.type === "string") {
+    return port.type.trim();
+  }
+
+  if (typeof port.type === "object" && port.type !== null) {
+    const candidate = port.type as { source?: unknown; kind?: unknown };
+    const source = candidate.source ?? candidate.kind;
+    return typeof source === "string" ? source.trim() : undefined;
+  }
+
+  return undefined;
 }
 
 function getFirstValidGraphWorkbenchConnection<

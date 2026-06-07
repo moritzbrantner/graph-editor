@@ -11,6 +11,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@moritzbrantner/ui";
+import {
+  getGraphEditorNodeHeaderHeight,
+  getGraphEditorNodeMinimizedPortsHeight,
+  getGraphEditorNodePortCenterOffset,
+  getGraphEditorNodeSize,
+  type GraphEditorNodeLayoutOptions,
+  type GraphEditorNodeSize,
+} from "../node-metrics";
 
 type GraphNodeTypeScriptType<TypeScriptType = unknown> =
   | string
@@ -68,14 +76,9 @@ type GraphOutputOnlyNodeData<Outputs extends readonly GraphNodePort[] = readonly
     outputs: Outputs;
   };
 
-type GraphNodeSize = {
-  width: number;
-  height: number;
-};
+type GraphNodeSize = GraphEditorNodeSize;
 
-type GraphNodeLayoutOptions = {
-  showPortColumnHeaders?: boolean;
-};
+type GraphNodeLayoutOptions = GraphEditorNodeLayoutOptions;
 
 type GraphNodeMenuItem = {
   id: string;
@@ -137,18 +140,7 @@ type GraphOutputOnlyNodeProps<Outputs extends readonly GraphNodePort[] = readonl
     node: GraphOutputOnlyNodeData<Outputs>;
   };
 
-const graphNodeInlineWidth = 240;
-const graphNodeDefaultWidth = 310;
-const graphNodeMinimizedWidth = 230;
-const graphNodeCompactHeight = 48;
 const graphNodeMinimizedHeaderHeight = 54;
-const graphNodePortRowHeight = 64;
-const graphNodePortGap = 8;
-const graphNodePortColumnsPaddingY = 24;
-const graphNodePortColumnLabelHeight = 21;
-const graphNodeHeaderBaseHeight = 72;
-const graphNodeDescriptionLineHeight = 20;
-const graphNodeDescriptionMaxRows = 4;
 const graphNodeControlButtonClassName =
   "inline-flex h-6 w-6 items-center justify-center rounded-md border border-zinc-300 bg-white/80 text-zinc-700 outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-1";
 
@@ -1045,42 +1037,11 @@ function graphNodeUsesCompactVariant(node: GraphNodeData) {
   return node.variant === "compact";
 }
 
-function graphNodeUsesMinimizedVariant(node: GraphNodeData) {
-  return node.minimized === true;
-}
-
 function getGraphNodeSize(
   node: GraphNodeData,
   options: GraphNodeLayoutOptions = {},
 ): GraphNodeSize {
-  if (graphNodeUsesMinimizedVariant(node)) {
-    return {
-      width: graphNodeMinimizedWidth,
-      height: graphNodeMinimizedHeaderHeight + getGraphNodeMinimizedPortsHeight(node),
-    };
-  }
-
-  if (graphNodeUsesCompactVariant(node)) {
-    return {
-      width: graphNodeInlineWidth,
-      height: graphNodeCompactHeight,
-    };
-  }
-
-  const rows = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
-  const headerHeight = getGraphNodeHeaderHeight(node);
-  const portColumnLabelHeight =
-    options.showPortColumnHeaders === false ? 0 : graphNodePortColumnLabelHeight;
-  const portsHeight =
-    graphNodePortColumnsPaddingY +
-    portColumnLabelHeight +
-    rows * graphNodePortRowHeight +
-    Math.max(rows - 1, 0) * graphNodePortGap;
-
-  return {
-    width: graphNodeDefaultWidth,
-    height: headerHeight + portsHeight,
-  };
+  return getGraphEditorNodeSize(node, options);
 }
 
 function getGraphNodePortCenterOffset(
@@ -1088,28 +1049,7 @@ function getGraphNodePortCenterOffset(
   portIndex: number,
   options: GraphNodeLayoutOptions = {},
 ) {
-  if (graphNodeUsesCompactVariant(node)) {
-    return getGraphNodeSize(node, options).height / 2;
-  }
-
-  if (graphNodeUsesMinimizedVariant(node)) {
-    const ports = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
-    const top = graphNodeMinimizedHeaderHeight;
-
-    return top + ((portIndex + 1) / (ports + 1)) * getGraphNodeMinimizedPortsHeight(node);
-  }
-
-  const headerHeight = getGraphNodeHeaderHeight(node);
-  const portColumnLabelHeight =
-    options.showPortColumnHeaders === false ? 0 : graphNodePortColumnLabelHeight;
-
-  return (
-    headerHeight +
-    graphNodePortColumnsPaddingY / 2 +
-    portColumnLabelHeight +
-    portIndex * (graphNodePortRowHeight + graphNodePortGap) +
-    graphNodePortRowHeight / 2
-  );
+  return getGraphEditorNodePortCenterOffset(node, portIndex, options);
 }
 
 function getGraphNodeToneFromStatus(status?: string): GraphNodeData["tone"] {
@@ -1190,27 +1130,12 @@ function getGraphNodeToneDotClass(tone?: GraphNodeData["tone"]) {
   return "bg-zinc-500";
 }
 
-function getGraphNodeDescriptionRows(node: GraphNodeData) {
-  if (!node.description) {
-    return 0;
-  }
-
-  return Math.max(
-    1,
-    Math.min(graphNodeDescriptionMaxRows, Math.ceil(node.description.length / 58)),
-  );
-}
-
 function getGraphNodeHeaderHeight(node: GraphNodeData) {
-  return (
-    graphNodeHeaderBaseHeight + getGraphNodeDescriptionRows(node) * graphNodeDescriptionLineHeight
-  );
+  return getGraphEditorNodeHeaderHeight(node);
 }
 
 function getGraphNodeMinimizedPortsHeight(node: GraphNodeData) {
-  const rows = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
-
-  return Math.max(40, rows * 16 + 16);
+  return getGraphEditorNodeMinimizedPortsHeight(node);
 }
 
 function getGraphNodePackageLabel(node: GraphNodeData) {

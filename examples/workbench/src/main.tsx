@@ -249,6 +249,7 @@ function App() {
 
 function WorkflowExample() {
   const [exampleId, setExampleId] = React.useState(defaultWorkbenchExample.id);
+  const [readOnly, setReadOnly] = React.useState(false);
   const selectedExample =
     workbenchExamples.find((example) => example.id === exampleId) ?? defaultWorkbenchExample;
   const [runtime, setRuntime] = React.useState(() =>
@@ -346,6 +347,13 @@ function WorkflowExample() {
             <RefreshCwIcon className="size-4" aria-hidden="true" />
             Reset
           </IconTextButton>
+          <IconTextButton
+            type="button"
+            aria-pressed={readOnly}
+            onClick={() => setReadOnly((current) => !current)}
+          >
+            Read only
+          </IconTextButton>
           <MetricBadge label={`${document.nodes.length} nodes`} />
           <MetricBadge label={`${document.edges.length} edges`} />
           {diagnostics.length > 0 ? (
@@ -359,6 +367,7 @@ function WorkflowExample() {
         runtime={runtime}
         nodeTemplates={selectedExample.nodeTemplates}
         inspectorSchema={workflowInspectorSchema}
+        readOnly={readOnly}
         className="h-[calc(100vh-12rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
         onRuntimeChange={commitWorkbenchRuntime}
       />

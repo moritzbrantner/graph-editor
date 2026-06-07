@@ -156,12 +156,15 @@ export type GraphEditorDocumentDiagnostic = {
   nodeId?: string;
   groupId?: string;
   edgeId?: string;
+  sourcePortId?: string;
+  targetPortId?: string;
   sourceNodeId?: string;
   targetNodeId?: string;
 };
 
 export type GraphEditorDocumentValidationOptions = {
   allowCycles?: boolean;
+  allowMissingDeclaredPorts?: boolean;
   allowSelfEdges?: boolean;
 };
 
@@ -409,6 +412,8 @@ export function validateGraphEditorDocument(
   }
 
   const nodeIds = new Set<string>();
+  const validInputPortIdsByNodeId = new Map<string, Set<string>>();
+  const validOutputPortIdsByNodeId = new Map<string, Set<string>>();
   value.nodes.forEach((node, index) => {
     const path = `$.nodes[${index}]`;
     if (!isRecord(node)) {
@@ -431,6 +436,28 @@ export function validateGraphEditorDocument(
       });
     } else {
       nodeIds.add(nodeId);
+    }
+    if (nodeId) {
+      if (Array.isArray(node.inputs)) {
+        validInputPortIdsByNodeId.set(
+          nodeId,
+          new Set(
+            node.inputs.flatMap((port) =>
+              isRecord(port) && typeof port.id === "string" ? [port.id] : [],
+            ),
+          ),
+        );
+      }
+      if (Array.isArray(node.outputs)) {
+        validOutputPortIdsByNodeId.set(
+          nodeId,
+          new Set(
+            node.outputs.flatMap((port) =>
+              isRecord(port) && typeof port.id === "string" ? [port.id] : [],
+            ),
+          ),
+        );
+      }
     }
     if (typeof node.label !== "string") {
       diagnostics.push({
@@ -468,6 +495,8 @@ export function validateGraphEditorDocument(
     const edgeId = typeof edge.id === "string" ? edge.id : undefined;
     const sourceNodeId = typeof edge.sourceNodeId === "string" ? edge.sourceNodeId : undefined;
     const targetNodeId = typeof edge.targetNodeId === "string" ? edge.targetNodeId : undefined;
+    const sourcePortId = typeof edge.sourcePortId === "string" ? edge.sourcePortId : undefined;
+    const targetPortId = typeof edge.targetPortId === "string" ? edge.targetPortId : undefined;
     if (!edgeId?.trim()) {
       diagnostics.push({
         code: "invalid-edge",
@@ -502,6 +531,32 @@ export function validateGraphEditorDocument(
         targetNodeId,
       });
     }
+    if (!options.allowMissingDeclaredPorts && sourceNodeId && nodeIds.has(sourceNodeId)) {
+      const validOutputPortIds = validOutputPortIdsByNodeId.get(sourceNodeId);
+      if (validOutputPortIds && (!sourcePortId || !validOutputPortIds.has(sourcePortId))) {
+        diagnostics.push({
+          code: "missing-edge-port",
+          message: `Graph edge source port is missing: ${sourcePortId ?? ""}`,
+          path: `${path}.sourcePortId`,
+          edgeId,
+          sourceNodeId,
+          sourcePortId,
+        });
+      }
+    }
+    if (!options.allowMissingDeclaredPorts && targetNodeId && nodeIds.has(targetNodeId)) {
+      const validInputPortIds = validInputPortIdsByNodeId.get(targetNodeId);
+      if (validInputPortIds && (!targetPortId || !validInputPortIds.has(targetPortId))) {
+        diagnostics.push({
+          code: "missing-edge-port",
+          message: `Graph edge target port is missing: ${targetPortId ?? ""}`,
+          path: `${path}.targetPortId`,
+          edgeId,
+          targetNodeId,
+          targetPortId,
+        });
+      }
+    }
     if (!options.allowSelfEdges && sourceNodeId && targetNodeId && sourceNodeId === targetNodeId) {
       diagnostics.push({
         code: "self-edge",
@@ -514,18 +569,29 @@ export function validateGraphEditorDocument(
     }
   });
 
+  const groupIds = new Set<string>();
   (Array.isArray(value.groups) ? value.groups : []).forEach((group, index) => {
     const path = `$.groups[${index}]`;
     if (!isRecord(group)) {
       diagnostics.push({ code: "invalid-group", message: "Graph group must be an object", path });
       return;
     }
-    if (typeof group.id !== "string" || !group.id.trim()) {
+    const groupId = typeof group.id === "string" ? group.id : undefined;
+    if (!groupId?.trim()) {
       diagnostics.push({
         code: "invalid-group",
         message: "Graph group id must be a non-empty string",
         path: `${path}.id`,
       });
+    } else if (groupIds.has(groupId)) {
+      diagnostics.push({
+        code: "duplicate-group-id",
+        message: `Duplicate graph group id: ${groupId}`,
+        path: `${path}.id`,
+        groupId,
+      });
+    } else {
+      groupIds.add(groupId);
     }
     if (typeof group.label !== "string") {
       diagnostics.push({
@@ -542,17 +608,30 @@ export function validateGraphEditorDocument(
       });
       return;
     }
-    for (const nodeId of group.nodeIds) {
+    const groupNodeIds = new Set<string>();
+    group.nodeIds.forEach((nodeId, nodeIndex) => {
       if (typeof nodeId !== "string" || !nodeIds.has(nodeId)) {
         diagnostics.push({
           code: "missing-group-node",
           message: `Graph group node is missing: ${String(nodeId)}`,
-          path: `${path}.nodeIds`,
-          groupId: typeof group.id === "string" ? group.id : undefined,
+          path: `${path}.nodeIds[${nodeIndex}]`,
+          groupId,
           nodeId: typeof nodeId === "string" ? nodeId : undefined,
         });
+        return;
       }
-    }
+      if (groupNodeIds.has(nodeId)) {
+        diagnostics.push({
+          code: "duplicate-group-node",
+          message: `Graph group contains duplicate node: ${nodeId}`,
+          path: `${path}.nodeIds[${nodeIndex}]`,
+          groupId,
+          nodeId,
+        });
+        return;
+      }
+      groupNodeIds.add(nodeId);
+    });
   });
 
   if (!options.allowCycles && Array.isArray(value.nodes) && Array.isArray(value.edges)) {
@@ -599,6 +678,7 @@ export function normalizeGraphEditorDocument<
       )
     : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const seenEdgeIds = new Set<string>();
   const edges = (Array.isArray(document.edges) ? document.edges : []).flatMap((edge) => {
     if (!isRecord(edge) || typeof edge.id !== "string" || seenEdgeIds.has(edge.id)) {
@@ -610,6 +690,12 @@ export function normalizeGraphEditorDocument<
       !nodeIds.has(edge.sourceNodeId) ||
       !nodeIds.has(edge.targetNodeId) ||
       (!options.allowSelfEdges && edge.sourceNodeId === edge.targetNodeId)
+    ) {
+      return [];
+    }
+    if (
+      !options.allowMissingDeclaredPorts &&
+      !graphEditorEdgeReferencesDeclaredPorts(edge as GraphEditorEdge<TEdgeData>, nodeById)
     ) {
       return [];
     }
@@ -1471,6 +1557,32 @@ function normalizeGraphEditorGroups(
       } as GraphEditorGroup,
     ];
   });
+}
+
+function graphEditorEdgeReferencesDeclaredPorts<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  edge: GraphEditorEdge<TEdgeData>,
+  nodeById: ReadonlyMap<string, GraphEditorNode<TNodeData, TPortType>>,
+) {
+  const sourceNode = nodeById.get(edge.sourceNodeId);
+  const targetNode = nodeById.get(edge.targetNodeId);
+  if (!sourceNode || !targetNode) {
+    return false;
+  }
+  const sourcePortIds = Array.isArray(sourceNode.outputs)
+    ? new Set(sourceNode.outputs.map((port) => port.id))
+    : null;
+  const targetPortIds = Array.isArray(targetNode.inputs)
+    ? new Set(targetNode.inputs.map((port) => port.id))
+    : null;
+
+  return (
+    (!sourcePortIds || sourcePortIds.has(edge.sourcePortId)) &&
+    (!targetPortIds || targetPortIds.has(edge.targetPortId))
+  );
 }
 
 function cloneGraphEditorNode<TNodeData, TPortType>(

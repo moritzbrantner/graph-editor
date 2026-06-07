@@ -23,8 +23,12 @@ export default defineConfig({
       "@moritzbrantner/graph-editor/layout": path.resolve(rootDir, "src/layout.ts"),
       "@moritzbrantner/graph-editor/react": path.resolve(rootDir, "src/react.tsx"),
       "@moritzbrantner/graph-editor": path.resolve(rootDir, "src/index.ts"),
+      "@moritzbrantner/ui": path.resolve(rootDir, "node_modules/@moritzbrantner/ui"),
+      "lucide-react": path.resolve(rootDir, "node_modules/lucide-react"),
+      react: path.resolve(rootDir, "node_modules/react"),
+      "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ["@moritzbrantner/ui", "react", "react-dom"],
   },
   server: {
     fs: {

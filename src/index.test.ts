@@ -23,11 +23,15 @@ import {
   editorSelectionToGraphEditorSelection,
   getGraphWorkbenchCommandFromKeyboardEvent,
   getGraphEditorCommandFromKeyboardEvent,
+  getGraphEditorNodeSize,
   graphEditorSelectionToEditorSelection,
   graphEditorDocumentAdapter,
+  layoutGraphEditorDocument,
+  markGraphEditorRuntimeSaved,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
   redoGraphEditorRuntime,
+  setGraphEditorRuntimeSelection,
   undoGraphEditorRuntime,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
@@ -239,6 +243,32 @@ describe("@moritzbrantner/graph-editor", () => {
 
     expect(next.document.viewport).toEqual({ x: 10, y: 20, zoom: 1.25 });
     expect(next.canUndo).toBe(false);
+  });
+
+  test("tracks dirty state and keeps selection-only runtime changes out of history", () => {
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [{ id: "node-1", label: "Node 1", x: 0, y: 0 }],
+        edges: [],
+      },
+      disableHistory: true,
+    });
+    const selected = setGraphEditorRuntimeSelection(runtime, {
+      nodeIds: ["node-1"],
+      edgeIds: [],
+    });
+    const updated = applyGraphEditorOperation(
+      selected,
+      createGraphEditorUpdateNodeOperation("node-1", { label: "Renamed" }),
+    );
+    const saved = markGraphEditorRuntimeSaved(updated);
+
+    expect(selected.runtime.status).toBe("clean");
+    expect(selected.canUndo).toBe(false);
+    expect(updated.runtime.status).toBe("dirty");
+    expect(updated.canUndo).toBe(false);
+    expect(saved.runtime.status).toBe("clean");
+    expect(saved.runtime.savedRevision).toBe(saved.runtime.revision);
   });
 
   test("resolves generic graph editor commands and shortcut events", async () => {
@@ -532,6 +562,188 @@ describe("@moritzbrantner/graph-editor", () => {
 
     expect(repaired.nodes).toHaveLength(1);
     expect(repaired.edges).toHaveLength(0);
+  });
+
+  test("validates declared edge ports while preserving loose portless documents", () => {
+    const looseDocument = {
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 0 },
+      ],
+      edges: [
+        {
+          id: "loose-edge",
+          sourceNodeId: "source",
+          sourcePortId: "anything",
+          targetNodeId: "target",
+          targetPortId: "anything",
+        },
+      ],
+    };
+    const declaredDocument = {
+      nodes: [
+        {
+          id: "source",
+          label: "Source",
+          x: 0,
+          y: 0,
+          outputs: [{ id: "out", label: "Out" }],
+        },
+        {
+          id: "target",
+          label: "Target",
+          x: 240,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+        },
+      ],
+      edges: [
+        {
+          id: "missing-port",
+          sourceNodeId: "source",
+          sourcePortId: "missing",
+          targetNodeId: "target",
+          targetPortId: "missing",
+        },
+      ],
+    };
+
+    expect(validateGraphEditorDocument(looseDocument)).toEqual([]);
+    expect(
+      validateGraphEditorDocument(declaredDocument).map((diagnostic) => diagnostic.code),
+    ).toEqual(["missing-edge-port", "missing-edge-port"]);
+    expect(
+      validateGraphEditorDocument(declaredDocument, { allowMissingDeclaredPorts: true }),
+    ).toEqual([]);
+    expect(
+      normalizeGraphEditorDocument(declaredDocument as GraphEditorDocument, { mode: "repair" })
+        .edges,
+    ).toEqual([]);
+  });
+
+  test("reports duplicate group ids and duplicate group nodes", () => {
+    const diagnostics = validateGraphEditorDocument({
+      nodes: [{ id: "node-1", label: "Node 1", x: 0, y: 0 }],
+      edges: [],
+      groups: [
+        { id: "group-1", label: "Group", nodeIds: ["node-1", "node-1"] },
+        { id: "group-1", label: "Duplicate", nodeIds: ["node-1"] },
+      ],
+    });
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "duplicate-group-node",
+      "duplicate-group-id",
+    ]);
+  });
+
+  test("validates self edges and cycles with document validation options", () => {
+    const selfEdgeDocument = {
+      nodes: [
+        {
+          id: "node-1",
+          label: "Node 1",
+          x: 0,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+          outputs: [{ id: "out", label: "Out" }],
+        },
+      ],
+      edges: [
+        {
+          id: "self",
+          sourceNodeId: "node-1",
+          sourcePortId: "out",
+          targetNodeId: "node-1",
+          targetPortId: "in",
+        },
+      ],
+    };
+    const cycleDocument = {
+      nodes: [
+        {
+          id: "a",
+          label: "A",
+          x: 0,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+          outputs: [{ id: "out", label: "Out" }],
+        },
+        {
+          id: "b",
+          label: "B",
+          x: 240,
+          y: 0,
+          inputs: [{ id: "in", label: "In" }],
+          outputs: [{ id: "out", label: "Out" }],
+        },
+      ],
+      edges: [
+        {
+          id: "a-b",
+          sourceNodeId: "a",
+          sourcePortId: "out",
+          targetNodeId: "b",
+          targetPortId: "in",
+        },
+        {
+          id: "b-a",
+          sourceNodeId: "b",
+          sourcePortId: "out",
+          targetNodeId: "a",
+          targetPortId: "in",
+        },
+      ],
+    };
+
+    expect(
+      validateGraphEditorDocument(selfEdgeDocument).map((diagnostic) => diagnostic.code),
+    ).toContain("self-edge");
+    expect(
+      validateGraphEditorDocument(selfEdgeDocument, { allowCycles: true, allowSelfEdges: true }),
+    ).toEqual([]);
+    expect(
+      validateGraphEditorDocument(cycleDocument).map((diagnostic) => diagnostic.code),
+    ).toContain("cycle");
+    expect(validateGraphEditorDocument(cycleDocument, { allowCycles: true })).toEqual([]);
+  });
+
+  test("lays out documents with headless node metrics", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        {
+          id: "source",
+          label: "Source",
+          x: 100,
+          y: 100,
+          outputs: [{ id: "out", label: "Out" }],
+        },
+        {
+          id: "target",
+          label: "Target",
+          x: 120,
+          y: 140,
+          inputs: [{ id: "in", label: "In" }],
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+
+    const size = getGraphEditorNodeSize(document.nodes[0]!);
+    const layout = layoutGraphEditorDocument(document);
+
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
+    expect(layout.changedNodeIds.length).toBeGreaterThan(0);
+    expect(layout.cycles).toEqual([]);
   });
 
   test("maps graph workbench keyboard shortcuts and ignores editable targets", () => {
