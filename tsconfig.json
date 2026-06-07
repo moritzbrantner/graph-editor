@@ -8,8 +8,11 @@
     "moduleResolution": "Bundler",
     "paths": {
       "@moritzbrantner/graph-editor": ["./src/index.ts"],
+      "@moritzbrantner/graph-editor/commands": ["./src/commands.ts"],
       "@moritzbrantner/graph-editor/core": ["./src/core.ts"],
       "@moritzbrantner/graph-editor/layout": ["./src/layout.ts"],
+      "@moritzbrantner/graph-editor/operations": ["./src/operations.ts"],
+      "@moritzbrantner/graph-editor/runtime": ["./src/runtime.ts"],
       "@moritzbrantner/graph-editor/react": ["./src/react.tsx"]
     }
   },

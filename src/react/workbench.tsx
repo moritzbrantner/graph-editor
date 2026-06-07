@@ -21,15 +21,7 @@ import {
 } from "lucide-react";
 
 import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
-import {
-  commitEditorSnapshotHistory,
-  createEditorSnapshotHistory,
-  downloadEditorJson,
-  readEditorJsonFile,
-  redoEditorSnapshotHistory,
-  undoEditorSnapshotHistory,
-  type EditorSnapshotHistory,
-} from "@moritzbrantner/editor-core";
+import { downloadEditorJson, readEditorJsonFile } from "@moritzbrantner/editor-core";
 import {
   addGraphEditorEdge,
   copyGraphEditorSelection,
@@ -44,7 +36,6 @@ import {
   updateGraphEditorEdge,
   updateGraphEditorNode,
   validateGraphEditorConnection,
-  validateGraphEditorDocument,
   type GraphEditorClipboardPayload,
   type GraphEditorConnectionInput,
   type GraphEditorConnectionValidationOptions,
@@ -58,6 +49,16 @@ import {
   type GraphEditorViewport,
 } from "../core";
 import { layoutGraphEditorDocument } from "../layout";
+import {
+  applyGraphEditorOperation,
+  createGraphEditorRuntime,
+  redoGraphEditorRuntime,
+  resetGraphEditorRuntime,
+  setGraphEditorRuntimeSelection,
+  undoGraphEditorRuntime,
+  type GraphEditorRuntimeState,
+} from "../runtime";
+import { type GraphEditorOperation } from "../operations";
 import { getGraphNodePortTypeSource, getGraphNodeSize } from "./graph-node";
 import {
   InspectorPanel,
@@ -100,6 +101,11 @@ export type GraphWorkbenchController<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 > = {
+  runtime: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>;
+  dispatch: (
+    operation: GraphEditorOperation<TNodeData, TEdgeData, TPortType>,
+    options?: { merge?: boolean },
+  ) => void;
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
   readOnly: boolean;
   selection: GraphEditorSelectionState;
@@ -107,7 +113,10 @@ export type GraphWorkbenchController<
   selectedEdge?: GraphEditorEdge<TEdgeData>;
   diagnostics: GraphEditorDocumentDiagnostic[];
   selectedDiagnostics: GraphEditorDocumentDiagnostic[];
-  history: EditorSnapshotHistory<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
+  history: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>["operationHistory"] & {
+    canUndo: boolean;
+    canRedo: boolean;
+  };
   palette: {
     groups: Array<GraphWorkbenchPaletteCategoryGroup<TNodeData>>;
     items: ReadonlyArray<GraphWorkbenchPaletteItem<TNodeData>>;
@@ -161,7 +170,8 @@ export type GraphWorkbenchProps<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 > = {
-  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+  document?: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+  runtime?: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>;
   nodeTemplates?: ReadonlyArray<GraphEditorNodeTemplate<TNodeData, TPortType>>;
   selectedNodeIds?: readonly string[] | null;
   selectedEdgeIds?: readonly string[] | null;
@@ -169,7 +179,10 @@ export type GraphWorkbenchProps<
   readOnly?: boolean;
   className?: string;
   showMiniMap?: boolean;
-  history?: "internal" | "external" | false;
+  disableHistory?: boolean;
+  initialSelection?: GraphEditorSelectionState | null;
+  historyLimit?: number;
+  operationHistoryLimit?: number;
   maxHistory?: number;
   inspectorSchema?: GraphWorkbenchInspectorSchema<TNodeData, TEdgeData, TPortType>;
   onDocumentChange?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
@@ -177,6 +190,7 @@ export type GraphWorkbenchProps<
   onViewportChange?: (viewport: GraphEditorViewport) => void;
   onImportDocument?: (file: File) => Promise<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
   onExportDocument?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
+  onRuntimeChange?: (runtime: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>) => void;
   onCommand?: (commandId: string) => void;
   connectionValidationOptions?: GraphEditorConnectionValidationOptions<
     TNodeData,
@@ -207,9 +221,11 @@ export type GraphWorkbenchProps<
 type GraphWorkbenchCommitOptions = {
   history?: boolean;
   drag?: "move" | "end";
+  selectionAfter?: GraphEditorSelectionState;
 };
 
 const emptySelection: GraphEditorSelectionState = { nodeIds: [], edgeIds: [] };
+const emptyDocument: GraphEditorDocument<any, any, any> = { nodes: [], edges: [] };
 const graphWorkbenchDefaultZoom = 0.9;
 
 export function GraphWorkbench<
@@ -217,7 +233,8 @@ export function GraphWorkbench<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 >({
-  document,
+  document: controlledDocument,
+  runtime: controlledRuntime,
   nodeTemplates = [],
   selectedNodeIds,
   selectedEdgeIds,
@@ -225,7 +242,10 @@ export function GraphWorkbench<
   readOnly = false,
   className,
   showMiniMap = true,
-  history: historyMode = "internal",
+  disableHistory = false,
+  initialSelection,
+  historyLimit,
+  operationHistoryLimit,
   maxHistory = 100,
   inspectorSchema,
   onDocumentChange,
@@ -233,6 +253,7 @@ export function GraphWorkbench<
   onViewportChange,
   onImportDocument,
   onExportDocument,
+  onRuntimeChange,
   onCommand,
   connectionValidationOptions,
   createEdge,
@@ -241,8 +262,20 @@ export function GraphWorkbench<
   renderInspector,
   renderContextPad,
 }: GraphWorkbenchProps<TNodeData, TEdgeData, TPortType>) {
-  const [internalSelection, setInternalSelection] =
-    React.useState<GraphEditorSelectionState>(emptySelection);
+  const initialDocument =
+    controlledRuntime?.document ??
+    controlledDocument ??
+    (emptyDocument as GraphEditorDocument<TNodeData, TEdgeData, TPortType>);
+  const [internalRuntime, setInternalRuntime] = React.useState(() =>
+    createGraphEditorRuntime<TNodeData, TEdgeData, TPortType>({
+      initialDocument,
+      initialSelection,
+      historyLimit: historyLimit ?? maxHistory,
+      operationHistoryLimit,
+      disableHistory,
+      connectionValidationOptions,
+    }),
+  );
   const [searchValue, setSearchValue] = React.useState("");
   const [showPalette, setShowPalette] = React.useState(true);
   const [showInspector, setShowInspector] = React.useState(true);
@@ -252,10 +285,15 @@ export function GraphWorkbench<
     TEdgeData,
     TPortType
   > | null>(null);
-  const [historyState, setHistoryState] = React.useState(() =>
-    createEditorSnapshotHistory(document),
-  );
+  const runtimeState: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> =
+    controlledRuntime ?? internalRuntime;
+  const document: GraphEditorDocument<TNodeData, TEdgeData, TPortType> = runtimeState.document;
   const workbenchRef = React.useRef<HTMLDivElement>(null);
+  const lastEmittedDocumentRef = React.useRef<GraphEditorDocument<
+    TNodeData,
+    TEdgeData,
+    TPortType
+  > | null>(null);
   const dragHistoryBaseRef = React.useRef<GraphEditorDocument<
     TNodeData,
     TEdgeData,
@@ -265,20 +303,20 @@ export function GraphWorkbench<
     selectedNodeIds !== undefined ||
     selectedEdgeIds !== undefined ||
     selectedGroupIds !== undefined;
-  const rawSelection = externalSelectionProvided
+  const rawSelection: GraphEditorSelectionState = externalSelectionProvided
     ? {
         nodeIds: [...(selectedNodeIds ?? [])],
         edgeIds: [...(selectedEdgeIds ?? [])],
         ...(selectedGroupIds?.length ? { groupIds: [...selectedGroupIds] } : {}),
       }
-    : internalSelection;
+    : runtimeState.selection;
   const selection = React.useMemo(
     () => normalizeGraphEditorSelection(document, rawSelection),
     [document, rawSelection],
   );
   const selectedNode = document.nodes.find((node) => node.id === selection.nodeIds.at(-1));
   const selectedEdge = document.edges.find((edge) => edge.id === selection.edgeIds.at(-1));
-  const diagnostics = React.useMemo(() => validateGraphEditorDocument(document), [document]);
+  const diagnostics: GraphEditorDocumentDiagnostic[] = runtimeState.diagnostics;
   const selectedDiagnostics = React.useMemo(
     () =>
       diagnostics.filter(
@@ -301,10 +339,24 @@ export function GraphWorkbench<
   );
 
   React.useEffect(() => {
-    setHistoryState((current) =>
-      current.present === document ? current : { ...current, present: document },
-    );
-  }, [document]);
+    if (controlledRuntime || !controlledDocument) {
+      return;
+    }
+    setInternalRuntime((current) => {
+      if (graphWorkbenchDocumentsEqual(current.document, controlledDocument)) {
+        return current;
+      }
+      if (
+        lastEmittedDocumentRef.current !== null &&
+        graphWorkbenchDocumentsEqual(lastEmittedDocumentRef.current, controlledDocument)
+      ) {
+        return current;
+      }
+      return resetGraphEditorRuntime(current, controlledDocument, {
+        selection: externalSelectionProvided ? rawSelection : current.selection,
+      });
+    });
+  }, [controlledDocument, controlledRuntime, externalSelectionProvided, rawSelection]);
 
   React.useEffect(() => {
     setShowMiniMap(showMiniMap);
@@ -313,12 +365,55 @@ export function GraphWorkbench<
   const commitSelection = React.useCallback(
     (nextSelection: GraphEditorSelectionState) => {
       const normalized = normalizeGraphEditorSelection(document, nextSelection);
-      if (!externalSelectionProvided) {
-        setInternalSelection(normalized);
+      const nextRuntime = setGraphEditorRuntimeSelection(runtimeState, normalized);
+      if (!externalSelectionProvided && !controlledRuntime) {
+        setInternalRuntime(nextRuntime);
       }
+      onRuntimeChange?.(nextRuntime);
       onSelectionStateChange?.(normalized);
     },
-    [document, externalSelectionProvided, onSelectionStateChange],
+    [
+      controlledRuntime,
+      document,
+      externalSelectionProvided,
+      onRuntimeChange,
+      onSelectionStateChange,
+      runtimeState,
+    ],
+  );
+
+  const commitRuntime = React.useCallback(
+    (nextRuntime: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>) => {
+      if (!controlledRuntime) {
+        setInternalRuntime(nextRuntime);
+      }
+      onRuntimeChange?.(nextRuntime);
+      if (nextRuntime.document !== runtimeState.document) {
+        lastEmittedDocumentRef.current = nextRuntime.document;
+        onDocumentChange?.(nextRuntime.document);
+      }
+      if (nextRuntime.selection !== runtimeState.selection) {
+        onSelectionStateChange?.(nextRuntime.selection);
+      }
+    },
+    [
+      controlledRuntime,
+      onDocumentChange,
+      onRuntimeChange,
+      onSelectionStateChange,
+      runtimeState.document,
+      runtimeState.selection,
+    ],
+  );
+
+  const dispatch = React.useCallback(
+    (
+      operation: GraphEditorOperation<TNodeData, TEdgeData, TPortType>,
+      options: { merge?: boolean } = {},
+    ) => {
+      commitRuntime(applyGraphEditorOperation(runtimeState, operation, options));
+    },
+    [commitRuntime, runtimeState],
   );
 
   const commitDocument = React.useCallback(
@@ -326,11 +421,17 @@ export function GraphWorkbench<
       nextDocument: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
       options: GraphWorkbenchCommitOptions = {},
     ) => {
-      const withHistory = historyMode !== false && options.history !== false;
-
       if (options.drag === "move") {
         dragHistoryBaseRef.current ??= document;
-        onDocumentChange?.(nextDocument);
+        const nextRuntime = applyGraphEditorOperation(
+          runtimeState,
+          createGraphWorkbenchDocumentOperation(
+            nextDocument,
+            options.selectionAfter ?? selection,
+            false,
+          ),
+        );
+        commitRuntime(nextRuntime);
         return;
       }
 
@@ -338,35 +439,34 @@ export function GraphWorkbench<
         const baseDocument = dragHistoryBaseRef.current;
         dragHistoryBaseRef.current = null;
 
-        if (
-          withHistory &&
-          baseDocument &&
-          !graphWorkbenchDocumentsEqual(baseDocument, nextDocument)
-        ) {
-          setHistoryState((current) =>
-            commitEditorSnapshotHistory({ ...current, present: baseDocument }, nextDocument, {
-              limit: maxHistory,
-              equals: graphWorkbenchDocumentsEqual,
-            }),
+        if (baseDocument && !graphWorkbenchDocumentsEqual(baseDocument, nextDocument)) {
+          const baseRuntime = resetGraphEditorRuntime(runtimeState, baseDocument, {
+            selection,
+          });
+          const nextRuntime = applyGraphEditorOperation(
+            baseRuntime,
+            createGraphWorkbenchDocumentOperation(
+              nextDocument,
+              options.selectionAfter ?? selection,
+              options.history !== false,
+            ),
           );
+          commitRuntime(nextRuntime);
+          return;
         }
-        onDocumentChange?.(nextDocument);
+        commitRuntime(runtimeState);
         return;
       }
 
-      if (withHistory) {
-        setHistoryState((current) =>
-          commitEditorSnapshotHistory(current, nextDocument, {
-            limit: maxHistory,
-            equals: graphWorkbenchDocumentsEqual,
-          }),
-        );
-      } else {
-        setHistoryState((current) => ({ ...current, present: nextDocument }));
-      }
-      onDocumentChange?.(nextDocument);
+      dispatch(
+        createGraphWorkbenchDocumentOperation(
+          nextDocument,
+          options.selectionAfter ?? selection,
+          options.history !== false,
+        ),
+      );
     },
-    [document, historyMode, maxHistory, onDocumentChange],
+    [commitRuntime, dispatch, document, runtimeState, selection],
   );
 
   const getViewportCenterPosition = React.useCallback(() => {
@@ -384,7 +484,7 @@ export function GraphWorkbench<
       }
 
       const id = createGraphWorkbenchNodeId(template.id, document);
-      const nextDocument = normalizeGraphEditorDocument({
+      const nextDocument = normalizeGraphEditorDocument<TNodeData, TEdgeData, TPortType>({
         ...document,
         nodes: [
           ...document.nodes,
@@ -396,8 +496,9 @@ export function GraphWorkbench<
           } as GraphEditorNode<TNodeData, TPortType>,
         ],
       });
-      commitDocument(nextDocument);
-      commitSelection({ nodeIds: [id], edgeIds: [], primary: { type: "node", id } });
+      commitDocument(nextDocument, {
+        selectionAfter: { nodeIds: [id], edgeIds: [], primary: { type: "node", id } },
+      });
     },
     [commitDocument, commitSelection, document, getViewportCenterPosition, readOnly],
   );
@@ -473,7 +574,7 @@ export function GraphWorkbench<
           x: sourceNode.x + sourceSize.width + 120,
           y: sourceNode.y,
         } as GraphEditorNode<TNodeData, TPortType>;
-        const documentWithNode = normalizeGraphEditorDocument({
+        const documentWithNode = normalizeGraphEditorDocument<TNodeData, TEdgeData, TPortType>({
           ...document,
           nodes: [...document.nodes, nextNode],
         });
@@ -493,8 +594,9 @@ export function GraphWorkbench<
           continue;
         }
 
-        commitDocument(result.document);
-        commitSelection({ nodeIds: [id], edgeIds: [], primary: { type: "node", id } });
+        commitDocument(result.document, {
+          selectionAfter: { nodeIds: [id], edgeIds: [], primary: { type: "node", id } },
+        });
         return;
       }
     },
@@ -529,15 +631,16 @@ export function GraphWorkbench<
       const imported = onImportDocument
         ? await onImportDocument(file)
         : await readEditorJsonFile<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>(file);
-      const normalized = normalizeGraphEditorDocument(imported, { mode: "repair" });
-      commitDocument(normalized);
-      commitSelection(emptySelection);
+      const normalized = normalizeGraphEditorDocument<TNodeData, TEdgeData, TPortType>(imported, {
+        mode: "repair",
+      });
+      commitDocument(normalized, { selectionAfter: emptySelection });
     },
     [commitDocument, commitSelection, onImportDocument, readOnly],
   );
 
   const copySelection = React.useCallback(async () => {
-    const payload = copyGraphEditorSelection(document, selection);
+    const payload = copyGraphEditorSelection<TNodeData, TEdgeData, TPortType>(document, selection);
     setClipboardPayload(payload);
 
     if (payload.nodes.length === 0 && payload.edges.length === 0) {
@@ -576,18 +679,22 @@ export function GraphWorkbench<
       return;
     }
 
-    const result = pasteGraphEditorClipboardPayload(document, payload);
-    commitDocument(result.document);
-    commitSelection({
-      nodeIds: result.nodeIds,
-      edgeIds: result.edgeIds,
-      ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
-      primary:
-        result.nodeIds.length > 0
-          ? { type: "node", id: result.nodeIds.at(-1)! }
-          : result.edgeIds.length > 0
-            ? { type: "edge", id: result.edgeIds.at(-1)! }
-            : undefined,
+    const result = pasteGraphEditorClipboardPayload<TNodeData, TEdgeData, TPortType>(
+      document,
+      payload,
+    );
+    commitDocument(result.document, {
+      selectionAfter: {
+        nodeIds: result.nodeIds,
+        edgeIds: result.edgeIds,
+        ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
+        primary:
+          result.nodeIds.length > 0
+            ? { type: "node", id: result.nodeIds.at(-1)! }
+            : result.edgeIds.length > 0
+              ? { type: "edge", id: result.edgeIds.at(-1)! }
+              : undefined,
+      },
     });
   }, [commitDocument, commitSelection, document, readClipboardPayload, readOnly]);
 
@@ -596,13 +703,18 @@ export function GraphWorkbench<
       return;
     }
 
-    const result = duplicateGraphEditorSelection(document, selection);
-    commitDocument(result.document);
-    commitSelection({
-      nodeIds: result.nodeIds,
-      edgeIds: result.edgeIds,
-      ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
-      primary: result.nodeIds.length > 0 ? { type: "node", id: result.nodeIds.at(-1)! } : undefined,
+    const result = duplicateGraphEditorSelection<TNodeData, TEdgeData, TPortType>(
+      document,
+      selection,
+    );
+    commitDocument(result.document, {
+      selectionAfter: {
+        nodeIds: result.nodeIds,
+        edgeIds: result.edgeIds,
+        ...(result.groupIds?.length ? { groupIds: result.groupIds } : {}),
+        primary:
+          result.nodeIds.length > 0 ? { type: "node", id: result.nodeIds.at(-1)! } : undefined,
+      },
     });
   }, [commitDocument, commitSelection, document, readOnly, selection]);
 
@@ -633,8 +745,9 @@ export function GraphWorkbench<
     if (readOnly) {
       return;
     }
-    commitDocument(removeGraphEditorSelection(document, selection));
-    commitSelection(emptySelection);
+    commitDocument(removeGraphEditorSelection(document, selection), {
+      selectionAfter: emptySelection,
+    });
   }, [commitDocument, commitSelection, document, readOnly, selection]);
 
   const groupSelection = React.useCallback(() => {
@@ -642,7 +755,9 @@ export function GraphWorkbench<
       return;
     }
 
-    const nextDocument = createGraphEditorGroup(document, { nodeIds: selection.nodeIds });
+    const nextDocument = createGraphEditorGroup<TNodeData, TEdgeData, TPortType>(document, {
+      nodeIds: selection.nodeIds,
+    });
     commitDocument(nextDocument);
   }, [commitDocument, document, readOnly, selection.nodeIds]);
 
@@ -655,8 +770,9 @@ export function GraphWorkbench<
       (currentDocument, groupId) => ungroupGraphEditorGroup(currentDocument, groupId),
       document,
     );
-    commitDocument(nextDocument);
-    commitSelection({ nodeIds: selection.nodeIds, edgeIds: selection.edgeIds });
+    commitDocument(nextDocument, {
+      selectionAfter: { nodeIds: selection.nodeIds, edgeIds: selection.edgeIds },
+    });
   }, [commitDocument, commitSelection, document, readOnly, selection]);
 
   const autoLayout = React.useCallback(() => {
@@ -665,7 +781,7 @@ export function GraphWorkbench<
     }
 
     commitDocument(
-      layoutGraphEditorDocument(document, {
+      layoutGraphEditorDocument<TNodeData, TEdgeData, TPortType>(document, {
         direction: "right",
         nodeSeparation: 80,
         rankSeparation: 120,
@@ -674,30 +790,21 @@ export function GraphWorkbench<
   }, [commitDocument, document, readOnly]);
 
   const undo = React.useCallback(() => {
-    if (historyMode === false || !historyState.canUndo) {
+    if (!runtimeState.canUndo) {
       return;
     }
-
-    setHistoryState((current) => {
-      const next = undoEditorSnapshotHistory(current);
-      onDocumentChange?.(next.present);
-      return next;
-    });
-  }, [historyMode, historyState.canUndo, onDocumentChange]);
+    commitRuntime(undoGraphEditorRuntime(runtimeState));
+  }, [commitRuntime, runtimeState]);
 
   const redo = React.useCallback(() => {
-    if (historyMode === false || !historyState.canRedo) {
+    if (!runtimeState.canRedo) {
       return;
     }
-
-    setHistoryState((current) => {
-      const next = redoEditorSnapshotHistory(current);
-      onDocumentChange?.(next.present);
-      return next;
-    });
-  }, [historyMode, historyState.canRedo, onDocumentChange]);
+    commitRuntime(redoGraphEditorRuntime(runtimeState));
+  }, [commitRuntime, runtimeState]);
 
   const actionsRef = React.useRef<Record<string, () => void | Promise<void>>>({});
+  const commandsRef = React.useRef<GraphWorkbenchAction[]>([]);
   const runCommand = React.useCallback(
     (commandId: GraphWorkbenchCommandId | string) => {
       onCommand?.(commandId);
@@ -741,8 +848,8 @@ export function GraphWorkbench<
     const commands = createGraphWorkbenchActions({
       actions: controllerActions,
       canPaste: Boolean(clipboardPayload),
-      canRedo: historyState.canRedo,
-      canUndo: historyState.canUndo,
+      canRedo: runtimeState.canRedo,
+      canUndo: runtimeState.canUndo,
       hasSelection: selection.nodeIds.length > 0 || selection.edgeIds.length > 0,
       nodeSelectionCount: selection.nodeIds.length,
       readOnly,
@@ -750,6 +857,8 @@ export function GraphWorkbench<
     });
 
     return {
+      runtime: runtimeState,
+      dispatch,
       document,
       readOnly,
       selection,
@@ -757,7 +866,11 @@ export function GraphWorkbench<
       selectedEdge,
       diagnostics,
       selectedDiagnostics,
-      history: historyState,
+      history: {
+        ...runtimeState.operationHistory,
+        canUndo: runtimeState.canUndo,
+        canRedo: runtimeState.canRedo,
+      },
       palette: {
         groups,
         items: nodeTemplates,
@@ -794,7 +907,6 @@ export function GraphWorkbench<
     fitView,
     groupSelection,
     groups,
-    historyState,
     importJson,
     internalShowMiniMap,
     nodeTemplates,
@@ -807,6 +919,8 @@ export function GraphWorkbench<
     selectedEdge,
     selectedNode,
     selection,
+    dispatch,
+    runtimeState,
     setZoom,
     showInspector,
     showPalette,
@@ -814,7 +928,8 @@ export function GraphWorkbench<
     ungroupSelection,
   ]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
+    commandsRef.current = controller.commands;
     actionsRef.current = Object.fromEntries(
       controller.commands.map((command) => [command.id, command.run]),
     );
@@ -827,20 +942,21 @@ export function GraphWorkbench<
         return;
       }
 
-      const commandId = getGraphWorkbenchCommandFromKeyboardEvent(event);
+      const commandId =
+        getGraphWorkbenchCommandFromKeyboardEvent(event) ??
+        getGraphWorkbenchFallbackCommandId(event);
       if (!commandId) {
         return;
       }
 
-      const command = controller.commands.find((candidate) => candidate.id === commandId);
-      if (!command || command.disabled) {
+      if (!actionsRef.current[commandId]) {
         return;
       }
 
       event.preventDefault();
-      void command.run();
+      void actionsRef.current[commandId]?.();
     },
-    [commitSelection, controller.commands],
+    [commitSelection],
   );
 
   React.useEffect(() => {
@@ -856,27 +972,30 @@ export function GraphWorkbench<
         return;
       }
 
-      const commandId = getGraphWorkbenchCommandFromKeyboardEvent(event);
+      const commandId =
+        getGraphWorkbenchCommandFromKeyboardEvent(event) ??
+        getGraphWorkbenchFallbackCommandId(event);
       if (!commandId) {
         return;
       }
 
-      const command = controller.commands.find((candidate) => candidate.id === commandId);
-      if (!command || command.disabled) {
+      if (!actionsRef.current[commandId]) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
-      void command.run();
+      void actionsRef.current[commandId]?.();
     };
 
     window.document.addEventListener("keydown", handleDocumentKeyDown, true);
+    window.addEventListener("keydown", handleDocumentKeyDown, true);
 
     return () => {
       window.document.removeEventListener("keydown", handleDocumentKeyDown, true);
+      window.removeEventListener("keydown", handleDocumentKeyDown, true);
     };
-  }, [controller.commands]);
+  }, []);
 
   const canvasSelection = selectedNode
     ? ({ type: "node", id: selectedNode.id, node: selectedNode } as GraphCanvasSelection)
@@ -1508,6 +1627,38 @@ function createGraphWorkbenchActions<
   ];
 }
 
+function getGraphWorkbenchFallbackCommandId(
+  event: Pick<KeyboardEvent | React.KeyboardEvent, "ctrlKey" | "key" | "metaKey" | "shiftKey">,
+): GraphWorkbenchCommandId | null {
+  const key = event.key.toLowerCase();
+  const mod = event.ctrlKey || event.metaKey;
+  if (mod && key === "z" && event.shiftKey) {
+    return "redo";
+  }
+  if (mod && key === "y") {
+    return "redo";
+  }
+  if (mod && key === "z") {
+    return "undo";
+  }
+  if (mod && key === "c") {
+    return "copy";
+  }
+  if (mod && key === "v") {
+    return "paste";
+  }
+  if (mod && key === "d") {
+    return "duplicate";
+  }
+  if (mod && key === "a") {
+    return "select-all";
+  }
+  if (!mod && (key === "delete" || key === "backspace")) {
+    return "delete";
+  }
+  return null;
+}
+
 function getDefaultNodeInspectorSections(node: GraphEditorNode): InspectorPanelSectionData[] {
   return [
     {
@@ -1699,6 +1850,24 @@ function graphWorkbenchDocumentsEqual<
   right: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
 ) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function createGraphWorkbenchDocumentOperation<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  selection: GraphEditorSelectionState,
+  history = true,
+): GraphEditorOperation<TNodeData, TEdgeData, TPortType> {
+  return {
+    id: "graph.update-node",
+    label: "Update document",
+    apply: () => document,
+    selectionAfter: selection,
+    metadata: { graphEditor: { history } },
+  };
 }
 
 function connectGraphWorkbenchNodes<

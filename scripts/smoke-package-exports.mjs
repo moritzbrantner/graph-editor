@@ -15,6 +15,18 @@ const modules = [
     path: "../dist/layout.js",
     exports: ["layoutGraphEditorDocument"],
   },
+  {
+    path: "../dist/operations.js",
+    exports: ["createGraphEditorAddNodeOperation", "createGraphEditorUpdateNodeOperation"],
+  },
+  {
+    path: "../dist/runtime.js",
+    exports: ["createGraphEditorRuntime", "applyGraphEditorOperation"],
+  },
+  {
+    path: "../dist/commands.js",
+    exports: ["createGraphEditorCommands", "getGraphEditorCommandFromKeyboardEvent"],
+  },
 ];
 
 const failures = [];

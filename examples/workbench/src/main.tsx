@@ -14,8 +14,10 @@ import {
 
 import {
   GraphWorkbench,
+  createGraphEditorRuntime,
   normalizeGraphEditorDocument,
   validateGraphEditorDocument,
+  type GraphEditorRuntimeState,
   type GraphWorkbenchInspectorSchema,
 } from "@moritzbrantner/graph-editor";
 import {
@@ -249,9 +251,12 @@ function WorkflowExample() {
   const [exampleId, setExampleId] = React.useState(defaultWorkbenchExample.id);
   const selectedExample =
     workbenchExamples.find((example) => example.id === exampleId) ?? defaultWorkbenchExample;
-  const [document, setDocument] = React.useState(() =>
-    normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)),
+  const [runtime, setRuntime] = React.useState(() =>
+    createGraphEditorRuntime<WorkflowNodeData, WorkflowEdgeData, WorkflowPortType>({
+      initialDocument: normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)),
+    }),
   );
+  const document = runtime.document;
   const categories = React.useMemo(
     () => Array.from(new Set(workbenchExamples.map((example) => example.category))),
     [],
@@ -276,7 +281,11 @@ function WorkflowExample() {
       return;
     }
     setExampleId(nextExample.id);
-    setDocument(normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(nextExample)));
+    setRuntime(
+      createGraphEditorRuntime<WorkflowNodeData, WorkflowEdgeData, WorkflowPortType>({
+        initialDocument: normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(nextExample)),
+      }),
+    );
   };
 
   const selectCategory = (category: string) => {
@@ -287,15 +296,26 @@ function WorkflowExample() {
   };
 
   const resetExample = () => {
-    setDocument(normalizeGraphEditorDocument(cloneWorkbenchExampleDocument(selectedExample)));
+    setRuntime(
+      createGraphEditorRuntime<WorkflowNodeData, WorkflowEdgeData, WorkflowPortType>({
+        initialDocument: normalizeGraphEditorDocument(
+          cloneWorkbenchExampleDocument(selectedExample),
+        ),
+      }),
+    );
   };
-  const commitWorkbenchDocument = React.useCallback((nextDocument: typeof document) => {
-    if (typeof window === "undefined" || typeof window.queueMicrotask !== "function") {
-      setDocument(nextDocument);
-      return;
-    }
-    window.queueMicrotask(() => setDocument(nextDocument));
-  }, []);
+  const commitWorkbenchRuntime = React.useCallback(
+    (
+      nextRuntime: GraphEditorRuntimeState<WorkflowNodeData, WorkflowEdgeData, WorkflowPortType>,
+    ) => {
+      if (typeof window === "undefined" || typeof window.queueMicrotask !== "function") {
+        setRuntime(nextRuntime);
+        return;
+      }
+      window.queueMicrotask(() => setRuntime(nextRuntime));
+    },
+    [],
+  );
 
   return (
     <section className="grid gap-3 p-4">
@@ -336,11 +356,11 @@ function WorkflowExample() {
         </div>
       </div>
       <GraphWorkbench
-        document={document}
+        runtime={runtime}
         nodeTemplates={selectedExample.nodeTemplates}
         inspectorSchema={workflowInspectorSchema}
         className="h-[calc(100vh-12rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
-        onDocumentChange={commitWorkbenchDocument}
+        onRuntimeChange={commitWorkbenchRuntime}
       />
     </section>
   );

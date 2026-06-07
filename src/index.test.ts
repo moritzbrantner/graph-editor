@@ -6,16 +6,29 @@ import {
   GraphCanvas,
   GraphWorkbench,
   GraphNode,
+  applyGraphEditorOperation,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
+  createGraphEditorAddEdgeOperation,
+  createGraphEditorAddNodeOperation,
+  createGraphEditorCommands,
+  createGraphEditorDuplicateSelectionOperation,
   createGraphEditorGraphAdapter,
+  createGraphEditorMoveNodesOperation,
+  createGraphEditorPasteOperation,
+  createGraphEditorRuntime,
+  createGraphEditorUpdateNodeOperation,
+  createGraphEditorUpdateViewportOperation,
   duplicateGraphEditorSelection,
   editorSelectionToGraphEditorSelection,
   getGraphWorkbenchCommandFromKeyboardEvent,
+  getGraphEditorCommandFromKeyboardEvent,
   graphEditorSelectionToEditorSelection,
   graphEditorDocumentAdapter,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
+  redoGraphEditorRuntime,
+  undoGraphEditorRuntime,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
   validateGraphEditorDocument,
@@ -108,6 +121,203 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(undone.present).toBe(second);
     expect(undone.canRedo).toBe(true);
     expect(redoEditorSnapshotHistory(undone).present).toBe(third);
+  });
+
+  test("applies graph operations through the headless runtime with undo and redo selection", () => {
+    const runtime = createGraphEditorRuntime({
+      initialDocument: { nodes: [], edges: [] },
+      initialSelection: { nodeIds: ["missing"], edgeIds: [] },
+    });
+
+    const withNode = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorAddNodeOperation({
+        node: { id: "node-1", label: "Node 1", x: 0, y: 0 },
+      }),
+    );
+    const updated = applyGraphEditorOperation(
+      withNode,
+      createGraphEditorUpdateNodeOperation("node-1", { id: "ignored", label: "Renamed" }),
+    );
+    const moved = applyGraphEditorOperation(
+      updated,
+      createGraphEditorMoveNodesOperation({ "node-1": { x: 32, y: 48 } }),
+    );
+
+    expect(runtime.selection).toEqual({ nodeIds: [], edgeIds: [] });
+    expect(moved.document.nodes[0]).toMatchObject({ id: "node-1", label: "Renamed", x: 32, y: 48 });
+    expect(moved.selection).toEqual({
+      nodeIds: ["node-1"],
+      edgeIds: [],
+      primary: { type: "node", id: "node-1" },
+    });
+    expect(moved.canUndo).toBe(true);
+
+    const undone = undoGraphEditorRuntime(moved);
+    expect(undone.document.nodes[0]).toMatchObject({ id: "node-1", label: "Renamed", x: 0, y: 0 });
+    expect(undone.selection).toEqual({
+      nodeIds: ["node-1"],
+      edgeIds: [],
+      primary: { type: "node", id: "node-1" },
+    });
+
+    const redone = redoGraphEditorRuntime(undone);
+    expect(redone.document.nodes[0]).toMatchObject({ x: 32, y: 48 });
+  });
+
+  test("blocks invalid graph operations without corrupting runtime document state", () => {
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [{ id: "source", label: "Source", x: 0, y: 0 }],
+        edges: [],
+      },
+    });
+
+    const next = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorAddEdgeOperation({
+        edge: {
+          id: "invalid",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "missing",
+          targetPortId: "in",
+        },
+      }),
+    );
+
+    expect(next.document).toBe(runtime.document);
+    expect(next.issues[0]?.message).toContain("target node is missing");
+    expect(next.diagnostics).toEqual([]);
+  });
+
+  test("pastes and duplicates selections through operations with dynamic selection results", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 0 },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+    const runtime = createGraphEditorRuntime({
+      initialDocument: document,
+      initialSelection: { nodeIds: ["source", "target"], edgeIds: [] },
+    });
+    const payload = copyGraphEditorSelection(document, runtime.selection, {
+      copiedAt: "2026-06-06T00:00:00.000Z",
+    });
+
+    const pasted = applyGraphEditorOperation(runtime, createGraphEditorPasteOperation(payload));
+    expect(pasted.document.nodes).toHaveLength(4);
+    expect(pasted.selection.nodeIds).toEqual(["source-2", "target-2"]);
+
+    const duplicated = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorDuplicateSelectionOperation(runtime.selection),
+    );
+    expect(duplicated.document.edges).toHaveLength(2);
+    expect(duplicated.selection.nodeIds).toEqual(["source-2", "target-2"]);
+  });
+
+  test("updates viewport without history when operation metadata disables history", () => {
+    const runtime = createGraphEditorRuntime({
+      initialDocument: { nodes: [], edges: [] },
+    });
+
+    const next = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorUpdateViewportOperation({ x: 10, y: 20, zoom: 1.25 }, { history: false }),
+    );
+
+    expect(next.document.viewport).toEqual({ x: 10, y: 20, zoom: 1.25 });
+    expect(next.canUndo).toBe(false);
+  });
+
+  test("resolves generic graph editor commands and shortcut events", async () => {
+    const calls: string[] = [];
+    const actions: Parameters<typeof createGraphEditorCommands>[0]["actions"] = {
+      undo: () => {
+        calls.push("undo");
+      },
+      redo: () => {
+        calls.push("redo");
+      },
+      copy: () => {
+        calls.push("copy");
+      },
+      paste: () => {
+        calls.push("paste");
+      },
+      duplicate: () => {
+        calls.push("duplicate");
+      },
+      delete: () => {
+        calls.push("delete");
+      },
+      "select-all": () => {
+        calls.push("select-all");
+      },
+      "fit-view": () => {
+        calls.push("fit-view");
+      },
+      "auto-layout": () => {
+        calls.push("auto-layout");
+      },
+      "export-json": () => {
+        calls.push("export-json");
+      },
+      "import-json": () => {
+        calls.push("import-json");
+      },
+      "group-selection": () => {
+        calls.push("group-selection");
+      },
+      "ungroup-selection": () => {
+        calls.push("ungroup-selection");
+      },
+    };
+    const commands = createGraphEditorCommands({
+      actions,
+      context: {
+        document: { nodes: [], edges: [] },
+        selection: { nodeIds: ["node-1"], edgeIds: [] },
+        readOnly: false,
+        canUndo: true,
+        canRedo: false,
+        canPaste: true,
+      },
+    });
+
+    expect(
+      getGraphEditorCommandFromKeyboardEvent({
+        key: "d",
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+        altKey: false,
+        target: document.body,
+      }),
+    ).toBe("duplicate");
+    expect(commands.find((command) => command.id === "redo")?.disabled).toBe(true);
+    await commands
+      .find((command) => command.id === "duplicate")
+      ?.run?.({
+        altKey: false,
+        ctrlKey: false,
+        key: "",
+        metaKey: false,
+        shiftKey: false,
+        target: document.body,
+      });
+    expect(calls).toEqual(["duplicate"]);
   });
 
   test("serializes graph documents through the editor-core adapter", () => {
@@ -501,6 +711,52 @@ describe("@moritzbrantner/graph-editor", () => {
 
     expect(getDocument().nodes).toHaveLength(1);
     expect(getDocument().edges).toHaveLength(0);
+  });
+
+  test("supports controlled GraphWorkbench runtime updates", async () => {
+    const controller: {
+      current: GraphWorkbenchController<AppendNodeData, AppendEdgeData, AppendPortType> | null;
+    } = { current: null };
+    let latestRuntime = createGraphEditorRuntime<AppendNodeData, AppendEdgeData, AppendPortType>({
+      initialDocument: { nodes: [], edges: [] },
+    });
+
+    function Harness() {
+      const [runtime, setRuntime] = React.useState(latestRuntime);
+
+      return React.createElement(GraphWorkbench<AppendNodeData, AppendEdgeData, AppendPortType>, {
+        runtime,
+        nodeTemplates: [appendPayloadTemplate],
+        onRuntimeChange(nextRuntime) {
+          latestRuntime = nextRuntime;
+          setRuntime(nextRuntime);
+        },
+        renderToolbar(nextController) {
+          controller.current = nextController;
+          return null;
+        },
+        renderPalette: () => null,
+        renderInspector: () => null,
+        renderContextPad: () => null,
+      });
+    }
+
+    render(React.createElement(Harness));
+
+    await act(async () => {
+      controller.current?.actions.addTemplateNode(appendPayloadTemplate, { x: 40, y: 50 });
+    });
+
+    expect(latestRuntime.document.nodes[0]).toMatchObject({
+      id: "transform-template",
+      x: 40,
+      y: 50,
+    });
+    expect(latestRuntime.canUndo).toBe(true);
+    expect(latestRuntime.selection.primary).toEqual({
+      type: "node",
+      id: "transform-template",
+    });
   });
 
   test("ships valid workbench example graph fixtures", () => {

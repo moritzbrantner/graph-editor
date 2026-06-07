@@ -13,12 +13,24 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@moritzbrantner/graph-editor/commands",
+        replacement: path.resolve(rootDir, "src/commands.ts"),
+      },
+      {
         find: "@moritzbrantner/graph-editor/core",
         replacement: path.resolve(rootDir, "src/core.ts"),
       },
       {
         find: "@moritzbrantner/graph-editor/layout",
         replacement: path.resolve(rootDir, "src/layout.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/operations",
+        replacement: path.resolve(rootDir, "src/operations.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/runtime",
+        replacement: path.resolve(rootDir, "src/runtime.ts"),
       },
       {
         find: "@moritzbrantner/graph-editor/react",

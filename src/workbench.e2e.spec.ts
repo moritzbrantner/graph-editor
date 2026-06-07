@@ -39,50 +39,54 @@ test("creates nodes from the palette and edits custom node fields", async ({ pag
   await expect(page.locator("#inspector-owner")).toHaveValue("Lifecycle Ops");
 });
 
-test("supports keyboard duplicate, delete, undo, and redo", async ({ page }) => {
+test("supports duplicate, delete, undo, and redo commands", async ({ page }) => {
   await page.goto("/");
 
-  const pressWorkbenchKey = async (init: KeyboardEventInit) => {
-    await (page as any).evaluate((eventInit: KeyboardEventInit) => {
-      document
-        .querySelector("[data-slot='graph-workbench']")
-        ?.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-    }, init);
-  };
   await page.getByRole("button", { name: "Lead created", exact: true }).click();
   await expect(page.locator("#inspector-label")).toHaveValue("Lead created");
-  await pressWorkbenchKey({
-    key: "d",
-    ctrlKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
+  await page.getByRole("button", { name: "Duplicate" }).first().click();
   await expect(page.getByRole("button", { name: "Lead created", exact: true })).toHaveCount(2);
 
   await page.getByRole("button", { name: "Lead created", exact: true }).first().click();
-  await pressWorkbenchKey({
-    key: "Delete",
-    bubbles: true,
-    cancelable: true,
-  });
+  await page.getByRole("button", { name: "Delete" }).first().click();
   await expect(page.getByRole("button", { name: "Lead created", exact: true })).toHaveCount(1);
 
-  await pressWorkbenchKey({
-    key: "z",
-    ctrlKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
+  await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByRole("button", { name: "Lead created", exact: true })).toHaveCount(2);
 
-  await pressWorkbenchKey({
-    key: "z",
-    ctrlKey: true,
-    shiftKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
+  await page.getByRole("button", { name: "Redo" }).click();
   await expect(page.getByRole("button", { name: "Lead created", exact: true })).toHaveCount(1);
+});
+
+test("undoes and redoes a node drag as one operation", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile-chrome", "Pointer drag assertion is desktop-only.");
+
+  await page.goto("/");
+
+  const node = page.locator("[data-slot='workflow-builder-node'][data-node-id='lead-created']");
+  const getNodePosition = () =>
+    node.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return `${style.left},${style.top}`;
+    });
+  const originalPosition = await getNodePosition();
+  const box = await node.boundingBox();
+  expect(box).not.toBeNull();
+
+  await page.mouse.move(box!.x + 40, box!.y + 32);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 150, box!.y + 72, { steps: 8 });
+  await page.mouse.up();
+
+  const movedPosition = await getNodePosition();
+  expect(movedPosition).not.toBe(originalPosition);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => getNodePosition()).toBe(originalPosition);
+
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect.poll(() => getNodePosition()).toBe(movedPosition);
 });
 
 test("appends from the context pad and exports JSON", async ({ page }) => {
