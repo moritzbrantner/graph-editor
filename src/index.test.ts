@@ -1,18 +1,20 @@
 import * as React from "react";
-import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, test } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   GraphCanvas,
   GraphWorkbench,
   GraphNode,
   applyGraphEditorOperation,
+  clearGraphEditorSelection,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
   createGraphEditorAddEdgeOperation,
   createGraphEditorAddNodeOperation,
   createGraphEditorCommands,
   createGraphEditorDuplicateSelectionOperation,
+  createGraphEditorGroup,
   createGraphEditorGraphAdapter,
   createGraphEditorMoveNodesOperation,
   createGraphEditorPasteOperation,
@@ -23,16 +25,20 @@ import {
   editorSelectionToGraphEditorSelection,
   getGraphWorkbenchCommandFromKeyboardEvent,
   getGraphEditorCommandFromKeyboardEvent,
+  getGraphEditorGroupBounds,
+  getGraphEditorSelectionFromBounds,
   getGraphEditorNodeSize,
   graphEditorSelectionToEditorSelection,
   graphEditorDocumentAdapter,
   layoutGraphEditorDocument,
   markGraphEditorRuntimeSaved,
   normalizeGraphEditorDocument,
+  normalizeGraphEditorBounds,
   pasteGraphEditorClipboardPayload,
   redoGraphEditorRuntime,
   setGraphEditorRuntimeSelection,
   undoGraphEditorRuntime,
+  updateGraphEditorSelection,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
   validateGraphEditorDocument,
@@ -41,6 +47,7 @@ import {
   type GraphEditorDocument,
   type GraphEditorEdge,
   type GraphEditorNodeTemplate,
+  type GraphEditorSelectionState,
   type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
 import {
@@ -57,12 +64,61 @@ import { workbenchExamples } from "../examples/workbench/src/workbench-examples"
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("@moritzbrantner/graph-editor", () => {
   test("exposes React graph primitives", () => {
     expect(typeof GraphCanvas).toBe("function");
     expect(typeof GraphNode).toBe("function");
+  });
+
+  test("selects multiple canvas nodes with modifier clicks", async () => {
+    const selections: Array<{ nodeIds: string[]; edgeIds: string[] }> = [];
+
+    function Harness() {
+      const [selection, setSelection] = React.useState({
+        nodeIds: [] as string[],
+        edgeIds: [] as string[],
+      });
+
+      return React.createElement(GraphCanvas, {
+        nodes: [
+          { id: "source", label: "Source", x: 0, y: 0 },
+          { id: "target", label: "Target", x: 260, y: 0 },
+        ],
+        edges: [],
+        selectedNodeIds: selection.nodeIds,
+        selectedEdgeIds: selection.edgeIds,
+        showToolbar: false,
+        showMiniMap: false,
+        onSelectionStateChange(nextSelection) {
+          selections.push({
+            nodeIds: nextSelection.nodeIds,
+            edgeIds: nextSelection.edgeIds,
+          });
+          setSelection({
+            nodeIds: nextSelection.nodeIds,
+            edgeIds: nextSelection.edgeIds,
+          });
+        },
+      });
+    }
+
+    render(React.createElement(Harness));
+
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Source" }), { button: 0 });
+    });
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Target" }), {
+        button: 0,
+        shiftKey: true,
+      });
+    });
+
+    expect(selections.at(-1)?.nodeIds).toEqual(["source", "target"]);
   });
 
   test("normalizes graph documents and validates structural connections", () => {
@@ -271,6 +327,34 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(saved.runtime.savedRevision).toBe(saved.runtime.revision);
   });
 
+  test("treats stable-equivalent nested document data as unchanged in runtime history", () => {
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [
+          {
+            id: "node-1",
+            label: "Node 1",
+            x: 0,
+            y: 0,
+            data: { nested: { a: 1, b: 2 } },
+          },
+        ],
+        edges: [],
+      },
+    });
+
+    const updated = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorUpdateNodeOperation("node-1", {
+        data: { nested: { b: 2, a: 1 } },
+      }),
+    );
+
+    expect(updated.runtime.revision).toBe(runtime.runtime.revision);
+    expect(updated.runtime.history.past).toEqual([]);
+    expect(updated.runtime.document).toBe(runtime.runtime.document);
+  });
+
   test("resolves generic graph editor commands and shortcut events", async () => {
     const calls: string[] = [];
     const actions: Parameters<typeof createGraphEditorCommands>[0]["actions"] = {
@@ -447,6 +531,80 @@ describe("@moritzbrantner/graph-editor", () => {
     });
   });
 
+  test("updates graph selections by replacing, extending, toggling, and marquee bounds", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 0 },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+
+    const selectedSource = updateGraphEditorSelection(
+      document,
+      clearGraphEditorSelection(),
+      { type: "node", id: "source" },
+      "replace",
+    );
+    const extended = updateGraphEditorSelection(
+      document,
+      selectedSource,
+      { type: "node", id: "target" },
+      "extend",
+    );
+    const toggled = updateGraphEditorSelection(
+      document,
+      extended,
+      { type: "node", id: "source" },
+      "toggle",
+    );
+    const marquee = getGraphEditorSelectionFromBounds(
+      document,
+      normalizeGraphEditorBounds({ x: -8, y: -8, width: 130, height: 80 }),
+      [
+        { type: "node", id: "source", bounds: { x: 0, y: 0, width: 120, height: 64 } },
+        { type: "node", id: "target", bounds: { x: 240, y: 0, width: 120, height: 64 } },
+      ],
+    );
+
+    expect(selectedSource.nodeIds).toEqual(["source"]);
+    expect(extended.nodeIds).toEqual(["source", "target"]);
+    expect(toggled.nodeIds).toEqual(["target"]);
+    expect(marquee.nodeIds).toEqual(["source"]);
+  });
+
+  test("calculates graph group bounds from visible node boxes", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 96 },
+        { id: "hidden", label: "Hidden", x: 800, y: 800 },
+      ],
+      edges: [],
+      groups: [{ id: "group-1", label: "Group", nodeIds: ["source", "target", "hidden"] }],
+    });
+
+    const [group] = getGraphEditorGroupBounds(
+      document,
+      (node) => ({ x: node.x, y: node.y, width: 100, height: 50 }),
+      { padding: 10, hiddenNodeIds: ["hidden"] },
+    );
+
+    expect(group).toEqual({
+      groupId: "group-1",
+      nodeIds: ["source", "target"],
+      bounds: { x: -10, y: -10, width: 360, height: 166 },
+    });
+  });
+
   test("updates graph edges without replacing their identity", () => {
     const document = normalizeGraphEditorDocument({
       nodes: [
@@ -541,6 +699,69 @@ describe("@moritzbrantner/graph-editor", () => {
     const duplicated = duplicateGraphEditorSelection(document, selection);
     expect(duplicated.document.nodes).toHaveLength(4);
     expect(duplicated.document.edges).toHaveLength(2);
+  });
+
+  test("preserves unique group and edge id suffix behavior", () => {
+    const grouped = createGraphEditorGroup(
+      {
+        nodes: [
+          { id: "source", label: "Source", x: 0, y: 0 },
+          { id: "target", label: "Target", x: 240, y: 0 },
+        ],
+        edges: [],
+        groups: [{ id: "group", label: "Group", nodeIds: ["source"] }],
+      },
+      { nodeIds: ["target"] },
+    );
+    expect(grouped.groups?.map((group) => group.id)).toEqual(["group", "group-2"]);
+
+    const edgeBase = "source:out->target:in";
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [
+          {
+            id: "source",
+            label: "Source",
+            x: 0,
+            y: 0,
+            outputs: [{ id: "out", label: "Out" }],
+          },
+          {
+            id: "target",
+            label: "Target",
+            x: 240,
+            y: 0,
+            inputs: [{ id: "in", label: "In" }],
+          },
+        ],
+        edges: [
+          {
+            id: edgeBase,
+            sourceNodeId: "source",
+            sourcePortId: "out",
+            targetNodeId: "target",
+            targetPortId: "in",
+          },
+        ],
+      },
+    });
+    const next = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorAddEdgeOperation({
+        connection: {
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+        validationOptions: {
+          allowDuplicateEdges: true,
+          allowOccupiedInputs: true,
+        },
+      }),
+    );
+
+    expect(next.document.edges.map((edge) => edge.id)).toEqual([edgeBase, `${edgeBase}-2`]);
   });
 
   test("repairs recoverable imported document shape", () => {
@@ -925,6 +1146,106 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(getDocument().edges).toHaveLength(0);
   });
 
+  test("copies and pastes through clipboard fallback when clipboard permissions fail", async () => {
+    const clipboard = {
+      readText: vi.fn(async () => {
+        throw new Error("clipboard denied");
+      }),
+      writeText: vi.fn(async () => {
+        throw new Error("clipboard denied");
+      }),
+    };
+    vi.stubGlobal("navigator", { clipboard });
+    const { controller, getDocument } = renderClipboardWorkbench();
+
+    await act(async () => {
+      await controller.current?.actions.copySelection();
+      await controller.current?.actions.pasteSelection();
+    });
+
+    expect(clipboard.writeText).toHaveBeenCalledOnce();
+    expect(clipboard.readText).toHaveBeenCalledOnce();
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "source-2"]);
+  });
+
+  test("pastes from in-memory payload when clipboard JSON is invalid", async () => {
+    const clipboard = {
+      readText: vi.fn(async () => "{"),
+      writeText: vi.fn(async () => undefined),
+    };
+    vi.stubGlobal("navigator", { clipboard });
+    const { controller, getDocument } = renderClipboardWorkbench();
+
+    await act(async () => {
+      await controller.current?.actions.copySelection();
+      await controller.current?.actions.pasteSelection();
+    });
+
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "source-2"]);
+  });
+
+  test("runs workbench hotkeys from the scoped body and ignores editable targets", async () => {
+    const { getDocument } = renderClipboardWorkbench({
+      renderToolbarContent: React.createElement("input", { "aria-label": "Hotkey input" }),
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(document, { ctrlKey: true, key: "d" });
+    });
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "source-2"]);
+
+    const input = screen.getByLabelText("Hotkey input");
+    input.focus();
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Delete" });
+    });
+
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "source-2"]);
+  });
+
+  test("clears workbench selection with Escape", async () => {
+    const selections: GraphEditorSelectionState[] = [];
+    const { getWorkbench } = renderClipboardWorkbench({
+      onSelectionStateChange(selection) {
+        selections.push(selection);
+      },
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(getWorkbench(), { key: "Escape" });
+    });
+
+    expect(selections.at(-1)).toEqual({ nodeIds: [], edgeIds: [] });
+  });
+
+  test("passes custom clipboard payloads to custom paste handlers", async () => {
+    vi.stubGlobal("navigator", {});
+    const customPayload = { kind: "custom" };
+    const pasteClipboardPayload = vi.fn((document: ClipboardWorkbenchDocument) => ({
+      document: {
+        ...document,
+        nodes: [...document.nodes, { id: "custom-node", label: "Custom", x: 48, y: 48 }],
+      },
+      edgeIds: [],
+      nodeIds: ["custom-node"],
+    }));
+    const { controller, getDocument } = renderClipboardWorkbench({
+      copySelection: () => customPayload,
+      pasteClipboardPayload,
+    });
+
+    await act(async () => {
+      await controller.current?.actions.copySelection();
+      await controller.current?.actions.pasteSelection();
+    });
+
+    expect(pasteClipboardPayload).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining(customPayload),
+    );
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "custom-node"]);
+  });
+
   test("supports controlled GraphWorkbench runtime updates", async () => {
     const controller: {
       current: GraphWorkbenchController<AppendNodeData, AppendEdgeData, AppendPortType> | null;
@@ -1062,3 +1383,78 @@ function renderWorkbenchHarness({
     getDocument: () => latestDocument,
   };
 }
+
+function renderClipboardWorkbench({
+  copySelection,
+  onSelectionStateChange,
+  pasteClipboardPayload,
+  renderToolbarContent,
+}: {
+  copySelection?: (
+    document: ClipboardWorkbenchDocument,
+    selection: GraphEditorSelectionState,
+  ) => unknown;
+  onSelectionStateChange?: (selection: GraphEditorSelectionState) => void;
+  pasteClipboardPayload?: (
+    document: ClipboardWorkbenchDocument,
+    payload: unknown,
+  ) => {
+    document: ClipboardWorkbenchDocument;
+    nodeIds: string[];
+    edgeIds: string[];
+    groupIds?: string[];
+  };
+  renderToolbarContent?: React.ReactNode;
+} = {}) {
+  const controller: { current: GraphWorkbenchController<ClipboardNodeData> | null } = {
+    current: null,
+  };
+  const initialDocument: ClipboardWorkbenchDocument = {
+    nodes: [{ id: "source", label: "Source", x: 0, y: 0 }],
+    edges: [],
+  };
+  let latestDocument = initialDocument;
+
+  function Harness() {
+    const [document, setDocument] = React.useState(initialDocument);
+
+    return React.createElement(GraphWorkbench<ClipboardNodeData>, {
+      copySelection,
+      document,
+      initialSelection: { nodeIds: ["source"], edgeIds: [] },
+      nodeTemplates: [],
+      onDocumentChange(nextDocument) {
+        latestDocument = nextDocument;
+        setDocument(nextDocument);
+      },
+      onSelectionStateChange,
+      pasteClipboardPayload,
+      className: "clipboard-workbench",
+      renderContextPad: () => null,
+      renderInspector: () => null,
+      renderPalette: () => null,
+      renderToolbar(nextController) {
+        controller.current = nextController;
+        return renderToolbarContent;
+      },
+    });
+  }
+
+  const fixture = render(
+    React.createElement(
+      "div",
+      { "data-testid": "clipboard-workbench" },
+      React.createElement(Harness),
+    ),
+  );
+
+  return {
+    controller,
+    getDocument: () => latestDocument,
+    getWorkbench: () =>
+      fixture.container.querySelector<HTMLElement>('[data-slot="graph-workbench"]')!,
+  };
+}
+
+type ClipboardNodeData = Record<string, unknown>;
+type ClipboardWorkbenchDocument = GraphEditorDocument<ClipboardNodeData>;

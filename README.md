@@ -25,7 +25,8 @@ and Playwright e2e suite.
 ## Main APIs
 
 - `GraphCanvas` and `GraphNode` for controlled React graph editing primitives.
-- `GraphWorkbench` for a compact generic graph editor shell.
+- `GraphWorkbench` for a compact generic graph editor shell with multi-select, groups, panning,
+  wheel zoom, clipboard, import/export, and inspectable node/edge/group properties.
 - `normalizeGraphEditorDocument(...)`, `validateGraphEditorDocument(...)`, and mutation helpers.
 - `createGraphEditorAddNodeOperation(...)` and other semantic graph operation factories.
 - `createGraphEditorRuntime(...)` and `applyGraphEditorOperation(...)` for headless editing,
@@ -167,6 +168,36 @@ export function Editor() {
   );
 }
 ```
+
+`GraphCanvas` supports controlled multi-selection through `selectedNodeIds`, `selectedEdgeIds`,
+`selectedGroupIds`, and `onSelectionStateChange`. Use modifier-clicks to extend/toggle selection
+and modifier-drag on the canvas to marquee-select nodes, edges, and groups. Empty-canvas drag pans
+the viewport, and modifier wheel zooms around the pointer.
+
+Connection lifecycle callbacks are split by intent:
+
+```tsx
+<GraphCanvas
+  nodes={nodes}
+  edges={edges}
+  groups={groups}
+  onConnectionCreate={(connection) => {
+    // add one edge
+    return true;
+  }}
+  onConnectionRewire={(edge, connection) => {
+    // update edge in place; preserve edge.id
+    return true;
+  }}
+  onConnectionDelete={(edge, reason) => {
+    // remove one edge
+  }}
+/>
+```
+
+`GraphWorkbench` exposes the same selection state through its controller and default UI. Consumers
+can add host-specific commands with the `commands` prop and can customize group inspection with
+`inspectorSchema.getGroupSections` and `inspectorSchema.applyGroupValues`.
 
 ### Controlled Workbench
 

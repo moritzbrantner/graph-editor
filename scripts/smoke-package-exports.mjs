@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -121,9 +121,17 @@ async function smokePackedTarball(failures) {
       path.join(tempDir, "package.json"),
       JSON.stringify({ private: true, type: "module" }, null, 2),
     );
+    const localDependencyTarballs = await packLocalSmokeDependencies(tempDir);
     await execFileAsync(
       "npm",
-      ["install", "--ignore-scripts", "--no-audit", "--no-fund", tarballPath],
+      [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        ...localDependencyTarballs,
+        tarballPath,
+      ],
       {
         cwd: tempDir,
       },
@@ -152,4 +160,21 @@ async function smokePackedTarball(failures) {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function packLocalSmokeDependencies(tempDir) {
+  const editorCoreDir = path.resolve(rootDir, "../editor-core");
+  try {
+    await access(path.join(editorCoreDir, "package.json"));
+  } catch {
+    return [];
+  }
+
+  const packResult = await execFileAsync(
+    "npm",
+    ["pack", editorCoreDir, "--pack-destination", tempDir, "--ignore-scripts"],
+    { cwd: rootDir },
+  );
+  const tarballName = packResult.stdout.trim().split(/\r?\n/).at(-1);
+  return tarballName ? [path.join(tempDir, tarballName)] : [];
 }

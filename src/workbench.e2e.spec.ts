@@ -142,6 +142,9 @@ test("supports keyboard duplicate and group commands", async ({ page }) => {
 
   await page.getByRole("button", { name: "Lead created", exact: true }).first().click();
   await page.getByRole("button", { name: "Group selection" }).first().click();
+  await expect(
+    page.locator("[data-slot='workflow-builder-group'][data-selected='true']"),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Ungroup selection" }).first()).toBeEnabled();
   await page.getByRole("button", { name: "Ungroup selection" }).first().click();
 });

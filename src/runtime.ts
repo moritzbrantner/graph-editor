@@ -1,5 +1,6 @@
 import {
   applyEditorOperation,
+  createStableEditorJsonEquals,
   createEditorOperationRuntime,
   redoEditorOperationRuntime,
   markEditorRuntimeSaved,
@@ -63,6 +64,8 @@ type GraphEditorRuntimeStateOptions<
 > = Omit<GraphEditorRuntimeOptions<TNodeData, TEdgeData, TPortType>, "initialDocument">;
 
 const runtimeOptionsByState = new WeakMap<object, GraphEditorRuntimeStateOptions<any, any, any>>();
+const graphEditorDocumentsEqual =
+  createStableEditorJsonEquals<GraphEditorDocument<any, any, any>>();
 
 export function createGraphEditorRuntime<
   TNodeData = Record<string, unknown>,
@@ -357,15 +360,4 @@ function toRuntimeStateOptions<
     operationHistoryLimit: options.operationHistoryLimit,
     validationOptions: options.validationOptions,
   };
-}
-
-function graphEditorDocumentsEqual<
-  TNodeData = Record<string, unknown>,
-  TEdgeData = Record<string, unknown>,
-  TPortType = unknown,
->(
-  left: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
-  right: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
-) {
-  return JSON.stringify(left) === JSON.stringify(right);
 }

@@ -2,6 +2,7 @@ import {
   EditorJsonParseError,
   createEditorEntitySelection,
   createEditorGraphIndexes,
+  createUniqueEditorId,
   createEditorViewportState,
   getEditorSelectedEntityIds,
   getEditorSelectionPrimaryEntityId,
@@ -110,6 +111,25 @@ export type GraphEditorSelectionState = {
   edgeIds: string[];
   groupIds?: string[];
   primary?: GraphEditorSelectionItem;
+};
+
+export type GraphEditorSelectionMode = "replace" | "toggle" | "extend";
+
+export type GraphEditorBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type GraphEditorSelectableBounds = GraphEditorSelectionItem & {
+  bounds: GraphEditorBounds;
+};
+
+export type GraphEditorGroupBounds = {
+  groupId: string;
+  bounds: GraphEditorBounds;
+  nodeIds: string[];
 };
 
 export type GraphEditorConnectionInput = {
@@ -1173,6 +1193,173 @@ export function normalizeGraphEditorSelection<
   };
 }
 
+export function clearGraphEditorSelection(): GraphEditorSelectionState {
+  return { nodeIds: [], edgeIds: [] };
+}
+
+export function replaceGraphEditorSelection<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  item: GraphEditorSelectionItem | null,
+): GraphEditorSelectionState {
+  if (!item) {
+    return clearGraphEditorSelection();
+  }
+  return normalizeGraphEditorSelection(document, {
+    nodeIds: item.type === "node" ? [item.id] : [],
+    edgeIds: item.type === "edge" ? [item.id] : [],
+    groupIds: item.type === "group" ? [item.id] : [],
+    primary: item,
+  });
+}
+
+export function updateGraphEditorSelection<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  selection: GraphEditorSelectionState,
+  item: GraphEditorSelectionItem,
+  mode: GraphEditorSelectionMode = "replace",
+): GraphEditorSelectionState {
+  if (mode === "replace") {
+    return replaceGraphEditorSelection(document, item);
+  }
+
+  const normalized = normalizeGraphEditorSelection(document, selection);
+  const nodeIds = new Set(normalized.nodeIds);
+  const edgeIds = new Set(normalized.edgeIds);
+  const groupIds = new Set(normalized.groupIds ?? []);
+  const selectedSet = item.type === "node" ? nodeIds : item.type === "edge" ? edgeIds : groupIds;
+  const selected = selectedSet.has(item.id);
+
+  if (mode === "toggle" && selected) {
+    selectedSet.delete(item.id);
+  } else {
+    selectedSet.add(item.id);
+  }
+
+  return normalizeGraphEditorSelection(document, {
+    nodeIds: [...nodeIds],
+    edgeIds: [...edgeIds],
+    groupIds: [...groupIds],
+    primary: selected && mode === "toggle" ? normalized.primary : item,
+  });
+}
+
+export function getGraphEditorSelectionFromBounds<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  bounds: GraphEditorBounds,
+  items: readonly GraphEditorSelectableBounds[],
+  options: { mode?: GraphEditorSelectionMode; selection?: GraphEditorSelectionState } = {},
+): GraphEditorSelectionState {
+  const selectedItems = items.filter((item) => graphEditorBoundsIntersect(bounds, item.bounds));
+  const nextSelection = selectedItems.reduce(
+    (currentSelection, item) =>
+      updateGraphEditorSelection(
+        document,
+        currentSelection,
+        { type: item.type, id: item.id },
+        "extend",
+      ),
+    options.mode === "toggle" || options.mode === "extend"
+      ? normalizeGraphEditorSelection(document, options.selection ?? clearGraphEditorSelection())
+      : clearGraphEditorSelection(),
+  );
+  return normalizeGraphEditorSelection(document, nextSelection);
+}
+
+export function getGraphEditorGroupBounds<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  getNodeBounds: (node: GraphEditorNode<TNodeData, TPortType>) => GraphEditorBounds,
+  options: { padding?: number; hiddenNodeIds?: readonly string[] } = {},
+): GraphEditorGroupBounds[] {
+  const padding = options.padding ?? 24;
+  const hiddenNodeIds = new Set(options.hiddenNodeIds ?? []);
+  const nodeById = new Map(document.nodes.map((node) => [node.id, node] as const));
+  return (document.groups ?? []).flatMap((group) => {
+    const boxes = group.nodeIds.flatMap((nodeId) => {
+      const node = nodeById.get(nodeId);
+      return node && !hiddenNodeIds.has(node.id) ? [getNodeBounds(node)] : [];
+    });
+
+    if (boxes.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        groupId: group.id,
+        nodeIds: group.nodeIds.filter(
+          (nodeId) => nodeById.has(nodeId) && !hiddenNodeIds.has(nodeId),
+        ),
+        bounds: expandGraphEditorBounds(mergeGraphEditorBounds(boxes), padding),
+      },
+    ];
+  });
+}
+
+export function graphEditorBoundsContainPoint(
+  bounds: GraphEditorBounds,
+  point: { x: number; y: number },
+) {
+  return (
+    point.x >= bounds.x &&
+    point.x <= bounds.x + bounds.width &&
+    point.y >= bounds.y &&
+    point.y <= bounds.y + bounds.height
+  );
+}
+
+export function graphEditorBoundsIntersect(left: GraphEditorBounds, right: GraphEditorBounds) {
+  return (
+    left.x <= right.x + right.width &&
+    left.x + left.width >= right.x &&
+    left.y <= right.y + right.height &&
+    left.y + left.height >= right.y
+  );
+}
+
+export function normalizeGraphEditorBounds(bounds: GraphEditorBounds): GraphEditorBounds {
+  const x = bounds.width < 0 ? bounds.x + bounds.width : bounds.x;
+  const y = bounds.height < 0 ? bounds.y + bounds.height : bounds.y;
+  return {
+    x,
+    y,
+    width: Math.abs(bounds.width),
+    height: Math.abs(bounds.height),
+  };
+}
+
+function mergeGraphEditorBounds(bounds: readonly GraphEditorBounds[]): GraphEditorBounds {
+  const minX = Math.min(...bounds.map((box) => box.x));
+  const minY = Math.min(...bounds.map((box) => box.y));
+  const maxX = Math.max(...bounds.map((box) => box.x + box.width));
+  const maxY = Math.max(...bounds.map((box) => box.y + box.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function expandGraphEditorBounds(bounds: GraphEditorBounds, padding: number): GraphEditorBounds {
+  return {
+    x: bounds.x - padding,
+    y: bounds.y - padding,
+    width: bounds.width + padding * 2,
+    height: bounds.height + padding * 2,
+  };
+}
+
 export function graphEditorSelectionToEditorSelection(
   selection: GraphEditorSelectionState | null | undefined,
 ): EditorSelection {
@@ -1623,17 +1810,7 @@ function createGraphEditorEdgeId<
   );
 }
 
-function createUniqueId(baseId: string, existingIds: ReadonlySet<string>) {
-  const sanitized = baseId.trim() || "item";
-  if (!existingIds.has(sanitized)) {
-    return sanitized;
-  }
-  let index = 2;
-  while (existingIds.has(`${sanitized}-${index}`)) {
-    index += 1;
-  }
-  return `${sanitized}-${index}`;
-}
+const createUniqueId = createUniqueEditorId;
 
 function orderedUnique(allowedIds: readonly string[], ids: readonly string[]) {
   const requested = new Set(ids);

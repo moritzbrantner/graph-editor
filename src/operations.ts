@@ -1,4 +1,4 @@
-import type { EditorOperation } from "@moritzbrantner/editor-core";
+import { createUniqueEditorId, type EditorOperation } from "@moritzbrantner/editor-core";
 
 import {
   addGraphEditorEdge,
@@ -47,7 +47,8 @@ export type GraphEditorOperationId =
   | "graph.create-group"
   | "graph.ungroup"
   | "graph.layout"
-  | "graph.update-viewport";
+  | "graph.update-viewport"
+  | "graph.replace-document";
 
 export type GraphEditorOperation<
   TNodeData = Record<string, unknown>,
@@ -501,17 +502,7 @@ function createGraphEditorEdgeId<
   );
 }
 
-function createUniqueId(baseId: string, existingIds: ReadonlySet<string>) {
-  const sanitized = baseId.trim() || "item";
-  if (!existingIds.has(sanitized)) {
-    return sanitized;
-  }
-  let index = 2;
-  while (existingIds.has(`${sanitized}-${index}`)) {
-    index += 1;
-  }
-  return `${sanitized}-${index}`;
-}
+const createUniqueId = createUniqueEditorId;
 
 function selectionFromPasteResult(
   result: {

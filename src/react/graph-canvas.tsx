@@ -5,6 +5,18 @@ import { Maximize2Icon, MinusIcon, PlusIcon, Trash2Icon, WorkflowIcon } from "lu
 
 import { Badge, Button, Separator, cn } from "@moritzbrantner/ui";
 import {
+  clearGraphEditorSelection,
+  getGraphEditorGroupBounds,
+  getGraphEditorSelectionFromBounds,
+  normalizeGraphEditorBounds,
+  normalizeGraphEditorSelection,
+  replaceGraphEditorSelection,
+  updateGraphEditorSelection,
+  type GraphEditorSelectionItem,
+  type GraphEditorSelectionMode,
+  type GraphEditorSelectionState,
+} from "../core";
+import {
   GraphNode,
   getGraphNodePortCenterOffset,
   getGraphNodeSize,
@@ -32,6 +44,13 @@ type GraphCanvasEdge = {
   color?: string;
   status?: "idle" | "running" | "success" | "error" | "warning" | string;
   metadata?: Record<string, unknown>;
+};
+
+type GraphCanvasGroup = {
+  id: string;
+  label: string;
+  nodeIds: string[];
+  minimized?: boolean;
 };
 
 type GraphCanvasSelection =
@@ -86,17 +105,23 @@ type GraphCanvasDisconnectReason =
 type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   nodes: GraphCanvasNodeData[];
   edges: GraphCanvasEdge[];
+  groups?: GraphCanvasGroup[];
   onNodesChange?: (nodes: GraphCanvasNodeData[]) => void;
   onNodesChangeEnd?: (nodes: GraphCanvasNodeData[]) => void;
   onEdgesChange?: (edges: GraphCanvasEdge[]) => void;
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
   selectedGroupId?: string | null;
+  selectedNodeIds?: readonly string[] | null;
+  selectedEdgeIds?: readonly string[] | null;
+  selectedGroupIds?: readonly string[] | null;
   hiddenNodeIds?: readonly string[];
   hiddenEdgeIds?: readonly string[];
   getNodeDragGroupIds?: (nodeId: string) => readonly string[];
   onNodePointerSelect?: (nodeId: string) => GraphCanvasSelection | undefined;
   onSelectionChange?: (selection: GraphCanvasSelection) => void;
+  onSelectionStateChange?: (selection: GraphEditorSelectionState) => void;
+  selectionMode?: "single" | "multi";
   readOnly?: boolean;
   defaultZoom?: number;
   zoom?: number;
@@ -113,6 +138,9 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   onConnectionCancel?: () => void;
   onConnectionComplete?: (connection: GraphCanvasConnection) => boolean | void;
   onConnectionDisconnect?: (edge: GraphCanvasEdge, reason: GraphCanvasDisconnectReason) => void;
+  onConnectionCreate?: (connection: GraphCanvasConnection) => boolean | void;
+  onConnectionRewire?: (edge: GraphCanvasEdge, connection: GraphCanvasConnection) => boolean | void;
+  onConnectionDelete?: (edge: GraphCanvasEdge, reason: GraphCanvasDisconnectReason) => void;
   minZoom?: number;
   maxZoom?: number;
   surfaceHeight?: number | string;
@@ -120,6 +148,9 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   showMiniMap?: boolean;
   showToolbar?: boolean;
   showPortColumnHeaders?: boolean;
+  enableMarqueeSelection?: boolean;
+  enablePan?: boolean;
+  enableWheelZoom?: boolean;
   toolbarLabel?: React.ReactNode;
   measurePorts?: "auto" | "dom" | "deterministic";
 };
@@ -231,23 +262,42 @@ type DragState = {
   originalPositions: Record<string, GraphCanvasPoint>;
 } | null;
 
+type MarqueeState = {
+  startPoint: GraphCanvasPoint;
+  pointerPoint: GraphCanvasPoint;
+  selectionBefore: GraphEditorSelectionState;
+  mode: GraphEditorSelectionMode;
+} | null;
+
+type PanState = {
+  startX: number;
+  startY: number;
+  viewport: GraphCanvasViewport;
+} | null;
+
 const graphCanvasSnapDistance = 28;
 const graphCanvasConnectionDragThreshold = 4;
 
 function GraphCanvas({
   nodes,
   edges,
+  groups = [],
   onNodesChange,
   onNodesChangeEnd,
   onEdgesChange,
   selectedNodeId,
   selectedEdgeId,
   selectedGroupId,
+  selectedNodeIds,
+  selectedEdgeIds,
+  selectedGroupIds,
   hiddenNodeIds,
   hiddenEdgeIds,
   getNodeDragGroupIds,
   onNodePointerSelect,
   onSelectionChange,
+  onSelectionStateChange,
+  selectionMode = "multi",
   readOnly = false,
   defaultZoom = 1,
   zoom,
@@ -260,6 +310,9 @@ function GraphCanvas({
   onConnectionCancel,
   onConnectionComplete,
   onConnectionDisconnect,
+  onConnectionCreate,
+  onConnectionRewire,
+  onConnectionDelete,
   minZoom = 0.5,
   maxZoom = 1.75,
   surfaceHeight = "32rem",
@@ -267,6 +320,9 @@ function GraphCanvas({
   showMiniMap = true,
   showToolbar = true,
   showPortColumnHeaders = true,
+  enableMarqueeSelection = true,
+  enablePan = true,
+  enableWheelZoom = true,
   toolbarLabel = "Workflow",
   measurePorts = "auto",
   className,
@@ -276,14 +332,16 @@ function GraphCanvas({
   const [internalViewport, setInternalViewport] = React.useState<GraphCanvasViewport>(
     defaultViewport ?? { x: 0, y: 0, zoom: defaultZoom },
   );
-  const [internalSelectedNodeId, setInternalSelectedNodeId] = React.useState<string | null>(null);
-  const [internalSelectedEdgeId, setInternalSelectedEdgeId] = React.useState<string | null>(null);
+  const [internalSelection, setInternalSelection] =
+    React.useState<GraphEditorSelectionState>(clearGraphEditorSelection);
   const [pendingConnection, setPendingConnection] = React.useState<PendingConnection | null>(null);
   const [connectionDrag, setConnectionDrag] = React.useState<GraphCanvasConnectionDrag | null>(
     null,
   );
   const [hoveredEdgeId, setHoveredEdgeId] = React.useState<string | null>(null);
   const [dragState, setDragState] = React.useState<DragState>(null);
+  const [marqueeState, setMarqueeState] = React.useState<MarqueeState>(null);
+  const [panState, setPanState] = React.useState<PanState>(null);
   const [portPoints, setPortPoints] = React.useState<GraphCanvasPortPointMap>({});
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const suppressNextPortClickRef = React.useRef(false);
@@ -294,8 +352,78 @@ function GraphCanvas({
     zoom: zoom ?? internalViewport.zoom ?? internalZoom,
   };
   const currentZoom = currentViewport.zoom;
-  const currentSelectedNodeId = selectedNodeId ?? internalSelectedNodeId;
-  const currentSelectedEdgeId = selectedEdgeId ?? internalSelectedEdgeId;
+  const selectionDocument = React.useMemo(() => ({ nodes, edges, groups }), [edges, groups, nodes]);
+  const externalSelectionProvided =
+    selectedNodeIds !== undefined ||
+    selectedEdgeIds !== undefined ||
+    selectedGroupIds !== undefined ||
+    selectedNodeId !== undefined ||
+    selectedEdgeId !== undefined ||
+    selectedGroupId !== undefined;
+  const currentSelection = React.useMemo(
+    () =>
+      externalSelectionProvided
+        ? {
+            nodeIds: selectedNodeIds
+              ? [...selectedNodeIds]
+              : selectedNodeId
+                ? [selectedNodeId]
+                : [],
+            edgeIds: selectedEdgeIds
+              ? [...selectedEdgeIds]
+              : selectedEdgeId
+                ? [selectedEdgeId]
+                : [],
+            groupIds: selectedGroupIds
+              ? [...selectedGroupIds]
+              : selectedGroupId
+                ? [selectedGroupId]
+                : [],
+            primary:
+              selectedNodeIds?.at(-1) || selectedNodeId
+                ? ({
+                    type: "node",
+                    id: selectedNodeIds?.at(-1) ?? selectedNodeId!,
+                  } as const)
+                : selectedEdgeIds?.at(-1) || selectedEdgeId
+                  ? ({
+                      type: "edge",
+                      id: selectedEdgeIds?.at(-1) ?? selectedEdgeId!,
+                    } as const)
+                  : selectedGroupIds?.at(-1) || selectedGroupId
+                    ? ({
+                        type: "group",
+                        id: selectedGroupIds?.at(-1) ?? selectedGroupId!,
+                      } as const)
+                    : undefined,
+          }
+        : internalSelection,
+    [
+      externalSelectionProvided,
+      internalSelection,
+      selectedEdgeId,
+      selectedEdgeIds,
+      selectedGroupId,
+      selectedGroupIds,
+      selectedNodeId,
+      selectedNodeIds,
+    ],
+  );
+  const currentSelectedNodeIds = currentSelection.nodeIds;
+  const currentSelectedEdgeIds = currentSelection.edgeIds;
+  const currentSelectedGroupIds = currentSelection.groupIds ?? [];
+  const currentSelectedNodeId =
+    currentSelection.primary?.type === "node"
+      ? currentSelection.primary.id
+      : (currentSelectedNodeIds.at(-1) ?? null);
+  const currentSelectedEdgeId =
+    currentSelection.primary?.type === "edge"
+      ? currentSelection.primary.id
+      : (currentSelectedEdgeIds.at(-1) ?? null);
+  const currentSelectedGroupId =
+    currentSelection.primary?.type === "group"
+      ? currentSelection.primary.id
+      : (currentSelectedGroupIds.at(-1) ?? null);
   const hiddenNodeIdSet = React.useMemo(() => new Set(hiddenNodeIds ?? []), [hiddenNodeIds]);
   const hiddenEdgeIdSet = React.useMemo(() => new Set(hiddenEdgeIds ?? []), [hiddenEdgeIds]);
   const visibleEdges = React.useMemo(
@@ -311,6 +439,28 @@ function GraphCanvas({
   const selectedEdge = React.useMemo(
     () => edges.find((edge) => edge.id === currentSelectedEdgeId),
     [currentSelectedEdgeId, edges],
+  );
+  const nodeBounds = React.useMemo(
+    () =>
+      new Map(
+        nodes.map((node) => {
+          const size = getGraphNodeSize(node, layoutOptions);
+          return [node.id, { x: node.x, y: node.y, width: size.width, height: size.height }];
+        }),
+      ),
+    [layoutOptions, nodes],
+  );
+  const groupBounds = React.useMemo(
+    () =>
+      getGraphEditorGroupBounds(
+        selectionDocument,
+        (node) => {
+          const bounds = nodeBounds.get(node.id);
+          return bounds ?? { x: node.x, y: node.y, ...graphNodeSizeFallback() };
+        },
+        { hiddenNodeIds },
+      ),
+    [hiddenNodeIds, nodeBounds, selectionDocument],
   );
   const edgeGeometry = React.useMemo(
     () =>
@@ -399,46 +549,106 @@ function GraphCanvas({
     commitViewport({ ...currentViewport, zoom: safeZoom });
   };
 
-  const commitSelection = React.useCallback(
-    (selection: GraphCanvasSelection) => {
-      setInternalSelectedNodeId(selection?.type === "node" ? selection.id : null);
-      setInternalSelectedEdgeId(selection?.type === "edge" ? selection.id : null);
-      onSelectionChange?.(selection);
+  const getCanvasSelection = React.useCallback(
+    (selection: GraphEditorSelectionState): GraphCanvasSelection => {
+      const primary =
+        selection.primary ??
+        (selection.nodeIds.at(-1)
+          ? ({ type: "node", id: selection.nodeIds.at(-1)! } as const)
+          : selection.edgeIds.at(-1)
+            ? ({ type: "edge", id: selection.edgeIds.at(-1)! } as const)
+            : selection.groupIds?.at(-1)
+              ? ({ type: "group", id: selection.groupIds.at(-1)! } as const)
+              : null);
+      if (!primary) {
+        return null;
+      }
+      if (primary.type === "node") {
+        const node = nodeById.get(primary.id);
+        return node ? { type: "node", id: primary.id, node } : null;
+      }
+      if (primary.type === "edge") {
+        const edge = edges.find((candidate) => candidate.id === primary.id);
+        return edge ? { type: "edge", id: primary.id, edge } : null;
+      }
+      return { type: "group", id: primary.id };
     },
-    [onSelectionChange],
+    [edges, nodeById],
+  );
+
+  const commitSelectionState = React.useCallback(
+    (selection: GraphEditorSelectionState) => {
+      const normalized = normalizeGraphEditorSelection(selectionDocument, selection);
+      setInternalSelection(normalized);
+      onSelectionStateChange?.(normalized);
+      onSelectionChange?.(getCanvasSelection(normalized));
+    },
+    [getCanvasSelection, onSelectionChange, onSelectionStateChange, selectionDocument],
+  );
+
+  const getSelectionModeFromEvent = (
+    event: Pick<React.PointerEvent | React.MouseEvent, "ctrlKey" | "metaKey" | "shiftKey">,
+  ): GraphEditorSelectionMode =>
+    selectionMode === "multi" && (event.ctrlKey || event.metaKey)
+      ? "toggle"
+      : selectionMode === "multi" && event.shiftKey
+        ? "extend"
+        : "replace";
+
+  const selectItem = React.useCallback(
+    (
+      item: GraphEditorSelectionItem,
+      mode: GraphEditorSelectionMode = "replace",
+      selection = currentSelection,
+    ) => {
+      commitSelectionState(updateGraphEditorSelection(selectionDocument, selection, item, mode));
+    },
+    [commitSelectionState, currentSelection, selectionDocument],
   );
 
   const selectNode = React.useCallback(
-    (node: GraphCanvasNodeData) => {
-      commitSelection({ type: "node", id: node.id, node });
+    (node: GraphCanvasNodeData, mode: GraphEditorSelectionMode = "replace") => {
+      selectItem({ type: "node", id: node.id }, mode);
     },
-    [commitSelection],
+    [selectItem],
   );
 
   const selectEdge = React.useCallback(
-    (edge: GraphCanvasEdge) => {
-      commitSelection({ type: "edge", id: edge.id, edge });
+    (edge: GraphCanvasEdge, mode: GraphEditorSelectionMode = "replace") => {
+      selectItem({ type: "edge", id: edge.id }, mode);
     },
-    [commitSelection],
+    [selectItem],
   );
   const selectNodeFromPointer = React.useCallback(
-    (node: GraphCanvasNodeData) => {
+    (node: GraphCanvasNodeData, event?: React.PointerEvent | React.MouseEvent) => {
       const pointerSelection = onNodePointerSelect?.(node.id);
       if (pointerSelection !== undefined) {
-        commitSelection(pointerSelection);
+        const item =
+          pointerSelection?.type === "node"
+            ? ({ type: "node", id: pointerSelection.id } as const)
+            : pointerSelection?.type === "edge"
+              ? ({ type: "edge", id: pointerSelection.id } as const)
+              : pointerSelection?.type === "group"
+                ? ({ type: "group", id: pointerSelection.id } as const)
+                : null;
+        commitSelectionState(replaceGraphEditorSelection(selectionDocument, item));
         return;
       }
 
-      selectNode(node);
+      selectNode(node, event ? getSelectionModeFromEvent(event) : "replace");
     },
-    [commitSelection, onNodePointerSelect, selectNode],
+    [commitSelectionState, onNodePointerSelect, selectNode, selectionDocument],
   );
 
   const removeEdge = (edge: GraphCanvasEdge, reason: GraphCanvasDisconnectReason) => {
-    onEdgesChange?.(edges.filter((currentEdge) => currentEdge.id !== edge.id));
+    if (onConnectionDelete) {
+      onConnectionDelete(edge, reason);
+    } else {
+      onEdgesChange?.(edges.filter((currentEdge) => currentEdge.id !== edge.id));
+    }
     onConnectionDisconnect?.(edge, reason);
     if (currentSelectedEdgeId === edge.id) {
-      commitSelection(null);
+      commitSelectionState(clearGraphEditorSelection());
     }
   };
 
@@ -461,7 +671,8 @@ function GraphCanvas({
         return false;
       }
 
-      const handled = onConnectionComplete?.(connection) === true;
+      const handled =
+        onConnectionCreate?.(connection) === true || onConnectionComplete?.(connection) === true;
       if (!handled) {
         onEdgesChange?.([
           ...edges,
@@ -473,7 +684,7 @@ function GraphCanvas({
       }
       return true;
     },
-    [edges, getConnectionValidity, onConnectionComplete, onEdgesChange],
+    [edges, getConnectionValidity, onConnectionComplete, onConnectionCreate, onEdgesChange],
   );
 
   const rewireConnection = React.useCallback(
@@ -485,20 +696,26 @@ function GraphCanvas({
       }
 
       const nextEdge = { ...edge, ...connection };
-      onEdgesChange?.(
-        edges.map((currentEdge) => (currentEdge.id === edge.id ? nextEdge : currentEdge)),
-      );
+      const handled = onConnectionRewire?.(edge, connection) === true;
+      if (!handled) {
+        onEdgesChange?.(
+          edges.map((currentEdge) => (currentEdge.id === edge.id ? nextEdge : currentEdge)),
+        );
+      }
       onConnectionDisconnect?.(edge, "rewire");
-      onConnectionComplete?.(connection);
-      commitSelection({ type: "edge", id: edge.id, edge: nextEdge });
+      commitSelectionState({
+        nodeIds: [],
+        edgeIds: [edge.id],
+        primary: { type: "edge", id: edge.id },
+      });
       return true;
     },
     [
-      commitSelection,
+      commitSelectionState,
       edges,
       getConnectionValidity,
-      onConnectionComplete,
       onConnectionDisconnect,
+      onConnectionRewire,
       onEdgesChange,
     ],
   );
@@ -519,12 +736,28 @@ function GraphCanvas({
         ),
       );
       incidentEdges.forEach((edge) => onConnectionDisconnect?.(edge, "node-delete"));
-      commitSelection(null);
+      commitSelectionState(clearGraphEditorSelection());
       return;
     }
 
     if (selectedEdge) {
       removeEdge(selectedEdge, "edge-delete");
+      return;
+    }
+
+    if (currentSelectedNodeIds.length > 0 || currentSelectedEdgeIds.length > 0) {
+      const nodeIds = new Set(currentSelectedNodeIds);
+      const edgeIds = new Set(currentSelectedEdgeIds);
+      onNodesChange?.(nodes.filter((node) => !nodeIds.has(node.id)));
+      onEdgesChange?.(
+        edges.filter(
+          (edge) =>
+            !edgeIds.has(edge.id) &&
+            !nodeIds.has(edge.sourceNodeId) &&
+            !nodeIds.has(edge.targetNodeId),
+        ),
+      );
+      commitSelectionState(clearGraphEditorSelection());
     }
   };
 
@@ -589,6 +822,22 @@ function GraphCanvas({
   const handlePointerMove = (
     event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>,
   ) => {
+    if (marqueeState && !readOnly) {
+      const pointerPoint = getGraphCanvasPointerPoint(event, viewportRef.current, currentZoom);
+      setMarqueeState((current) => (current ? { ...current, pointerPoint } : current));
+      return;
+    }
+
+    if (panState && !readOnly) {
+      const pointer = getWorkflowPointer(event);
+      commitViewport({
+        ...panState.viewport,
+        x: Math.round(panState.viewport.x + pointer.x - panState.startX),
+        y: Math.round(panState.viewport.y + pointer.y - panState.startY),
+      });
+      return;
+    }
+
     if (connectionDrag && !readOnly) {
       const pointerPoint = getGraphCanvasPointerPoint(event, viewportRef.current, currentZoom);
       const distance = getWorkflowPointDistance(connectionDrag.startPoint, pointerPoint);
@@ -667,7 +916,7 @@ function GraphCanvas({
       event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>,
       node: GraphCanvasNodeData,
     ) => {
-      selectNodeFromPointer(node);
+      selectNodeFromPointer(node, event);
       if (
         readOnly ||
         (event.button !== 0 && event.button !== undefined) ||
@@ -676,9 +925,19 @@ function GraphCanvas({
         return;
       }
       const pointer = getWorkflowPointer(event);
+      const selectedNodeDragIds =
+        currentSelectedNodeIds.includes(node.id) && currentSelectedNodeIds.length > 1
+          ? currentSelectedNodeIds
+          : null;
+      const selectedGroupNodeIds = currentSelectedGroupIds.flatMap((groupId) => {
+        const group = groups.find((candidate) => candidate.id === groupId);
+        return group?.nodeIds ?? [];
+      });
       const dragNodeIds = orderedGraphCanvasNodeIds(
         nodes,
-        getNodeDragGroupIds?.(node.id) ?? [node.id],
+        getNodeDragGroupIds?.(node.id) ??
+          selectedNodeDragIds ??
+          (selectedGroupNodeIds.includes(node.id) ? selectedGroupNodeIds : [node.id]),
       );
       const originalPositions = Object.fromEntries(
         dragNodeIds.flatMap((nodeId) => {
@@ -696,7 +955,146 @@ function GraphCanvas({
         originalPositions,
       });
     },
-    [getNodeDragGroupIds, nodeById, nodes, readOnly, selectNodeFromPointer],
+    [
+      currentSelectedGroupIds,
+      currentSelectedNodeIds,
+      getNodeDragGroupIds,
+      groups,
+      nodeById,
+      nodes,
+      readOnly,
+      selectNodeFromPointer,
+    ],
+  );
+
+  const selectableBounds = React.useMemo(() => {
+    const edgeItems = visibleEdges.flatMap((edge) => {
+      const geometry = edgeGeometry.get(edge.id);
+      if (!geometry) {
+        return [];
+      }
+      const minX = Math.min(geometry.sourcePoint.x, geometry.targetPoint.x);
+      const minY = Math.min(geometry.sourcePoint.y, geometry.targetPoint.y);
+      const maxX = Math.max(geometry.sourcePoint.x, geometry.targetPoint.x);
+      const maxY = Math.max(geometry.sourcePoint.y, geometry.targetPoint.y);
+      return [
+        {
+          type: "edge" as const,
+          id: edge.id,
+          bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        },
+      ];
+    });
+
+    return [
+      ...nodes.flatMap((node) => {
+        const bounds = nodeBounds.get(node.id);
+        return bounds && !hiddenNodeIdSet.has(node.id)
+          ? [{ type: "node" as const, id: node.id, bounds }]
+          : [];
+      }),
+      ...edgeItems,
+      ...groupBounds.map((group) => ({
+        type: "group" as const,
+        id: group.groupId,
+        bounds: group.bounds,
+      })),
+    ];
+  }, [edgeGeometry, groupBounds, hiddenNodeIdSet, nodeBounds, nodes, visibleEdges]);
+
+  const commitMarqueeSelection = React.useCallback(() => {
+    if (!marqueeState) {
+      return;
+    }
+
+    const bounds = normalizeGraphEditorBounds({
+      x: marqueeState.startPoint.x,
+      y: marqueeState.startPoint.y,
+      width: marqueeState.pointerPoint.x - marqueeState.startPoint.x,
+      height: marqueeState.pointerPoint.y - marqueeState.startPoint.y,
+    });
+    const nextSelection = getGraphEditorSelectionFromBounds(
+      selectionDocument,
+      bounds,
+      selectableBounds,
+      {
+        mode: marqueeState.mode,
+        selection: marqueeState.selectionBefore,
+      },
+    );
+    commitSelectionState(nextSelection);
+    setMarqueeState(null);
+  }, [commitSelectionState, marqueeState, selectableBounds, selectionDocument]);
+
+  const handleSurfacePointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>) => {
+      if (
+        readOnly ||
+        (event.button !== 0 && event.button !== undefined) ||
+        isGraphCanvasInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
+      const pointer = getWorkflowPointer(event);
+      const canvasPoint = getGraphCanvasPointerPoint(event, viewportRef.current, currentZoom);
+      const useMarquee =
+        enableMarqueeSelection && (!enablePan || event.shiftKey || event.ctrlKey || event.metaKey);
+
+      if (useMarquee) {
+        setMarqueeState({
+          startPoint: canvasPoint,
+          pointerPoint: canvasPoint,
+          selectionBefore: currentSelection,
+          mode: getSelectionModeFromEvent(event),
+        });
+        return;
+      }
+
+      if (enablePan) {
+        setPanState({
+          startX: pointer.x,
+          startY: pointer.y,
+          viewport: currentViewport,
+        });
+      }
+    },
+    [currentSelection, currentViewport, currentZoom, enableMarqueeSelection, enablePan, readOnly],
+  );
+
+  const finishSurfaceGesture = React.useCallback(() => {
+    commitMarqueeSelection();
+    setPanState(null);
+  }, [commitMarqueeSelection]);
+
+  const handleWheel = React.useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!enableWheelZoom || (event.ctrlKey === false && event.metaKey === false)) {
+        return;
+      }
+
+      event.preventDefault();
+      const surfaceRect = event.currentTarget.getBoundingClientRect();
+      const nextZoom = clampWorkflowValue(
+        currentZoom * (event.deltaY > 0 ? 0.9 : 1.1),
+        minZoom,
+        maxZoom,
+      );
+      const pointer = {
+        x: event.clientX - surfaceRect.left,
+        y: event.clientY - surfaceRect.top,
+      };
+      const canvasPoint = {
+        x: (pointer.x - currentViewport.x) / currentZoom,
+        y: (pointer.y - currentViewport.y) / currentZoom,
+      };
+      commitViewport({
+        x: Math.round(pointer.x - canvasPoint.x * nextZoom),
+        y: Math.round(pointer.y - canvasPoint.y * nextZoom),
+        zoom: nextZoom,
+      });
+    },
+    [currentViewport, currentZoom, enableWheelZoom, maxZoom, minZoom],
   );
 
   const completeConnection = React.useCallback(
@@ -850,7 +1248,9 @@ function GraphCanvas({
       }
       setPendingConnection(null);
       setConnectionDrag(null);
-      commitSelection(null);
+      setMarqueeState(null);
+      setPanState(null);
+      commitSelectionState(clearGraphEditorSelection());
     }
   };
 
@@ -963,7 +1363,7 @@ function GraphCanvas({
           minZoom={minZoom}
           maxZoom={maxZoom}
           readOnly={readOnly}
-          selectedLabel={selectedGroupId ?? selectedNode?.label ?? selectedEdge?.id}
+          selectedLabel={currentSelectedGroupId ?? selectedNode?.label ?? selectedEdge?.id}
           toolbarLabel={toolbarLabel}
           onZoomChange={commitZoom}
           onFitView={fitView}
@@ -975,18 +1375,29 @@ function GraphCanvas({
         tabIndex={0}
         className="relative overflow-auto rounded-md border bg-muted/20"
         style={{ height: typeof surfaceHeight === "number" ? `${surfaceHeight}px` : surfaceHeight }}
+        onPointerDown={handleSurfacePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={(event) => {
           completeConnectionDragFromPointer(event);
           finishNodeDrag();
+          finishSurfaceGesture();
         }}
-        onPointerLeave={finishNodeDrag}
+        onPointerLeave={() => {
+          finishNodeDrag();
+          finishSurfaceGesture();
+        }}
+        onWheel={handleWheel}
+        onMouseDown={handleSurfacePointerDown}
         onMouseMove={handlePointerMove}
         onMouseUp={(event) => {
           completeConnectionDragFromPointer(event);
           finishNodeDrag();
+          finishSurfaceGesture();
         }}
-        onMouseLeave={finishNodeDrag}
+        onMouseLeave={() => {
+          finishNodeDrag();
+          finishSurfaceGesture();
+        }}
       >
         <div
           ref={viewportRef}
@@ -999,6 +1410,74 @@ function GraphCanvas({
             width: `${100 / currentZoom}%`,
           }}
         >
+          {groupBounds.map((group) => {
+            const sourceGroup = groups.find((candidate) => candidate.id === group.groupId);
+            const selected = currentSelectedGroupIds.includes(group.groupId);
+            return (
+              <div
+                key={group.groupId}
+                data-slot="workflow-builder-group"
+                data-group-id={group.groupId}
+                data-selected={selected ? "true" : undefined}
+                role="button"
+                tabIndex={0}
+                aria-label={sourceGroup?.label ?? group.groupId}
+                className={cn(
+                  "absolute rounded-md border border-dashed bg-background/30 text-xs text-muted-foreground",
+                  selected && "border-primary bg-primary/5 text-primary",
+                )}
+                style={{
+                  left: group.bounds.x,
+                  top: group.bounds.y,
+                  width: group.bounds.width,
+                  height: group.bounds.height,
+                }}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  selectItem(
+                    { type: "group", id: group.groupId },
+                    getSelectionModeFromEvent(event),
+                  );
+                  if (readOnly || (event.button !== 0 && event.button !== undefined)) {
+                    return;
+                  }
+                  const firstNode = group.nodeIds.flatMap((nodeId) => {
+                    const node = nodeById.get(nodeId);
+                    return node ? [node] : [];
+                  })[0];
+                  if (!firstNode) {
+                    return;
+                  }
+                  const pointer = getWorkflowPointer(event);
+                  const originalPositions = Object.fromEntries(
+                    group.nodeIds.flatMap((nodeId) => {
+                      const dragNode = nodeById.get(nodeId);
+                      return dragNode ? [[nodeId, { x: dragNode.x, y: dragNode.y }]] : [];
+                    }),
+                  ) as Record<string, GraphCanvasPoint>;
+                  setDragState({
+                    nodeId: firstNode.id,
+                    nodeIds: orderedGraphCanvasNodeIds(nodes, group.nodeIds),
+                    startX: pointer.x,
+                    startY: pointer.y,
+                    originalX: firstNode.x,
+                    originalY: firstNode.y,
+                    originalPositions,
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectItem({ type: "group", id: group.groupId });
+                  }
+                }}
+              >
+                <span className="absolute -top-5 left-2 max-w-full truncate rounded bg-background px-1.5 py-0.5">
+                  {sourceGroup?.label ?? group.groupId}
+                </span>
+              </div>
+            );
+          })}
           <svg
             data-slot="workflow-builder-edges"
             aria-label="Workflow connections"
@@ -1035,7 +1514,7 @@ function GraphCanvas({
                     d={line.path}
                     className="pointer-events-auto cursor-pointer fill-none stroke-transparent"
                     strokeWidth={16}
-                    onClick={() => selectEdge(edge)}
+                    onClick={(event) => selectEdge(edge, getSelectionModeFromEvent(event))}
                     onDoubleClick={(event) => {
                       event.stopPropagation();
                       if (!readOnly) {
@@ -1132,7 +1611,7 @@ function GraphCanvas({
             <GraphCanvasNode
               key={node.id}
               node={node}
-              selected={node.id === currentSelectedNodeId}
+              selected={currentSelectedNodeIds.includes(node.id)}
               hidden={hiddenNodeIdSet.has(node.id)}
               readOnly={readOnly}
               pendingConnection={pendingConnection}
@@ -1150,6 +1629,18 @@ function GraphCanvas({
               onNodePointerDown={handleNodePointerDown}
             />
           ))}
+          {marqueeState ? (
+            <div
+              data-slot="workflow-builder-marquee"
+              className="pointer-events-none absolute rounded-sm border border-primary bg-primary/10"
+              style={normalizeGraphEditorBounds({
+                x: marqueeState.startPoint.x,
+                y: marqueeState.startPoint.y,
+                width: marqueeState.pointerPoint.x - marqueeState.startPoint.x,
+                height: marqueeState.pointerPoint.y - marqueeState.startPoint.y,
+              })}
+            />
+          ) : null}
         </div>
         {showMiniMap ? (
           <GraphCanvasMiniMap
@@ -1818,6 +2309,25 @@ function isGraphNodeControlEvent(target: EventTarget) {
   );
 }
 
+function isGraphCanvasInteractiveTarget(target: EventTarget) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        [
+          "[data-slot='workflow-builder-node']",
+          "[data-slot='workflow-builder-edge-hit']",
+          "[data-slot='workflow-builder-edge-handle']",
+          "[data-slot='workflow-builder-group']",
+          "[data-slot='workflow-node-port']",
+          "[data-slot='workflow-node-minimize']",
+          "[data-slot='workflow-node-menu-trigger']",
+        ].join(", "),
+      ),
+    )
+  );
+}
+
 function getWorkflowPointer(event: React.PointerEvent<Element> | React.MouseEvent<Element>) {
   const nativeEvent = event.nativeEvent as (PointerEvent | MouseEvent) & {
     pageX?: number;
@@ -1893,6 +2403,7 @@ export type {
   GraphCanvasConnectionValidityInput,
   GraphCanvasDisconnectReason,
   GraphCanvasEdge,
+  GraphCanvasGroup,
   GraphCanvasNodeData,
   GraphCanvasPort,
   GraphCanvasProps,
