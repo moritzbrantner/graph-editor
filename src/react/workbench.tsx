@@ -33,7 +33,11 @@ import {
   type EditorClipboardFallback,
   type EditorCommandDefinition,
 } from "@moritzbrantner/editor-core";
-import { useEditorHotkeys } from "@moritzbrantner/editor-core/react";
+import {
+  getEditorCommandIdFromKeyboardEvent,
+  isEditorEditableTarget,
+  matchesEditorHotkey,
+} from "@moritzbrantner/editor-core/hotkeys";
 import {
   addGraphEditorEdge,
   copyGraphEditorSelection,
@@ -1176,6 +1180,67 @@ export function useGraphWorkbenchController<
   return controller;
 }
 
+type UseGraphWorkbenchHotkeysOptions<TId extends string> = {
+  commands: readonly EditorCommandDefinition<TId>[];
+  disabled?: boolean;
+  readOnly?: boolean;
+  allowEditableTargets?: boolean;
+  scopeRef?: React.RefObject<HTMLElement | null>;
+};
+
+function useGraphWorkbenchHotkeys<TId extends string>({
+  commands,
+  disabled = false,
+  readOnly = false,
+  allowEditableTargets = false,
+  scopeRef,
+}: UseGraphWorkbenchHotkeysOptions<TId>) {
+  React.useEffect(() => {
+    if (disabled || typeof document === "undefined") {
+      return;
+    }
+
+    const scope = scopeRef?.current ?? null;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (scope && !isGraphWorkbenchHotkeyInScope(scope, event)) {
+        return;
+      }
+
+      if (!allowEditableTargets && isEditorEditableTarget(event.target)) {
+        return;
+      }
+
+      const commandId = allowEditableTargets
+        ? (commands.find(
+            (command) =>
+              !command.disabled &&
+              command.hotkeys?.some((hotkey) => matchesEditorHotkey(event, hotkey)),
+          )?.id ?? null)
+        : getEditorCommandIdFromKeyboardEvent(event, commands);
+      const command = commands.find((candidate) => candidate.id === commandId);
+      if (!command?.run) {
+        return;
+      }
+
+      event.preventDefault();
+      void command.run(event);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [allowEditableTargets, commands, disabled, readOnly, scopeRef]);
+}
+
+function isGraphWorkbenchHotkeyInScope(scope: HTMLElement, event: KeyboardEvent) {
+  const target = event.target;
+  if (target instanceof Node && scope.contains(target)) {
+    return true;
+  }
+
+  const activeElement = document.activeElement;
+  return activeElement === document.body || Boolean(activeElement && scope.contains(activeElement));
+}
+
 export function GraphWorkbench<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,
@@ -1204,7 +1269,7 @@ export function GraphWorkbench<
     [controller.commands],
   );
 
-  useEditorHotkeys({
+  useGraphWorkbenchHotkeys({
     allowEditableTargets: false,
     commands: hotkeyCommands,
     readOnly: controller.readOnly,
