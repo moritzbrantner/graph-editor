@@ -24,19 +24,19 @@ import {
 
 import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
 import {
-  createStableEditorJsonEquals,
-  createUniqueEditorId,
   downloadEditorJson,
   readEditorClipboardJson,
   readEditorJsonFile,
   writeEditorClipboardJson,
   type EditorClipboardFallback,
-  type EditorCommandDefinition,
-} from "@moritzbrantner/editor-core";
+} from "@moritzbrantner/editor-core/browser";
+import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
+import { createStableEditorJsonEquals } from "@moritzbrantner/editor-core/json";
 import {
   getEditorCommandIdFromKeyboardEvent,
   isEditorEditableTarget,
   matchesEditorHotkey,
+  type EditorCommandDefinition,
 } from "@moritzbrantner/editor-core/hotkeys";
 import {
   addGraphEditorEdge,
@@ -1188,6 +1188,7 @@ type UseGraphWorkbenchHotkeysOptions<TId extends string> = {
   scopeRef?: React.RefObject<HTMLElement | null>;
 };
 
+// Keep this hook local while editor-core/react pulls React into the headless package surface.
 function useGraphWorkbenchHotkeys<TId extends string>({
   commands,
   disabled = false,

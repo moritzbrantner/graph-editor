@@ -1,14 +1,16 @@
 import type * as React from "react";
 import {
-  formatEditorShortcutLabel,
-  getEditorCommandIdFromKeyboardEvent,
-  isEditorEditableTarget,
   resolveEditorCommands,
   type EditorCommandContext,
   type EditorContextualCommandDefinition,
-  type EditorHotkeyMap,
   type EditorResolvedCommandDefinition,
-} from "@moritzbrantner/editor-core";
+} from "@moritzbrantner/editor-core/commands";
+import {
+  formatEditorShortcutLabel,
+  getEditorCommandIdFromKeyboardEvent,
+  isEditorEditableTarget,
+  type EditorHotkeyMap,
+} from "@moritzbrantner/editor-core/hotkeys";
 
 import type { GraphEditorDocument, GraphEditorSelectionState, GraphEditorViewport } from "./core";
 

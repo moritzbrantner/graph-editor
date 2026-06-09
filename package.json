@@ -46,6 +46,30 @@
     "./commands": {
       "types": "./dist/commands.d.ts",
       "import": "./dist/commands.js"
+    },
+    "./serialization": {
+      "types": "./dist/serialization.d.ts",
+      "import": "./dist/serialization.js"
+    },
+    "./persistence": {
+      "types": "./dist/persistence.d.ts",
+      "import": "./dist/persistence.js"
+    },
+    "./patches": {
+      "types": "./dist/patches.d.ts",
+      "import": "./dist/patches.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
+    "./interaction": {
+      "types": "./dist/interaction.d.ts",
+      "import": "./dist/interaction.js"
+    },
+    "./operation-log": {
+      "types": "./dist/operation-log.d.ts",
+      "import": "./dist/operation-log.js"
     }
   },
   "publishConfig": {
@@ -53,7 +77,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts src/runtime.ts src/operations.ts src/commands.ts --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts src/runtime.ts src/operations.ts src/commands.ts src/serialization.ts src/persistence.ts src/patches.ts src/plugins.ts src/interaction.ts src/operation-log.ts --format esm --dts --clean --out-dir dist",
     "build:examples": "vite build --config examples/workbench/vite.config.ts --outDir ../../dist-examples --emptyOutDir",
     "dev:examples": "vite --config examples/workbench/vite.config.ts",
     "format": "oxfmt",
@@ -68,7 +92,8 @@
     "test:coverage": "node node_modules/vitest/vitest.mjs run --coverage",
     "test:e2e": "playwright test",
     "bench": "vitest bench --passWithNoTests --run",
-    "verify": "bun run format:check && bun run lint && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package && bun run pack:check",
+    "check:editor-core": "node scripts/check-editor-core-consumption.mjs",
+    "verify": "bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package && bun run pack:check",
     "verify:full": "bun run verify && bun run test:coverage && bun run build:examples && bun run test:e2e"
   },
   "dependencies": {

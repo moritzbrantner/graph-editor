@@ -1,4 +1,5 @@
-import { createUniqueEditorId, type EditorOperation } from "@moritzbrantner/editor-core";
+import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
+import type { EditorOperation } from "@moritzbrantner/editor-core/operations";
 
 import {
   addGraphEditorEdge,
@@ -32,6 +33,7 @@ import {
   type GraphEditorLayoutOptions,
   type GraphEditorLayoutResult,
 } from "./layout";
+import { applyGraphEditorDocumentPatch, type GraphEditorDocumentPatch } from "./patches";
 
 export type GraphEditorOperationId =
   | "graph.select"
@@ -48,7 +50,8 @@ export type GraphEditorOperationId =
   | "graph.ungroup"
   | "graph.layout"
   | "graph.update-viewport"
-  | "graph.replace-document";
+  | "graph.replace-document"
+  | "graph.patch";
 
 export type GraphEditorOperation<
   TNodeData = Record<string, unknown>,
@@ -67,6 +70,7 @@ export type GraphEditorOperation<
     graphEditor?: {
       history?: boolean;
       layoutResult?: GraphEditorLayoutResult<TNodeData, TEdgeData, TPortType>;
+      patch?: GraphEditorDocumentPatch;
     };
   };
 };
@@ -458,6 +462,59 @@ export function createGraphEditorUpdateViewportOperation<
     apply: (document) => ({ ...document, viewport }),
     mergeKey: "graph.viewport",
     metadata: { graphEditor: { history: options.history ?? true } },
+    selectionBefore: options.selectionBefore,
+    selectionAfter: options.selectionAfter,
+  };
+}
+
+export function createGraphEditorPatchOperation<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  patch: GraphEditorDocumentPatch,
+  options: {
+    label?: string;
+    selectionBefore?: GraphEditorSelectionState;
+    selectionAfter?: GraphEditorSelectionState;
+    strict?: boolean;
+  } = {},
+): GraphEditorOperation<TNodeData, TEdgeData, TPortType> {
+  return {
+    id: "graph.patch",
+    label: options.label ?? "Apply patch",
+    apply: (document) =>
+      applyGraphEditorDocumentPatch(document, patch, {
+        strict: options.strict ?? true,
+      }),
+    metadata: {
+      graphEditor: {
+        patch,
+      },
+    },
+    selectionBefore: options.selectionBefore,
+    selectionAfter: options.selectionAfter,
+  };
+}
+
+export function createGraphEditorReplaceDocumentOperation<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  options: {
+    label?: string;
+    selectionBefore?: GraphEditorSelectionState;
+    selectionAfter?: GraphEditorSelectionState;
+  } = {},
+): GraphEditorOperation<TNodeData, TEdgeData, TPortType> {
+  const normalizedDocument = normalizeGraphEditorDocument(document, { mode: "repair" });
+
+  return {
+    id: "graph.replace-document",
+    label: options.label ?? "Replace document",
+    apply: () => normalizedDocument,
     selectionBefore: options.selectionBefore,
     selectionAfter: options.selectionAfter,
   };

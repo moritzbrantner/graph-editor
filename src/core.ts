@@ -1,22 +1,30 @@
 import {
-  EditorJsonParseError,
-  createEditorEntitySelection,
-  createEditorGraphIndexes,
   createUniqueEditorId,
-  createEditorViewportState,
+  type EditorEntityBase,
+  type EditorEntityId,
+} from "@moritzbrantner/editor-core/entities";
+import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
+import {
+  EditorJsonParseError,
+  type EditorDocumentAdapter,
+} from "@moritzbrantner/editor-core/serialization";
+import {
+  createEditorEntitySelection,
   getEditorSelectedEntityIds,
   getEditorSelectionPrimaryEntityId,
   normalizeEditorSelection,
-  type EditorDocumentAdapter,
-  type EditorEntityBase,
-  type EditorEntityId,
-  type EditorGraphAdapter,
-  type EditorGraphConnection,
-  type EditorGraphEdge,
-  type EditorGraphPort,
   type EditorSelection,
+} from "@moritzbrantner/editor-core/selection";
+import {
+  createEditorViewportState,
   type EditorViewportState,
-} from "@moritzbrantner/editor-core";
+} from "@moritzbrantner/editor-core/viewport";
+import type { EditorGraphConnection } from "@moritzbrantner/editor-core/constraints";
+import type {
+  EditorGraphAdapter,
+  EditorGraphEdge,
+  EditorGraphPort,
+} from "@moritzbrantner/editor-core/entities";
 
 export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = Omit<
   EditorGraphPort,

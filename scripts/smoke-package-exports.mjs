@@ -39,7 +39,11 @@ const modules = [
   {
     specifier: "@moritzbrantner/graph-editor/operations",
     path: "../dist/operations.js",
-    exports: ["createGraphEditorAddNodeOperation", "createGraphEditorUpdateNodeOperation"],
+    exports: [
+      "createGraphEditorAddNodeOperation",
+      "createGraphEditorReplaceDocumentOperation",
+      "createGraphEditorUpdateNodeOperation",
+    ],
   },
   {
     specifier: "@moritzbrantner/graph-editor/runtime",
@@ -50,6 +54,68 @@ const modules = [
     specifier: "@moritzbrantner/graph-editor/commands",
     path: "../dist/commands.js",
     exports: ["createGraphEditorCommands", "getGraphEditorCommandFromKeyboardEvent"],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/serialization",
+    path: "../dist/serialization.js",
+    exports: [
+      "parseGraphEditorDocumentJson",
+      "readSerializedGraphEditorDocument",
+      "serializeGraphEditorDocument",
+    ],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/persistence",
+    path: "../dist/persistence.js",
+    exports: [
+      "createGraphEditorLocalStorage",
+      "createGraphEditorMemoryStorage",
+      "loadGraphEditorRuntimePersistence",
+      "saveGraphEditorRuntimePersistence",
+    ],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/patches",
+    path: "../dist/patches.js",
+    exports: [
+      "applyGraphEditorDocumentPatch",
+      "diffGraphEditorDocuments",
+      "invertGraphEditorDocumentPatch",
+      "isGraphEditorDocumentPatchEmpty",
+    ],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/plugins",
+    path: "../dist/plugins.js",
+    exports: [
+      "createGraphEditorPluginRegistry",
+      "getGraphEditorPluginDiagnostics",
+      "resolveGraphEditorPluginCommands",
+      "resolveGraphEditorPluginRuntimeOptions",
+    ],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/interaction",
+    path: "../dist/interaction.js",
+    exports: [
+      "beginGraphEditorMoveInteraction",
+      "cancelGraphEditorInteraction",
+      "commitGraphEditorInteraction",
+      "commitGraphEditorInteractionOperation",
+      "createGraphEditorInteractionSession",
+      "previewGraphEditorMoveInteraction",
+    ],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/operation-log",
+    path: "../dist/operation-log.js",
+    exports: [
+      "graphEditorOperationFromSerializedOperation",
+      "graphEditorOperationLogAdapter",
+      "readGraphEditorOperationLog",
+      "serializeGraphEditorOperation",
+      "serializeGraphEditorOperationLog",
+    ],
   },
 ];
 
@@ -170,7 +236,11 @@ async function smokePackedTarball(failures) {
 }
 
 async function packLocalSmokeDependencies(tempDir) {
-  const editorCoreDir = path.resolve(rootDir, "../editor-core");
+  if (process.env.GRAPH_EDITOR_SMOKE_LOCAL_EDITOR_CORE !== "1") {
+    return [];
+  }
+
+  const editorCoreDir = path.resolve(rootDir, "..", "editor-core");
   try {
     await access(path.join(editorCoreDir, "package.json"));
   } catch {

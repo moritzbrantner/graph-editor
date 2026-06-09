@@ -1,17 +1,20 @@
 import {
   applyEditorOperation,
-  createStableEditorJsonEquals,
   createEditorOperationRuntime,
   redoEditorOperationRuntime,
-  markEditorRuntimeSaved,
-  resetEditorRuntime,
-  setEditorRuntimeSelection,
   undoEditorOperationRuntime,
   type ApplyEditorOperationOptions,
   type EditorOperation,
   type EditorOperationPreflightIssue,
   type EditorOperationRuntimeState,
-} from "@moritzbrantner/editor-core";
+} from "@moritzbrantner/editor-core/operations";
+import { createStableEditorJsonEquals } from "@moritzbrantner/editor-core/json";
+import {
+  markEditorRuntimeSaved,
+  resetEditorRuntime,
+  setEditorRuntimeSelection,
+  type EditorRuntimeState,
+} from "@moritzbrantner/editor-core/runtime";
 
 import {
   normalizeGraphEditorDocument,
@@ -24,6 +27,11 @@ import {
   type GraphEditorSelectionState,
 } from "./core";
 import type { GraphEditorOperation } from "./operations";
+import {
+  createGraphEditorPluginRegistry,
+  resolveGraphEditorPluginRuntimeOptions,
+  type GraphEditorPlugin,
+} from "./plugins";
 
 export type GraphEditorRuntimeState<
   TNodeData = Record<string, unknown>,
@@ -54,6 +62,10 @@ export type GraphEditorRuntimeOptions<
     TEdgeData,
     TPortType
   >;
+  plugins?: readonly GraphEditorPlugin<
+    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    GraphEditorSelectionState
+  >[];
   disableHistory?: boolean;
 };
 
@@ -79,10 +91,27 @@ export function createGraphEditorRuntime<
     mode: "repair",
   });
   const runtimeOptions = toRuntimeStateOptions(options);
-  const state = createEditorOperationRuntime<
-    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
-    GraphEditorSelectionState
-  >({
+  const registry = createGraphEditorPluginRegistry(runtimeOptions.plugins ?? []);
+  const preflight = (
+    context: Parameters<
+      NonNullable<
+        Parameters<
+          typeof createEditorOperationRuntime<
+            GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+            GraphEditorSelectionState
+          >
+        >[0]["preflight"]
+      >
+    >[0],
+  ) => [
+    ...preflightGraphEditorOperation(
+      context.document,
+      context.operation,
+      runtimeOptions.validationOptions,
+    ),
+    ...runtimePluginOptions.preflight(context),
+  ];
+  const baseRuntimeOptions = {
     initialDocument: normalizedDocument,
     initialSelection: normalizeGraphEditorSelection(
       normalizedDocument,
@@ -91,16 +120,24 @@ export function createGraphEditorRuntime<
     history: {
       limit: options.historyLimit,
       equals: graphEditorDocumentsEqual,
-      normalize: (document) =>
+      normalize: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) =>
         normalizeGraphEditorDocument(document, {
           ...(options.validationOptions ?? {}),
           mode: "repair",
         }),
     },
     operationHistoryLimit: options.disableHistory ? 0 : options.operationHistoryLimit,
-    preflight: ({ document, operation }) =>
-      preflightGraphEditorOperation(document, operation, runtimeOptions.validationOptions),
-    validate: (document) => validateGraphEditorDocument(document, options.validationOptions),
+    validate: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) =>
+      validateGraphEditorDocument(document, options.validationOptions),
+  };
+  const runtimePluginOptions = resolveGraphEditorPluginRuntimeOptions(registry, baseRuntimeOptions);
+  const state = createEditorOperationRuntime<
+    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    GraphEditorSelectionState
+  >({
+    ...runtimePluginOptions,
+    operationHistoryLimit: options.disableHistory ? 0 : options.operationHistoryLimit,
+    preflight,
   });
 
   return withGraphEditorRuntimeState(state, runtimeOptions);
@@ -225,6 +262,37 @@ export function markGraphEditorRuntimeSaved<
     {
       ...state,
       runtime: markEditorRuntimeSaved(state.runtime),
+    },
+    getGraphEditorRuntimeStateOptions(state),
+  );
+}
+
+export function replaceGraphEditorRuntimeCoreState<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  state: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>,
+  runtime: EditorRuntimeState<
+    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    GraphEditorSelectionState
+  >,
+  options: {
+    clearOperationHistory?: boolean;
+  } = {},
+): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
+  const operationHistory = options.clearOperationHistory
+    ? { undoStack: [], redoStack: [] }
+    : state.operationHistory;
+  return withGraphEditorRuntimeState(
+    {
+      ...state,
+      canUndo: operationHistory.undoStack.length > 0,
+      canRedo: operationHistory.redoStack.length > 0,
+      issues: [],
+      lastMergeKey: options.clearOperationHistory ? null : state.lastMergeKey,
+      operationHistory,
+      runtime,
     },
     getGraphEditorRuntimeStateOptions(state),
   );
@@ -358,6 +426,7 @@ function toRuntimeStateOptions<
     historyLimit: options.historyLimit,
     initialSelection: options.initialSelection,
     operationHistoryLimit: options.operationHistoryLimit,
+    plugins: options.plugins,
     validationOptions: options.validationOptions,
   };
 }

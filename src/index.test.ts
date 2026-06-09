@@ -10,7 +10,13 @@ import {
   GraphNode,
   InspectorPanel,
   applyGraphEditorOperation,
+  applyGraphEditorDocumentPatch,
+  beginGraphEditorMoveInteraction,
+  cancelGraphEditorInteraction,
   clearGraphEditorSelection,
+  commitGraphEditorInteraction,
+  commitGraphEditorInteractionOperation,
+  createGraphEditorInteractionSession,
   copyGraphEditorSelection,
   connectGraphEditorNodes,
   createGraphEditorAddEdgeOperation,
@@ -21,11 +27,20 @@ import {
   createGraphEditorGraphAdapter,
   createGraphEditorMoveNodesOperation,
   createGraphEditorPasteOperation,
+  createGraphEditorPatchOperation,
+  createGraphEditorPluginRegistry,
+  createGraphEditorMemoryStorage,
+  createGraphEditorReplaceDocumentOperation,
   createGraphEditorRuntime,
   createGraphEditorUpdateNodeOperation,
   createGraphEditorUpdateViewportOperation,
+  diffGraphEditorDocuments,
   duplicateGraphEditorSelection,
   editorSelectionToGraphEditorSelection,
+  graphEditorOperationFromSerializedOperation,
+  graphEditorOperationLogAdapter,
+  createGraphEditorLocalStorage,
+  getGraphEditorPluginDiagnostics,
   getGraphWorkbenchCommandFromKeyboardEvent,
   getGraphEditorCommandFromKeyboardEvent,
   getGraphEditorGroupBounds,
@@ -33,12 +48,24 @@ import {
   getGraphEditorNodeSize,
   graphEditorSelectionToEditorSelection,
   graphEditorDocumentAdapter,
+  invertGraphEditorDocumentPatch,
+  isGraphEditorDocumentPatchEmpty,
   layoutGraphEditorDocument,
+  loadGraphEditorRuntimePersistence,
   markGraphEditorRuntimeSaved,
   normalizeGraphEditorDocument,
   normalizeGraphEditorBounds,
   pasteGraphEditorClipboardPayload,
+  parseGraphEditorDocumentJson,
+  previewGraphEditorMoveInteraction,
   redoGraphEditorRuntime,
+  readGraphEditorOperationLog,
+  readSerializedGraphEditorDocument,
+  resolveGraphEditorPluginCommands,
+  saveGraphEditorRuntimePersistence,
+  serializeGraphEditorDocument,
+  serializeGraphEditorOperation,
+  serializeGraphEditorOperationLog,
   setGraphEditorRuntimeSelection,
   undoGraphEditorRuntime,
   updateGraphEditorSelection,
@@ -64,17 +91,28 @@ import {
   type InspectorPanelSectionData,
   type InspectorPanelSectionProps,
   type GraphWorkbenchController,
+  type GraphEditorPlugin,
+  type GraphEditorSerializedOperation,
 } from "@moritzbrantner/graph-editor";
 import {
-  createEditorEntitySelection,
-  createEditorGraphIndexes,
   commitEditorSnapshotHistory,
   createEditorSnapshotHistory,
-  getEditorSelectedEntityIds,
   redoEditorSnapshotHistory,
-  serializeEditorDocument,
   undoEditorSnapshotHistory,
-} from "@moritzbrantner/editor-core";
+} from "@moritzbrantner/editor-core/history";
+import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
+import {
+  EditorJsonParseError,
+  serializeEditorDocument,
+} from "@moritzbrantner/editor-core/serialization";
+import {
+  createEditorEntitySelection,
+  getEditorSelectedEntityIds,
+} from "@moritzbrantner/editor-core/selection";
+import {
+  assertEditorDocumentAdapter,
+  assertEditorOperationLogAdapter,
+} from "@moritzbrantner/editor-core/testing";
 import { workbenchExamples } from "../examples/workbench/src/workbench-examples";
 
 afterEach(() => {
@@ -583,6 +621,650 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(serialized.format).toBe("@moritzbrantner/graph-editor/document");
     expect(serialized.schemaVersion).toBe(1);
     expect(serialized.document.nodes[0]?.id).toBe("node");
+  });
+
+  test("passes editor-core document adapter contract checks", () => {
+    assertEditorDocumentAdapter(graphEditorDocumentAdapter, [
+      {
+        id: "current-envelope",
+        input: {
+          format: "@moritzbrantner/graph-editor/document",
+          schemaVersion: 1,
+          document: {
+            nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+            edges: [],
+          },
+        },
+        expected: {
+          nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+          edges: [],
+        },
+        roundtrip: true,
+      },
+    ]);
+  });
+
+  test("wraps editor-core graph document serialization helpers", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+    const serialized = serializeGraphEditorDocument(document, { exportedAt: false });
+
+    expect(serialized).toMatchObject({
+      format: "@moritzbrantner/graph-editor/document",
+      schemaVersion: 1,
+    });
+    expect(readSerializedGraphEditorDocument(serialized)).toEqual(document);
+    expect(() =>
+      readSerializedGraphEditorDocument({
+        ...serialized,
+        format: "wrong",
+      }),
+    ).toThrow();
+
+    const migrated = readSerializedGraphEditorDocument(
+      {
+        ...serialized,
+        schemaVersion: 0,
+      },
+      {
+        migrations: {
+          0: (input) => ({ ...input, schemaVersion: 1 }),
+        },
+      },
+    );
+    expect(migrated).toEqual(document);
+  });
+
+  test("parses graph document JSON and preserves serialized envelope options", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+    const serialized = serializeGraphEditorDocument(document, {
+      exportedAt: new Date("2026-06-09T00:00:00.000Z"),
+      metadata: { source: "test" },
+    });
+
+    expect(parseGraphEditorDocumentJson(JSON.stringify(serialized))).toEqual(document);
+    expect(serialized.exportedAt).toBe("2026-06-09T00:00:00.000Z");
+    expect(serialized.metadata).toEqual({ source: "test" });
+    expect("exportedAt" in serializeGraphEditorDocument(document, { exportedAt: false })).toBe(
+      false,
+    );
+    expect(() => parseGraphEditorDocumentJson("{")).toThrow(EditorJsonParseError);
+    expect(() =>
+      readSerializedGraphEditorDocument(
+        { ...serialized, schemaVersion: 0 },
+        {
+          migrations: {
+            0: (input) => ({ ...input, schemaVersion: 99 }),
+          },
+        },
+      ),
+    ).toThrow("Unsupported @moritzbrantner/graph-editor/document schema version 99.");
+  });
+
+  test("diffs, applies, inverts, and applies graph document patches through operations", () => {
+    const before = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+    const after = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Renamed", x: 20, y: 0 }],
+      edges: [],
+    });
+    const patch = diffGraphEditorDocuments(before, after, { includeOldValues: true });
+
+    expect(isGraphEditorDocumentPatchEmpty(patch)).toBe(false);
+    expect(applyGraphEditorDocumentPatch(before, patch)).toEqual(after);
+    expect(applyGraphEditorDocumentPatch(after, invertGraphEditorDocumentPatch(patch))).toEqual(
+      before,
+    );
+
+    const runtime = createGraphEditorRuntime({ initialDocument: before });
+    const patched = applyGraphEditorOperation(runtime, createGraphEditorPatchOperation(patch));
+    expect(patched.document.nodes[0]?.label).toBe("Renamed");
+    expect(() =>
+      applyGraphEditorDocumentPatch(before, [{ op: "replace", path: ["nodes", 3], value: null }]),
+    ).toThrow();
+  });
+
+  test("applies graph patches with explicit strictness and normalization behavior", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 240, y: 0 },
+      ],
+      edges: [
+        {
+          id: "edge",
+          sourceNodeId: "source",
+          sourcePortId: "out",
+          targetNodeId: "target",
+          targetPortId: "in",
+        },
+      ],
+    });
+    const removeSourcePatch = [{ op: "remove" as const, path: ["nodes", 0] }];
+
+    expect(applyGraphEditorDocumentPatch(document, removeSourcePatch).edges).toEqual([]);
+    expect(
+      applyGraphEditorDocumentPatch(document, removeSourcePatch, { normalize: false }).edges,
+    ).toHaveLength(1);
+    expect(() =>
+      applyGraphEditorDocumentPatch(document, [
+        { op: "replace", path: ["nodes", 4, "label"], value: "Missing" },
+      ]),
+    ).toThrow('Cannot apply editor patch at path "nodes.4.label".');
+    expect(
+      applyGraphEditorDocumentPatch(
+        document,
+        [{ op: "replace", path: ["nodes", 4, "label"], value: "Missing" }],
+        { strict: false },
+      ),
+    ).toEqual(document);
+
+    const selectionBefore = { nodeIds: ["source"], edgeIds: [] };
+    const selectionAfter = { nodeIds: ["target"], edgeIds: [] };
+    const operation = createGraphEditorPatchOperation(removeSourcePatch, {
+      selectionAfter,
+      selectionBefore,
+    });
+    expect(operation.selectionBefore).toBe(selectionBefore);
+    expect(operation.selectionAfter).toBe(selectionAfter);
+  });
+
+  test("loads and saves graph runtimes through editor-core persistence wrappers", async () => {
+    let stored: GraphEditorDocument | null = {
+      nodes: [{ id: "stored", label: "Stored", x: 0, y: 0 }],
+      edges: [],
+    };
+    const storage = {
+      load: vi.fn(async () => stored),
+      save: vi.fn(async (value: GraphEditorDocument) => {
+        stored = value;
+      }),
+    };
+    const runtime = createGraphEditorRuntime({
+      initialDocument: { nodes: [], edges: [] },
+    });
+    const edited = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorAddNodeOperation({
+        node: { id: "local", label: "Local", x: 0, y: 0 },
+      }),
+    );
+    expect(edited.canUndo).toBe(true);
+
+    const loaded = await loadGraphEditorRuntimePersistence(edited, storage);
+    expect(loaded.runtime.document.nodes[0]?.id).toBe("stored");
+    expect(loaded.runtime.canUndo).toBe(false);
+    expect(loaded.runtime.operationHistory.undoStack).toEqual([]);
+
+    const skipped = await saveGraphEditorRuntimePersistence(loaded.runtime, storage);
+    expect(skipped.saved).toBe(false);
+    const dirty = applyGraphEditorOperation(
+      loaded.runtime,
+      createGraphEditorUpdateNodeOperation("stored", { label: "Saved" }),
+    );
+    const saved = await saveGraphEditorRuntimePersistence(dirty, storage);
+    expect(saved.saved).toBe(true);
+    expect(saved.runtime.runtime.status).toBe("clean");
+    expect(stored?.nodes[0]?.label).toBe("Saved");
+  });
+
+  test("handles graph runtime persistence fallbacks, force saves, errors, and memory storage", async () => {
+    const fallback = normalizeGraphEditorDocument({
+      nodes: [{ id: "fallback", label: "Fallback", x: 0, y: 0 }],
+      edges: [],
+    });
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [{ id: "local", label: "Local", x: 0, y: 0 }],
+        edges: [],
+      },
+      initialSelection: { nodeIds: ["local"], edgeIds: [] },
+    });
+    const storage = {
+      load: vi.fn(async () => null),
+      save: vi.fn(async () => {}),
+    };
+    const loaded = await loadGraphEditorRuntimePersistence(runtime, storage, {
+      fallback,
+      selection: { nodeIds: ["missing"], edgeIds: ["missing"] },
+    });
+
+    expect(loaded.runtime.document).toEqual(fallback);
+    expect(loaded.runtime.selection).toEqual({ nodeIds: [], edgeIds: [] });
+    expect(loaded.runtime.runtime.status).toBe("clean");
+
+    const cleanSaved = await saveGraphEditorRuntimePersistence(loaded.runtime, storage, {
+      force: true,
+    });
+    expect(cleanSaved.saved).toBe(true);
+    expect(storage.save).toHaveBeenCalledWith(fallback);
+
+    const saveError = new Error("save failed");
+    const onError = vi.fn();
+    const failingStorage = {
+      load: vi.fn(async () => fallback),
+      save: vi.fn(async () => {
+        throw saveError;
+      }),
+    };
+    const dirty = applyGraphEditorOperation(
+      loaded.runtime,
+      createGraphEditorUpdateNodeOperation("fallback", { label: "Dirty" }),
+    );
+    const failed = await saveGraphEditorRuntimePersistence(dirty, failingStorage, { onError });
+    expect(failed.saved).toBe(false);
+    expect(failed.runtime.runtime.status).toBe("dirty");
+    expect(failed.runtime.document.nodes[0]?.label).toBe("Dirty");
+    expect(onError).toHaveBeenCalledWith(saveError, { operation: "save", revision: 2 });
+
+    const memoryStorage = createGraphEditorMemoryStorage({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [
+        {
+          id: "invalid",
+          sourceNodeId: "node",
+          sourcePortId: "out",
+          targetNodeId: "missing",
+          targetPortId: "in",
+        },
+      ],
+    });
+    expect((await memoryStorage.load())?.edges).toEqual([]);
+  });
+
+  test("creates typed local storage adapters for graph documents", async () => {
+    const backing = new Map<string, string>();
+    const storageLike = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        backing.set(key, value);
+      },
+      removeItem: (key: string) => {
+        backing.delete(key);
+      },
+      clear: () => backing.clear(),
+      key: (index: number) => [...backing.keys()][index] ?? null,
+      get length() {
+        return backing.size;
+      },
+    } as Storage;
+    const storage = createGraphEditorLocalStorage({
+      key: "graph",
+      storage: storageLike,
+    });
+
+    await storage.save({ nodes: [{ id: "node", label: "Node", x: 0, y: 0 }], edges: [] });
+    expect((await storage.load())?.nodes[0]?.id).toBe("node");
+  });
+
+  test("composes graph editor plugins into runtime validation, preflight, and commands", () => {
+    const plugin: GraphEditorPlugin<GraphEditorDocument, GraphEditorSelectionState> = {
+      id: "quality",
+      commands: [
+        {
+          id: "quality.inspect",
+          label: "Inspect",
+          canRun: ({ selection }) => selection.nodeIds.length > 0,
+        },
+      ],
+      validators: [
+        (document) =>
+          document.nodes.some((node) => node.label === "Blocked")
+            ? [{ path: "$.nodes", message: "Blocked label" }]
+            : [],
+      ],
+      operationPreflight: [
+        ({ operation }) =>
+          operation.id === "graph.add-node"
+            ? [{ path: "$.nodes", message: "Adding nodes is blocked" }]
+            : [],
+      ],
+    };
+    const registry = createGraphEditorPluginRegistry([plugin]);
+    const runtime = createGraphEditorRuntime({
+      initialDocument: { nodes: [{ id: "a", label: "Blocked", x: 0, y: 0 }], edges: [] },
+      plugins: [plugin],
+    });
+
+    expect(runtime.runtime.issues.map((issue) => issue.message)).toContain("Blocked label");
+    const blocked = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorAddNodeOperation({
+        node: { id: "b", label: "B", x: 0, y: 0 },
+      }),
+    );
+    expect(blocked.document.nodes.some((node) => node.id === "b")).toBe(false);
+    expect(blocked.issues.map((issue) => issue.message)).toContain("Adding nodes is blocked");
+    expect(
+      resolveGraphEditorPluginCommands(registry, {
+        document: runtime.document,
+        selection: { nodeIds: ["a"], edgeIds: [] },
+      }).map((command) => command.id),
+    ).toEqual(["quality.inspect"]);
+  });
+
+  test("reports plugin diagnostics and keeps warning-only preflight non-blocking", () => {
+    const duplicateCommandPlugin: GraphEditorPlugin<
+      GraphEditorDocument,
+      GraphEditorSelectionState
+    > = {
+      id: "duplicate-command",
+      commands: [
+        { id: "plugin.rename", label: "Rename", hotkeys: ["Mod+K"] },
+        { id: "plugin.inspect", label: "Inspect", hotkeys: ["Mod+K"] },
+      ],
+    };
+    const registry = createGraphEditorPluginRegistry([
+      { id: "same" },
+      { id: "same" },
+      duplicateCommandPlugin,
+    ]);
+
+    expect(
+      getGraphEditorPluginDiagnostics(registry).map((diagnostic) => diagnostic.message),
+    ).toEqual(
+      expect.arrayContaining([
+        'Duplicate plugin id "same".',
+        'Hotkey "Mod+K" conflicts with command "plugin.inspect".',
+      ]),
+    );
+
+    const warningPlugin: GraphEditorPlugin<GraphEditorDocument, GraphEditorSelectionState> = {
+      id: "warning",
+      operationPreflight: [() => [{ path: "$", message: "Soft warning", severity: "warning" }]],
+      validators: [
+        () => [{ path: "$.plugins", message: "Plugin validator after base validation" }],
+      ],
+    };
+    const runtime = createGraphEditorRuntime({
+      initialDocument: {
+        nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+        edges: [],
+      },
+      plugins: [warningPlugin],
+    });
+    const next = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorUpdateNodeOperation("node", { label: "Renamed" }),
+    );
+
+    expect(next.document.nodes[0]?.label).toBe("Renamed");
+    expect(next.issues).toEqual([{ path: "$", message: "Soft warning", severity: "warning" }]);
+    expect(runtime.runtime.issues.map((issue) => issue.message)).toEqual([
+      "Plugin validator after base validation",
+    ]);
+
+    const invalid = applyGraphEditorOperation(runtime, {
+      id: "graph.add-edge",
+      apply: (document) => ({
+        ...document,
+        edges: [
+          {
+            id: "invalid",
+            sourceNodeId: "node",
+            sourcePortId: "out",
+            targetNodeId: "missing",
+            targetPortId: "in",
+          },
+        ],
+      }),
+    });
+    expect(invalid.issues.map((issue) => issue.message)).toEqual([
+      "Graph edge target node is missing: missing",
+      "Soft warning",
+    ]);
+  });
+
+  test("previews, cancels, and commits graph interaction operations", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+    const session = beginGraphEditorMoveInteraction(createGraphEditorInteractionSession(document), {
+      nodeIds: ["node"],
+      origin: { x: 0, y: 0 },
+    });
+    const preview = previewGraphEditorMoveInteraction(session, { node: { x: 40, y: 20 } });
+
+    expect(preview.previewDocument.nodes[0]).toMatchObject({ x: 40, y: 20 });
+    expect(createGraphEditorInteractionSession(document).previewDocument.nodes[0]?.x).toBe(0);
+
+    const runtime = createGraphEditorRuntime({ initialDocument: document });
+    const committed = applyGraphEditorOperation(
+      runtime,
+      createGraphEditorMoveNodesOperation({ node: { x: 40, y: 20 } }, { merge: true }),
+      { merge: true },
+    );
+    expect(committed.canUndo).toBe(true);
+  });
+
+  test("commits, cancels, and merges graph interaction sessions", () => {
+    const document = normalizeGraphEditorDocument({
+      nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+      edges: [],
+    });
+    const session = beginGraphEditorMoveInteraction(createGraphEditorInteractionSession(document), {
+      nodeIds: ["node"],
+      origin: { x: 0, y: 0 },
+    });
+    const preview = previewGraphEditorMoveInteraction(session, { node: { x: 40, y: 20 } });
+
+    expect(cancelGraphEditorInteraction(preview).previewDocument.nodes[0]?.x).toBe(0);
+    expect(commitGraphEditorInteraction(preview).committedDocument.nodes[0]).toMatchObject({
+      x: 40,
+      y: 20,
+    });
+
+    const runtime = createGraphEditorRuntime({ initialDocument: document });
+    const first = commitGraphEditorInteractionOperation(
+      runtime,
+      createGraphEditorMoveNodesOperation({ node: { x: 10, y: 0 } }),
+    );
+    const second = commitGraphEditorInteractionOperation(
+      first,
+      createGraphEditorMoveNodesOperation({ node: { x: 20, y: 0 } }),
+    );
+    expect(second.operationHistory.undoStack).toHaveLength(1);
+    expect(second.document.nodes[0]?.x).toBe(20);
+  });
+
+  test("serializes, validates, and replays deterministic graph operation logs", () => {
+    const operation: GraphEditorSerializedOperation = {
+      id: "rename",
+      type: "graph.update-node",
+      schemaVersion: 1,
+      payload: {
+        type: "graph.update-node",
+        nodeId: "node",
+        patch: { label: "Renamed" },
+      },
+    };
+    assertEditorOperationLogAdapter(graphEditorOperationLogAdapter, [
+      {
+        id: "valid-log",
+        input: serializeGraphEditorOperationLog([operation], { exportedAt: false }),
+        expected: [operation],
+      },
+    ]);
+
+    const operations = readGraphEditorOperationLog(serializeGraphEditorOperationLog([operation]));
+    const runtime = createGraphEditorRuntime({
+      initialDocument: { nodes: [{ id: "node", label: "Node", x: 0, y: 0 }], edges: [] },
+    });
+    const replayed = applyGraphEditorOperation(
+      runtime,
+      graphEditorOperationFromSerializedOperation(operations[0]!),
+    );
+    expect(replayed.document.nodes[0]?.label).toBe("Renamed");
+
+    expect(() =>
+      readGraphEditorOperationLog(
+        serializeGraphEditorOperationLog([
+          {
+            id: "paste",
+            type: "graph.paste",
+            schemaVersion: 1,
+            payload: {
+              type: "graph.paste",
+              unsupported: true,
+            },
+          },
+        ]),
+      ),
+    ).toThrow();
+  });
+
+  test("serializes and replays deterministic graph operation variants", () => {
+    const operations = [
+      serializeGraphEditorOperation(
+        "graph.add-node",
+        {
+          type: "graph.add-node",
+          node: {
+            id: "source",
+            label: "Source",
+            x: 0,
+            y: 0,
+            outputs: [{ id: "out", label: "Out" }],
+          },
+        },
+        { id: "add-source" },
+      ),
+      serializeGraphEditorOperation(
+        "graph.add-node",
+        {
+          type: "graph.add-node",
+          node: {
+            id: "target",
+            label: "Target",
+            x: 240,
+            y: 0,
+            inputs: [{ id: "in", label: "In" }],
+          },
+        },
+        { id: "add-target" },
+      ),
+      serializeGraphEditorOperation(
+        "graph.add-edge",
+        {
+          type: "graph.add-edge",
+          edge: {
+            id: "edge",
+            sourceNodeId: "source",
+            sourcePortId: "out",
+            targetNodeId: "target",
+            targetPortId: "in",
+          },
+        },
+        { id: "add-edge" },
+      ),
+      serializeGraphEditorOperation(
+        "graph.patch",
+        {
+          type: "graph.patch",
+          patch: [{ op: "replace", path: ["nodes", 0, "label"], value: "Renamed" }],
+        },
+        { id: "patch" },
+      ),
+      serializeGraphEditorOperation(
+        "graph.replace-document",
+        {
+          type: "graph.replace-document",
+          document: {
+            nodes: [{ id: "replacement", label: "Replacement", x: 0, y: 0 }],
+            edges: [],
+          },
+        },
+        { id: "replace" },
+      ),
+    ];
+    const replayed = readGraphEditorOperationLog(
+      serializeGraphEditorOperationLog(operations, { exportedAt: false }),
+    ).reduce(
+      (runtime, serializedOperation) =>
+        applyGraphEditorOperation(
+          runtime,
+          graphEditorOperationFromSerializedOperation(serializedOperation),
+        ),
+      createGraphEditorRuntime({ initialDocument: { nodes: [], edges: [] } }),
+    );
+
+    expect(replayed.document.nodes).toEqual([
+      { id: "replacement", label: "Replacement", x: 0, y: 0 },
+    ]);
+    expect(
+      createGraphEditorReplaceDocumentOperation({
+        nodes: [{ id: "node", label: "Node", x: 0, y: 0 }],
+        edges: [
+          {
+            id: "invalid",
+            sourceNodeId: "node",
+            sourcePortId: "out",
+            targetNodeId: "missing",
+            targetPortId: "in",
+          },
+        ],
+      }).apply({ nodes: [], edges: [] }).edges,
+    ).toEqual([]);
+    expect(() =>
+      serializeGraphEditorOperation("graph.paste", {
+        type: "graph.paste",
+        unsupported: true,
+      }),
+    ).toThrow("graph.paste cannot be serialized without materialized generated ids.");
+  });
+
+  test("rejects unsupported and invalid graph operation log payloads with stable errors", () => {
+    const paste: GraphEditorSerializedOperation = {
+      id: "paste",
+      type: "graph.paste",
+      schemaVersion: 1,
+      payload: { type: "graph.paste", unsupported: true },
+    };
+    const duplicateSelection: GraphEditorSerializedOperation = {
+      id: "duplicate",
+      type: "graph.duplicate-selection",
+      schemaVersion: 1,
+      payload: { type: "graph.duplicate-selection", unsupported: true },
+    };
+    const mismatch: GraphEditorSerializedOperation = {
+      id: "mismatch",
+      type: "graph.add-node",
+      schemaVersion: 1,
+      payload: { type: "graph.add-edge", edge: {} as never },
+    };
+    const schemaMismatch: GraphEditorSerializedOperation = {
+      id: "schema",
+      type: "graph.add-node",
+      schemaVersion: 2 as 1,
+      payload: {
+        type: "graph.add-node",
+        node: { id: "node", label: "Node", x: 0, y: 0 },
+      },
+    };
+
+    expect(() => readGraphEditorOperationLog(serializeGraphEditorOperationLog([paste]))).toThrow(
+      "graph.paste cannot be replayed without materialized generated ids.",
+    );
+    expect(() => graphEditorOperationFromSerializedOperation(paste)).toThrow(
+      "graph.paste cannot be replayed without materialized generated ids.",
+    );
+    expect(() => graphEditorOperationFromSerializedOperation(duplicateSelection)).toThrow(
+      "graph.duplicate-selection cannot be replayed without materialized generated ids.",
+    );
+    expect(() => readGraphEditorOperationLog(serializeGraphEditorOperationLog([mismatch]))).toThrow(
+      EditorJsonParseError,
+    );
+    expect(() =>
+      readGraphEditorOperationLog(serializeGraphEditorOperationLog([schemaMismatch])),
+    ).toThrow(EditorJsonParseError);
   });
 
   test("projects graph documents through the editor-core graph adapter", () => {

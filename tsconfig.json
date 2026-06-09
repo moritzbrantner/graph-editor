@@ -13,6 +13,12 @@
       "@moritzbrantner/graph-editor/layout": ["./src/layout.ts"],
       "@moritzbrantner/graph-editor/operations": ["./src/operations.ts"],
       "@moritzbrantner/graph-editor/runtime": ["./src/runtime.ts"],
+      "@moritzbrantner/graph-editor/serialization": ["./src/serialization.ts"],
+      "@moritzbrantner/graph-editor/persistence": ["./src/persistence.ts"],
+      "@moritzbrantner/graph-editor/patches": ["./src/patches.ts"],
+      "@moritzbrantner/graph-editor/plugins": ["./src/plugins.ts"],
+      "@moritzbrantner/graph-editor/interaction": ["./src/interaction.ts"],
+      "@moritzbrantner/graph-editor/operation-log": ["./src/operation-log.ts"],
       "@moritzbrantner/graph-editor/react": ["./src/react.tsx"]
     }
   },

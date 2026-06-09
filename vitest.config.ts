@@ -33,6 +33,30 @@ export default defineConfig({
         replacement: path.resolve(rootDir, "src/runtime.ts"),
       },
       {
+        find: "@moritzbrantner/graph-editor/serialization",
+        replacement: path.resolve(rootDir, "src/serialization.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/persistence",
+        replacement: path.resolve(rootDir, "src/persistence.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/patches",
+        replacement: path.resolve(rootDir, "src/patches.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/plugins",
+        replacement: path.resolve(rootDir, "src/plugins.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/interaction",
+        replacement: path.resolve(rootDir, "src/interaction.ts"),
+      },
+      {
+        find: "@moritzbrantner/graph-editor/operation-log",
+        replacement: path.resolve(rootDir, "src/operation-log.ts"),
+      },
+      {
         find: "@moritzbrantner/graph-editor/react",
         replacement: path.resolve(rootDir, "src/react.tsx"),
       },

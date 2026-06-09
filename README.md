@@ -32,6 +32,8 @@ and Playwright e2e suite.
 - `createGraphEditorRuntime(...)` and `applyGraphEditorOperation(...)` for headless editing,
   undo/redo, normalized selection, diagnostics, and dirty state.
 - `createGraphEditorCommands(...)` and shortcut helpers for generic graph editor command menus.
+- `serializeGraphEditorDocument(...)`, patch helpers, plugin registries, interaction sessions, and
+  deterministic operation-log helpers for headless integrations.
 - `copyGraphEditorSelection(...)`, `pasteGraphEditorClipboardPayload(...)`, and selection helpers.
 - `layoutGraphEditorDocument(...)` for deterministic Dagre-powered layout.
 - `getGraphEditorNodeSize(...)` for headless deterministic node measurement.
@@ -45,6 +47,15 @@ and Playwright e2e suite.
   normalized selection, validation diagnostics, and saved/dirty tracking.
 - `@moritzbrantner/graph-editor/commands`: command definitions, shortcut matching, and command
   resolution helpers.
+- `@moritzbrantner/graph-editor/serialization`: graph document envelopes, JSON parsing, and
+  migration-aware reads.
+- `@moritzbrantner/graph-editor/persistence`: adapter-level runtime load/save helpers plus browser
+  local storage and memory storage adapters.
+- `@moritzbrantner/graph-editor/patches`: graph document diff/apply/invert helpers.
+- `@moritzbrantner/graph-editor/plugins`: plugin registry, validator, preflight, and command
+  composition helpers.
+- `@moritzbrantner/graph-editor/interaction`: headless preview/cancel/commit interaction sessions.
+- `@moritzbrantner/graph-editor/operation-log`: deterministic serialized operation-log helpers.
 - `@moritzbrantner/graph-editor/react`: React canvas, node, inspector, palette, and workbench UI.
 
 ```ts
@@ -152,6 +163,119 @@ import {
 const result = layoutGraphEditorDocument(document, { direction: "right" });
 const size = getGraphEditorNodeSize(result.document.nodes[0]);
 ```
+
+### Serialization
+
+```ts
+import {
+  parseGraphEditorDocumentJson,
+  readSerializedGraphEditorDocument,
+  serializeGraphEditorDocument,
+} from "@moritzbrantner/graph-editor/serialization";
+
+const serialized = serializeGraphEditorDocument(document, {
+  exportedAt: false,
+  metadata: { source: "importer" },
+});
+
+const fromEnvelope = readSerializedGraphEditorDocument(serialized);
+const fromJson = parseGraphEditorDocumentJson(JSON.stringify(serialized));
+```
+
+### Persistence
+
+```ts
+import { createGraphEditorRuntime } from "@moritzbrantner/graph-editor/runtime";
+import {
+  createGraphEditorLocalStorage,
+  loadGraphEditorRuntimePersistence,
+  saveGraphEditorRuntimePersistence,
+} from "@moritzbrantner/graph-editor/persistence";
+
+const storage = createGraphEditorLocalStorage({ key: "graph-editor:document" });
+
+let runtime = createGraphEditorRuntime({ initialDocument: { nodes: [], edges: [] } });
+runtime = (await loadGraphEditorRuntimePersistence(runtime, storage)).runtime;
+runtime = (await saveGraphEditorRuntimePersistence(runtime, storage, { force: true })).runtime;
+```
+
+`loadGraphEditorRuntimePersistence` clears operation history after replacing the committed document
+snapshot. `createGraphEditorMemoryStorage(document)` is available for tests and examples without a
+browser storage dependency.
+
+### Patches
+
+```ts
+import {
+  applyGraphEditorDocumentPatch,
+  diffGraphEditorDocuments,
+} from "@moritzbrantner/graph-editor/patches";
+
+const patch = diffGraphEditorDocuments(beforeDocument, afterDocument);
+const nextDocument = applyGraphEditorDocumentPatch(beforeDocument, patch);
+```
+
+### Plugins
+
+```ts
+import { applyGraphEditorOperation, createGraphEditorRuntime } from "@moritzbrantner/graph-editor";
+import { createGraphEditorAddNodeOperation } from "@moritzbrantner/graph-editor/operations";
+import { createGraphEditorPluginRegistry } from "@moritzbrantner/graph-editor/plugins";
+
+const qualityPlugin = {
+  id: "quality",
+  validators: [
+    (document) =>
+      document.nodes.some((node) => node.label === "Blocked")
+        ? [{ path: "$.nodes", message: "Blocked label" }]
+        : [],
+  ],
+  commands: [{ id: "quality.inspect", label: "Inspect" }],
+};
+
+createGraphEditorPluginRegistry([qualityPlugin]);
+
+let runtime = createGraphEditorRuntime({
+  initialDocument: { nodes: [], edges: [] },
+  plugins: [qualityPlugin],
+});
+runtime = applyGraphEditorOperation(
+  runtime,
+  createGraphEditorAddNodeOperation({
+    node: { id: "node-1", label: "Node 1", x: 0, y: 0 },
+  }),
+);
+```
+
+### Operation Logs
+
+```ts
+import { applyGraphEditorOperation, createGraphEditorRuntime } from "@moritzbrantner/graph-editor";
+import {
+  graphEditorOperationFromSerializedOperation,
+  readGraphEditorOperationLog,
+  serializeGraphEditorOperation,
+  serializeGraphEditorOperationLog,
+} from "@moritzbrantner/graph-editor/operation-log";
+
+const addNode = serializeGraphEditorOperation("graph.add-node", {
+  type: "graph.add-node",
+  node: { id: "node-1", label: "Node 1", x: 0, y: 0 },
+});
+const log = serializeGraphEditorOperationLog([addNode], { exportedAt: false });
+
+const runtime = readGraphEditorOperationLog(log).reduce(
+  (currentRuntime, operation) =>
+    applyGraphEditorOperation(
+      currentRuntime,
+      graphEditorOperationFromSerializedOperation(operation),
+    ),
+  createGraphEditorRuntime({ initialDocument: { nodes: [], edges: [] } }),
+);
+```
+
+Operation logs intentionally reject `graph.paste` and `graph.duplicate-selection` payloads unless a
+consumer materializes their generated ids into deterministic patches or replacement documents.
 
 ### React
 
@@ -320,5 +444,7 @@ graph unit. Keyboard movement is disabled in `readOnly` mode.
   treat other formats or versions as unsupported.
 
 This package intentionally does not include workflow templates, typed workflow semantics,
-persistence backends, sharing UI, collaboration, or a document-library editor shell. Persistence
-and sharing should be supplied by consumers through adapter-level integration.
+persistence backends or persistence UI, sharing UI, collaboration transport, sync, presence, or a
+document-library editor shell. It does provide headless adapter-level persistence helpers over
+`editor-core`; consumers still own storage backends, sharing flows, and product-specific document
+management.
