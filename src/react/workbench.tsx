@@ -19,6 +19,7 @@ import {
   Trash2Icon,
   Undo2Icon,
   WorkflowIcon,
+  XIcon,
 } from "lucide-react";
 
 import { Badge, Button, Input, Separator, cn } from "@moritzbrantner/ui";
@@ -103,6 +104,7 @@ import {
   type GraphWorkbenchPaletteCategoryGroup,
   type GraphWorkbenchPaletteItem,
 } from "./palette-model";
+import { clampGraphOverlayPosition, graphWorkbenchOverlayMargin } from "./overlay-position";
 
 export type GraphWorkbenchInspectorSchema<
   TNodeData = Record<string, unknown>,
@@ -126,6 +128,19 @@ export type GraphWorkbenchInspectorSchema<
   ) => Partial<GraphEditorGroup>;
 };
 
+export type GraphWorkbenchActionErrorCode =
+  | "import-json"
+  | "copy-selection"
+  | "paste-selection"
+  | "command";
+
+export type GraphWorkbenchActionError = {
+  id: string;
+  code: GraphWorkbenchActionErrorCode;
+  message: string;
+  detail?: string;
+};
+
 export type GraphWorkbenchController<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,
@@ -147,6 +162,10 @@ export type GraphWorkbenchController<
   history: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>["operationHistory"] & {
     canUndo: boolean;
     canRedo: boolean;
+  };
+  status: {
+    actionError: GraphWorkbenchActionError | null;
+    clearActionError: () => void;
   };
   palette: {
     groups: Array<GraphWorkbenchPaletteCategoryGroup<TNodeData>>;
@@ -222,6 +241,7 @@ export type GraphWorkbenchProps<
   onImportDocument?: (file: File) => Promise<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>;
   onExportDocument?: (document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) => void;
   onRuntimeChange?: (runtime: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>) => void;
+  onActionError?: (error: GraphWorkbenchActionError) => void;
   onCommand?: (commandId: string) => void;
   connectionValidationOptions?: GraphEditorConnectionValidationOptions<
     TNodeData,
@@ -346,6 +366,7 @@ export function useGraphWorkbenchController<
   onImportDocument,
   onExportDocument,
   onRuntimeChange,
+  onActionError,
   onCommand,
   connectionValidationOptions,
   createEdge,
@@ -379,8 +400,10 @@ export function useGraphWorkbenchController<
   const [showInspector, setShowInspector] = React.useState(true);
   const [internalShowMiniMap, setShowMiniMap] = React.useState(showMiniMap);
   const [clipboardPayload, setClipboardPayload] = React.useState<unknown>(null);
+  const [actionError, setActionError] = React.useState<GraphWorkbenchActionError | null>(null);
   const clipboardPayloadRef = React.useRef<unknown>(null);
   const clipboardTextFallbackRef = React.useRef<EditorClipboardFallback>({});
+  const actionErrorIdRef = React.useRef(0);
   const runtimeState: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> =
     controlledRuntime ?? internalRuntime;
   const document: GraphEditorDocument<TNodeData, TEdgeData, TPortType> = runtimeState.document;
@@ -461,6 +484,24 @@ export function useGraphWorkbenchController<
   React.useEffect(() => {
     setShowMiniMap(showMiniMap);
   }, [showMiniMap]);
+
+  const clearActionError = React.useCallback(() => {
+    setActionError(null);
+  }, []);
+
+  const reportActionError = React.useCallback(
+    (code: GraphWorkbenchActionErrorCode, error: unknown, fallbackMessage: string) => {
+      const nextError: GraphWorkbenchActionError = {
+        id: `${code}-${++actionErrorIdRef.current}`,
+        code,
+        message: fallbackMessage,
+        ...formatGraphWorkbenchActionErrorDetail(error),
+      };
+      setActionError(nextError);
+      onActionError?.(nextError);
+    },
+    [onActionError],
+  );
 
   const commitSelection = React.useCallback(
     (nextSelection: GraphEditorSelectionState) => {
@@ -743,33 +784,59 @@ export function useGraphWorkbenchController<
         return;
       }
 
-      const imported = onImportDocument
-        ? await onImportDocument(file)
-        : await readEditorJsonFile<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>(file);
-      const normalized = normalizeGraphWorkbenchDocument(imported, normalizeDocument);
-      commitDocument(normalized, { selectionAfter: emptySelection });
+      try {
+        const imported = onImportDocument
+          ? await onImportDocument(file)
+          : await readEditorJsonFile<GraphEditorDocument<TNodeData, TEdgeData, TPortType>>(file);
+        const normalized = normalizeGraphWorkbenchDocument(imported, normalizeDocument);
+        commitDocument(normalized, { selectionAfter: emptySelection });
+        clearActionError();
+      } catch (error) {
+        reportActionError("import-json", error, "Import failed");
+      }
     },
-    [commitDocument, normalizeDocument, onImportDocument, readOnly],
+    [
+      clearActionError,
+      commitDocument,
+      normalizeDocument,
+      onImportDocument,
+      readOnly,
+      reportActionError,
+    ],
   );
 
   const copySelection = React.useCallback(async () => {
-    const payload =
-      customCopySelection?.(document, selection) ??
-      copyGraphEditorSelection<TNodeData, TEdgeData, TPortType>(document, selection);
-    clipboardPayloadRef.current = payload;
-    setClipboardPayload(payload);
+    try {
+      const payload =
+        customCopySelection?.(document, selection) ??
+        copyGraphEditorSelection<TNodeData, TEdgeData, TPortType>(document, selection);
+      clipboardPayloadRef.current = payload;
+      setClipboardPayload(payload);
 
-    if (
-      isGraphWorkbenchEmptyClipboardPayload(payload) ||
-      (typeof payload !== "object" && payload !== null)
-    ) {
-      return;
+      if (
+        isGraphWorkbenchEmptyClipboardPayload(payload) ||
+        (typeof payload !== "object" && payload !== null)
+      ) {
+        clearActionError();
+        return;
+      }
+
+      try {
+        const copied = await writeEditorClipboardJson(payload, {
+          fallback: clipboardTextFallbackRef.current,
+        });
+        if (copied) {
+          clearActionError();
+        } else {
+          reportActionError("copy-selection", "Clipboard write used fallback", "Copy failed");
+        }
+      } catch (error) {
+        reportActionError("copy-selection", error, "Copy failed");
+      }
+    } catch (error) {
+      reportActionError("copy-selection", error, "Copy failed");
     }
-
-    await writeEditorClipboardJson(payload, {
-      fallback: clipboardTextFallbackRef.current,
-    });
-  }, [customCopySelection, document, selection]);
+  }, [clearActionError, customCopySelection, document, reportActionError, selection]);
 
   const readClipboardPayload = React.useCallback(async () => {
     const payload = await readEditorClipboardJson({
@@ -787,32 +854,41 @@ export function useGraphWorkbenchController<
       return;
     }
 
-    const payload = await readClipboardPayload();
-    if (!payload) {
-      return;
-    }
+    try {
+      const payload = await readClipboardPayload();
+      if (!payload) {
+        reportActionError("paste-selection", null, "Paste failed");
+        return;
+      }
 
-    if (pasteClipboardPayload) {
-      const result = pasteClipboardPayload(document, payload);
-      commitDocument(result.document, {
-        selectionAfter: selectionFromPasteResult(result),
-      });
-      return;
-    }
+      if (pasteClipboardPayload) {
+        const result = pasteClipboardPayload(document, payload);
+        commitDocument(result.document, {
+          selectionAfter: selectionFromPasteResult(result),
+        });
+        clearActionError();
+        return;
+      }
 
-    dispatch(
-      createGraphEditorPasteOperation(
-        payload as GraphEditorClipboardPayload<TNodeData, TEdgeData, TPortType>,
-        { selectionBefore: selection },
-      ),
-    );
+      dispatch(
+        createGraphEditorPasteOperation(
+          payload as GraphEditorClipboardPayload<TNodeData, TEdgeData, TPortType>,
+          { selectionBefore: selection },
+        ),
+      );
+      clearActionError();
+    } catch (error) {
+      reportActionError("paste-selection", error, "Paste failed");
+    }
   }, [
+    clearActionError,
     commitDocument,
     dispatch,
     document,
     pasteClipboardPayload,
     readClipboardPayload,
     readOnly,
+    reportActionError,
     selection,
   ]);
 
@@ -942,9 +1018,19 @@ export function useGraphWorkbenchController<
   const runCommand = React.useCallback(
     (commandId: GraphWorkbenchCommandId | string) => {
       onCommand?.(commandId);
-      return actionsRef.current[commandId]?.();
+      try {
+        const result = actionsRef.current[commandId]?.();
+        if (result instanceof Promise) {
+          return result.catch((error: unknown) => {
+            reportActionError("command", error, "Command failed");
+          });
+        }
+        return result;
+      } catch (error) {
+        reportActionError("command", error, "Command failed");
+      }
     },
-    [onCommand],
+    [onCommand, reportActionError],
   );
 
   const controller = React.useMemo<
@@ -1008,6 +1094,10 @@ export function useGraphWorkbenchController<
         canUndo: runtimeState.canUndo,
         canRedo: runtimeState.canRedo,
       },
+      status: {
+        actionError,
+        clearActionError,
+      },
       palette: {
         groups,
         items: nodeTemplates,
@@ -1038,8 +1128,10 @@ export function useGraphWorkbenchController<
   }, [
     addTemplateNode,
     appendTemplateNode,
+    actionError,
     autoLayout,
     clipboardPayload,
+    clearActionError,
     commitDocument,
     commitSelection,
     copySelection,
@@ -1428,6 +1520,7 @@ export function GraphWorkbenchToolbar<
 >({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const zoom = controller.document.viewport?.zoom ?? 1;
+  const actionError = controller.status.actionError;
 
   return (
     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1437,6 +1530,22 @@ export function GraphWorkbenchToolbar<
         <Badge variant="secondary">{controller.document.nodes.length} nodes</Badge>
         {controller.diagnostics.length > 0 ? (
           <Badge variant="destructive">{controller.diagnostics.length} issues</Badge>
+        ) : null}
+        {actionError ? (
+          <div
+            role="alert"
+            className="flex max-w-[18rem] items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+          >
+            <span className="truncate" title={actionError.detail}>
+              {actionError.message}
+            </span>
+            <GraphWorkbenchIconButton
+              label="Dismiss error"
+              onClick={controller.status.clearActionError}
+            >
+              <XIcon />
+            </GraphWorkbenchIconButton>
+          </div>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-1">
@@ -1678,7 +1787,53 @@ export function GraphWorkbenchContextPad<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 >({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
+  const padRef = React.useRef<HTMLDivElement>(null);
+  const [padSize, setPadSize] = React.useState(graphWorkbenchContextPadFallbackSize);
+  const [containerSize, setContainerSize] = React.useState(() =>
+    getInitialGraphWorkbenchContextPadContainerSize(),
+  );
   const node = controller.selectedNode;
+
+  React.useLayoutEffect(() => {
+    const pad = padRef.current;
+    if (!pad) {
+      return;
+    }
+
+    const container = pad.offsetParent instanceof HTMLElement ? pad.offsetParent : null;
+    const measure = () => {
+      const padRect = pad.getBoundingClientRect();
+      const containerRect = container?.getBoundingClientRect();
+      setPadSize((current) =>
+        updateGraphWorkbenchMeasuredSize(current, {
+          width: padRect.width || graphWorkbenchContextPadFallbackSize.width,
+          height: padRect.height || graphWorkbenchContextPadFallbackSize.height,
+        }),
+      );
+      if (containerRect) {
+        setContainerSize((current) =>
+          updateGraphWorkbenchMeasuredSize(current, {
+            width: containerRect.width,
+            height: containerRect.height,
+          }),
+        );
+      }
+    };
+
+    measure();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(pad);
+    if (container) {
+      resizeObserver.observe(container);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, [node?.id]);
 
   if (!node) {
     return null;
@@ -1686,15 +1841,27 @@ export function GraphWorkbenchContextPad<
 
   const viewport = controller.document.viewport ?? { x: 0, y: 0, zoom: 1 };
   const nodeSize = getGraphEditorNodeSize(node);
-  const style: React.CSSProperties = {
-    left: viewport.x + (node.x + nodeSize.width + 12) * viewport.zoom,
-    top: viewport.y + node.y * viewport.zoom,
-  };
+  const parent = padRef.current?.offsetParent;
+  const position = getGraphWorkbenchContextPadPosition({
+    node: { x: node.x, y: node.y },
+    nodeSize,
+    viewport,
+    padSize,
+    containerSize,
+  });
+  const clampedPosition = clampGraphOverlayPosition(
+    { x: position.left, y: position.top },
+    parent instanceof HTMLElement ? parent : null,
+    padRef.current,
+    padSize,
+  );
+  const style: React.CSSProperties = { left: clampedPosition.x, top: clampedPosition.y };
 
   return (
     <div
+      ref={padRef}
       data-slot="graph-workbench-context-pad"
-      className="absolute z-10 flex items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
+      className="absolute z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
       style={style}
     >
       <GraphWorkbenchIconButton
@@ -1726,6 +1893,127 @@ export function GraphWorkbenchContextPad<
       </GraphWorkbenchCommandButton>
     </div>
   );
+}
+
+const graphWorkbenchContextPadFallbackSize = { width: 226, height: 50 };
+
+function getInitialGraphWorkbenchContextPadContainerSize() {
+  if (typeof window === "undefined") {
+    return { width: 0, height: 0 };
+  }
+
+  return {
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+  };
+}
+
+function updateGraphWorkbenchMeasuredSize(
+  current: { width: number; height: number },
+  next: { width: number; height: number },
+) {
+  if (Math.abs(current.width - next.width) < 0.5 && Math.abs(current.height - next.height) < 0.5) {
+    return current;
+  }
+
+  return next;
+}
+
+function getGraphWorkbenchContextPadPosition({
+  node,
+  nodeSize,
+  viewport,
+  padSize,
+  containerSize,
+}: {
+  node: { x: number; y: number };
+  nodeSize: { width: number; height: number };
+  viewport: GraphEditorViewport;
+  padSize: { width: number; height: number };
+  containerSize: { width: number; height: number };
+}) {
+  const gap = graphWorkbenchOverlayMargin;
+  const nodeLeft = viewport.x + node.x * viewport.zoom;
+  const nodeTop = viewport.y + node.y * viewport.zoom;
+  const nodeRight = viewport.x + (node.x + nodeSize.width) * viewport.zoom;
+  const nodeBottom = viewport.y + (node.y + nodeSize.height) * viewport.zoom;
+  const right = { left: nodeRight + gap, top: nodeTop };
+
+  if (fitsGraphWorkbenchContextPadHorizontally(right.left, padSize.width, containerSize.width)) {
+    return clampGraphWorkbenchContextPadToContainer(right, padSize, containerSize);
+  }
+
+  const left = { left: nodeLeft - padSize.width - gap, top: nodeTop };
+  if (fitsGraphWorkbenchContextPadHorizontally(left.left, padSize.width, containerSize.width)) {
+    return clampGraphWorkbenchContextPadToContainer(left, padSize, containerSize);
+  }
+
+  const below = { left: nodeLeft, top: nodeBottom + gap };
+  if (fitsGraphWorkbenchContextPadVertically(below.top, padSize.height, containerSize.height)) {
+    return clampGraphWorkbenchContextPadToContainer(below, padSize, containerSize);
+  }
+
+  return clampGraphWorkbenchContextPadToContainer(
+    { left: nodeLeft, top: nodeTop - padSize.height - gap },
+    padSize,
+    containerSize,
+  );
+}
+
+function fitsGraphWorkbenchContextPadHorizontally(
+  left: number,
+  width: number,
+  containerWidth: number,
+) {
+  if (containerWidth <= 0) {
+    return true;
+  }
+
+  return (
+    left >= graphWorkbenchOverlayMargin &&
+    left + width <= containerWidth - graphWorkbenchOverlayMargin
+  );
+}
+
+function fitsGraphWorkbenchContextPadVertically(
+  top: number,
+  height: number,
+  containerHeight: number,
+) {
+  if (containerHeight <= 0) {
+    return true;
+  }
+
+  return (
+    top >= graphWorkbenchOverlayMargin &&
+    top + height <= containerHeight - graphWorkbenchOverlayMargin
+  );
+}
+
+function clampGraphWorkbenchContextPadToContainer(
+  position: { left: number; top: number },
+  padSize: { width: number; height: number },
+  containerSize: { width: number; height: number },
+) {
+  if (containerSize.width <= 0 || containerSize.height <= 0) {
+    return position;
+  }
+
+  const minLeft = graphWorkbenchOverlayMargin;
+  const minTop = graphWorkbenchOverlayMargin;
+  const maxLeft = Math.max(
+    minLeft,
+    containerSize.width - padSize.width - graphWorkbenchOverlayMargin,
+  );
+  const maxTop = Math.max(
+    minTop,
+    containerSize.height - padSize.height - graphWorkbenchOverlayMargin,
+  );
+
+  return {
+    left: Math.min(Math.max(position.left, minLeft), maxLeft),
+    top: Math.min(Math.max(position.top, minTop), maxTop),
+  };
 }
 
 export function GraphWorkbenchOverlayPanel({ children, className }: React.ComponentProps<"div">) {
@@ -1909,6 +2197,18 @@ function createGraphWorkbenchHotkeyCommands(
     label: String(command.label ?? command.id),
     run: command.run,
   }));
+}
+
+function formatGraphWorkbenchActionErrorDetail(error: unknown) {
+  if (error === null || error === undefined) {
+    return {};
+  }
+
+  if (error instanceof Error) {
+    return { detail: error.message };
+  }
+
+  return { detail: String(error) };
 }
 
 function getDefaultNodeInspectorSections<TNodeData = Record<string, unknown>, TPortType = unknown>(

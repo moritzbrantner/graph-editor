@@ -218,6 +218,92 @@ export function ControlledEditor() {
 }
 ```
 
+### Advanced Workbench Integration
+
+`GraphWorkbench` can stay generic while host applications provide domain behavior at the edges.
+Use `createEdge` when a connection only needs custom edge data:
+
+```tsx
+<GraphWorkbench
+  document={document}
+  createEdge={(connection) => ({
+    id: `${connection.sourceNodeId}-${connection.targetNodeId}`,
+    ...connection,
+    data: { label: "domain edge" },
+  })}
+/>
+```
+
+Use `connectDocument` when the host owns the full connection transaction, including validation
+side effects, edge replacement, or related document updates:
+
+```tsx
+<GraphWorkbench
+  document={document}
+  connectDocument={(currentDocument, connection, validity) => {
+    if (!validity.valid) {
+      return { document: currentDocument, connected: false };
+    }
+
+    return {
+      document: connectGraphEditorNodes(currentDocument, connection),
+      connected: true,
+    };
+  }}
+/>
+```
+
+Import/export and clipboard formats can also be host-owned:
+
+```tsx
+<GraphWorkbench
+  document={document}
+  onImportDocument={async (file) => loadGraphFromFile(file)}
+  onExportDocument={(currentDocument) => saveGraph(currentDocument)}
+  copySelection={(currentDocument, selection) => toDomainClipboard(currentDocument, selection)}
+  pasteClipboardPayload={(currentDocument, payload) =>
+    pasteDomainClipboard(currentDocument, payload)
+  }
+/>
+```
+
+Customize inspector fields with `inspectorSchema`, and replace workbench regions with render
+overrides when the default UI is too generic:
+
+```tsx
+<GraphWorkbench
+  document={document}
+  inspectorSchema={{
+    getNodeSections: (node) => getDomainNodeSections(node),
+    applyNodeValues: (node, values) => applyDomainNodeValues(node, values),
+  }}
+  renderToolbar={(controller) => <DomainToolbar controller={controller} />}
+  renderPalette={(controller) => <DomainPalette controller={controller} />}
+  renderInspector={(controller) => <DomainInspector controller={controller} />}
+  renderContextPad={(controller) => <DomainContextPad controller={controller} />}
+  renderCanvasOverlay={(controller, { containerRef }) => (
+    <DomainOverlay controller={controller} containerRef={containerRef} />
+  )}
+/>
+```
+
+Built-in import, copy, paste, and command failures are exposed through
+`controller.status.actionError` and `onActionError`. The default toolbar renders a dismissible
+`role="alert"` message.
+
+```tsx
+<GraphWorkbench
+  document={document}
+  onActionError={(error) => {
+    console.warn(error.code, error.detail ?? error.message);
+  }}
+/>
+```
+
+Keyboard editing is available in the canvas by default. Arrow keys move selection between visible
+nodes. `Shift+Arrow` nudges selected nodes by 10 graph units, and `Alt+Shift+Arrow` nudges by 1
+graph unit. Keyboard movement is disabled in `readOnly` mode.
+
 ## Document Invariants
 
 - Node IDs, edge IDs, and group IDs must be non-empty strings and unique within their collection.

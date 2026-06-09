@@ -250,6 +250,8 @@ type GraphCanvasPoint = {
   y: number;
 };
 
+type GraphCanvasKeyboardDirection = "up" | "right" | "down" | "left";
+
 type GraphCanvasPortPointMap = Record<string, GraphCanvasPoint>;
 
 type DragState = {
@@ -1238,6 +1240,57 @@ function GraphCanvas({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isGraphCanvasEditableTarget(event.target)) {
+      return;
+    }
+
+    const keyboardDirection = getGraphCanvasKeyboardDirection(event.key);
+
+    if (keyboardDirection) {
+      if (event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+
+        if (readOnly) {
+          return;
+        }
+
+        const distance = event.altKey ? 1 : 10;
+        const delta = getGraphCanvasKeyboardNudgeDelta(keyboardDirection, distance);
+        const nextNodes = nudgeGraphCanvasNodes(
+          nodes,
+          currentSelectedNodeIds,
+          delta,
+          hiddenNodeIdSet,
+        );
+
+        if (nextNodes !== nodes) {
+          onNodesChange?.(nextNodes);
+          onNodesChangeEnd?.(nextNodes);
+        }
+        return;
+      }
+
+      if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        const nextNode = getNextGraphCanvasNodeSelection(
+          nodes,
+          currentSelectedNodeId,
+          keyboardDirection,
+          layoutOptions,
+          hiddenNodeIdSet,
+        );
+
+        if (nextNode) {
+          event.preventDefault();
+          commitSelectionState({
+            nodeIds: [nextNode.id],
+            edgeIds: [],
+            primary: { type: "node", id: nextNode.id },
+          });
+        }
+        return;
+      }
+    }
+
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       deleteSelection();
@@ -2097,6 +2150,143 @@ function getWorkflowBounds(
   };
 }
 
+function getGraphCanvasKeyboardDirection(key: string): GraphCanvasKeyboardDirection | null {
+  if (key === "ArrowUp") {
+    return "up";
+  }
+  if (key === "ArrowRight") {
+    return "right";
+  }
+  if (key === "ArrowDown") {
+    return "down";
+  }
+  if (key === "ArrowLeft") {
+    return "left";
+  }
+
+  return null;
+}
+
+function getGraphCanvasKeyboardNudgeDelta(
+  direction: GraphCanvasKeyboardDirection,
+  distance: number,
+): GraphCanvasPoint {
+  if (direction === "up") {
+    return { x: 0, y: -distance };
+  }
+  if (direction === "right") {
+    return { x: distance, y: 0 };
+  }
+  if (direction === "down") {
+    return { x: 0, y: distance };
+  }
+
+  return { x: -distance, y: 0 };
+}
+
+function getGraphCanvasNodeCenter(
+  node: GraphCanvasNodeData,
+  layoutOptions: GraphNodeLayoutOptions = {},
+): GraphCanvasPoint {
+  const size = getGraphNodeSize(node, layoutOptions);
+  return {
+    x: node.x + size.width / 2,
+    y: node.y + size.height / 2,
+  };
+}
+
+function getNextGraphCanvasNodeSelection(
+  nodes: GraphCanvasNodeData[],
+  currentNodeId: string | null,
+  direction: GraphCanvasKeyboardDirection,
+  layoutOptions: GraphNodeLayoutOptions,
+  hiddenNodeIdSet: ReadonlySet<string>,
+) {
+  const visibleNodes = nodes
+    .filter((node) => !hiddenNodeIdSet.has(node.id))
+    .sort(
+      (first, second) =>
+        first.y - second.y || first.x - second.x || first.id.localeCompare(second.id),
+    );
+
+  if (visibleNodes.length === 0) {
+    return null;
+  }
+
+  const currentNode =
+    (currentNodeId ? visibleNodes.find((node) => node.id === currentNodeId) : null) ?? null;
+
+  if (!currentNode) {
+    return visibleNodes[0]!;
+  }
+
+  const currentCenter = getGraphCanvasNodeCenter(currentNode, layoutOptions);
+  const candidates = visibleNodes.flatMap((node) => {
+    if (node.id === currentNode.id) {
+      return [];
+    }
+
+    const center = getGraphCanvasNodeCenter(node, layoutOptions);
+    const primaryDistance =
+      direction === "right"
+        ? center.x - currentCenter.x
+        : direction === "left"
+          ? currentCenter.x - center.x
+          : direction === "down"
+            ? center.y - currentCenter.y
+            : currentCenter.y - center.y;
+
+    if (primaryDistance <= 0) {
+      return [];
+    }
+
+    const perpendicularDistance =
+      direction === "right" || direction === "left"
+        ? Math.abs(center.y - currentCenter.y)
+        : Math.abs(center.x - currentCenter.x);
+
+    return [{ node, perpendicularDistance, primaryDistance }];
+  });
+
+  return (
+    candidates.sort(
+      (first, second) =>
+        first.perpendicularDistance - second.perpendicularDistance ||
+        first.primaryDistance - second.primaryDistance ||
+        first.node.id.localeCompare(second.node.id),
+    )[0]?.node ?? null
+  );
+}
+
+function nudgeGraphCanvasNodes(
+  nodes: GraphCanvasNodeData[],
+  selectedNodeIds: readonly string[],
+  delta: GraphCanvasPoint,
+  hiddenNodeIdSet: ReadonlySet<string>,
+): GraphCanvasNodeData[] {
+  const selectedNodeIdSet = new Set(selectedNodeIds);
+
+  if (selectedNodeIdSet.size === 0) {
+    return nodes;
+  }
+
+  let moved = false;
+  const nextNodes = nodes.map((node) => {
+    if (!selectedNodeIdSet.has(node.id) || hiddenNodeIdSet.has(node.id)) {
+      return node;
+    }
+
+    moved = true;
+    return {
+      ...node,
+      x: node.x + delta.x,
+      y: node.y + delta.y,
+    };
+  });
+
+  return moved ? nextNodes : nodes;
+}
+
 function getGraphNodePortDotXOffset(
   node: GraphCanvasNodeData,
   direction: GraphCanvasPortDirection,
@@ -2307,6 +2497,15 @@ function isGraphNodeControlEvent(target: EventTarget) {
       ),
     )
   );
+}
+
+function isGraphCanvasEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const editable = target.closest("input, textarea, select, [contenteditable='true']");
+  return editable instanceof HTMLElement;
 }
 
 function isGraphCanvasInteractiveTarget(target: EventTarget) {

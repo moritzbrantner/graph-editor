@@ -22,7 +22,14 @@ const modules = [
   {
     specifier: "@moritzbrantner/graph-editor/react",
     path: "../dist/react.js",
-    exports: ["GraphCanvas", "GraphNode", "GraphWorkbench"],
+    exports: [
+      "GraphCanvas",
+      "GraphCanvasToolbar",
+      "GraphNode",
+      "GraphWorkbench",
+      "GraphWorkbenchContextPad",
+      "InspectorPanel",
+    ],
   },
   {
     specifier: "@moritzbrantner/graph-editor/layout",

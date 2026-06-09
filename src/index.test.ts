@@ -4,8 +4,11 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   GraphCanvas,
+  GraphCanvasToolbar,
   GraphWorkbench,
+  GraphWorkbenchContextPad,
   GraphNode,
+  InspectorPanel,
   applyGraphEditorOperation,
   clearGraphEditorSelection,
   copyGraphEditorSelection,
@@ -48,6 +51,18 @@ import {
   type GraphEditorEdge,
   type GraphEditorNodeTemplate,
   type GraphEditorSelectionState,
+  type GraphCanvasMiniMapProps,
+  type GraphCanvasNodeData,
+  type GraphCanvasNodeProps,
+  type GraphCanvasToolbarProps,
+  type GraphWorkbenchActionError,
+  type InspectorActionsProps,
+  type InspectorFieldGroupProps,
+  type InspectorFieldOption,
+  type InspectorFieldProps,
+  type InspectorPanelHeaderProps,
+  type InspectorPanelSectionData,
+  type InspectorPanelSectionProps,
   type GraphWorkbenchController,
 } from "@moritzbrantner/graph-editor";
 import {
@@ -68,10 +83,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+type PublicReactTypeSurface = {
+  actionError: GraphWorkbenchActionError;
+  canvasMiniMapProps: GraphCanvasMiniMapProps;
+  canvasNodeProps: GraphCanvasNodeProps;
+  canvasToolbarProps: GraphCanvasToolbarProps;
+  inspectorActionsProps: InspectorActionsProps;
+  inspectorFieldGroupProps: InspectorFieldGroupProps;
+  inspectorFieldOption: InspectorFieldOption;
+  inspectorFieldProps: InspectorFieldProps;
+  inspectorPanelHeaderProps: InspectorPanelHeaderProps;
+  inspectorPanelSectionData: InspectorPanelSectionData;
+  inspectorPanelSectionProps: InspectorPanelSectionProps;
+};
+
+void (null as PublicReactTypeSurface | null);
+
 describe("@moritzbrantner/graph-editor", () => {
   test("exposes React graph primitives", () => {
     expect(typeof GraphCanvas).toBe("function");
+    expect(typeof GraphCanvasToolbar).toBe("function");
     expect(typeof GraphNode).toBe("function");
+    expect(typeof GraphWorkbenchContextPad).toBe("function");
+    expect(typeof InspectorPanel).toBe("function");
   });
 
   test("selects multiple canvas nodes with modifier clicks", async () => {
@@ -119,6 +153,108 @@ describe("@moritzbrantner/graph-editor", () => {
     });
 
     expect(selections.at(-1)?.nodeIds).toEqual(["source", "target"]);
+  });
+
+  test("navigates canvas nodes with arrows and nudges selected nodes", async () => {
+    const selections: GraphEditorSelectionState[] = [];
+    let latestNodes: GraphCanvasNodeData[] = [];
+    let changeEndCount = 0;
+
+    function Harness() {
+      const [nodes, setNodes] = React.useState([
+        { id: "source", label: "Source", x: 0, y: 0 },
+        { id: "target", label: "Target", x: 260, y: 0 },
+        { id: "lower", label: "Lower", x: 260, y: 240 },
+      ]);
+      const [selection, setSelection] = React.useState<GraphEditorSelectionState>({
+        nodeIds: [],
+        edgeIds: [],
+      });
+      latestNodes = nodes;
+
+      return React.createElement(GraphCanvas, {
+        nodes,
+        edges: [],
+        selectedNodeIds: selection.nodeIds,
+        selectedEdgeIds: selection.edgeIds,
+        showToolbar: false,
+        showMiniMap: false,
+        onNodesChange(nextNodes) {
+          latestNodes = nextNodes;
+          setNodes(nextNodes);
+        },
+        onNodesChangeEnd(nextNodes) {
+          latestNodes = nextNodes;
+          changeEndCount += 1;
+        },
+        onSelectionStateChange(nextSelection) {
+          selections.push(nextSelection);
+          setSelection(nextSelection);
+        },
+      });
+    }
+
+    const fixture = render(React.createElement(Harness));
+    const canvas = fixture.container.querySelector<HTMLElement>('[data-slot="workflow-builder"]')!;
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "ArrowRight" });
+    });
+    expect(selections.at(-1)?.nodeIds).toEqual(["source"]);
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "ArrowRight" });
+    });
+    expect(selections.at(-1)?.nodeIds).toEqual(["target"]);
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "ArrowDown" });
+    });
+    expect(selections.at(-1)?.nodeIds).toEqual(["lower"]);
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "ArrowRight", shiftKey: true });
+    });
+    expect(latestNodes.find((node) => node.id === "lower")).toMatchObject({ x: 270, y: 240 });
+    expect(changeEndCount).toBe(1);
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { altKey: true, key: "ArrowLeft", shiftKey: true });
+    });
+    expect(latestNodes.find((node) => node.id === "lower")).toMatchObject({ x: 269, y: 240 });
+    expect(changeEndCount).toBe(2);
+  });
+
+  test("does not nudge canvas nodes in read-only mode", async () => {
+    let latestNodes: GraphCanvasNodeData[] = [{ id: "source", label: "Source", x: 0, y: 0 }];
+
+    function Harness() {
+      const [nodes, setNodes] = React.useState(latestNodes);
+      latestNodes = nodes;
+
+      return React.createElement(GraphCanvas, {
+        nodes,
+        edges: [],
+        selectedNodeIds: ["source"],
+        selectedEdgeIds: [],
+        readOnly: true,
+        showToolbar: false,
+        showMiniMap: false,
+        onNodesChange(nextNodes) {
+          latestNodes = nextNodes;
+          setNodes(nextNodes);
+        },
+      });
+    }
+
+    const fixture = render(React.createElement(Harness));
+    const canvas = fixture.container.querySelector<HTMLElement>('[data-slot="workflow-builder"]')!;
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "ArrowRight", shiftKey: true });
+    });
+
+    expect(latestNodes[0]).toMatchObject({ x: 0, y: 0 });
   });
 
   test("normalizes graph documents and validates structural connections", () => {
@@ -1246,6 +1382,93 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "custom-node"]);
   });
 
+  test("records and clears GraphWorkbench import action errors", async () => {
+    const errors: GraphWorkbenchActionError[] = [];
+    const { controller, getDocument } = renderClipboardWorkbench({
+      onActionError(error) {
+        errors.push(error);
+      },
+      async onImportDocument() {
+        throw new Error("invalid fixture");
+      },
+    });
+    const file = new File(["{}"], "broken.json", { type: "application/json" });
+
+    await act(async () => {
+      await controller.current?.actions.importJson(file);
+    });
+
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source"]);
+    expect(errors.at(-1)).toMatchObject({
+      code: "import-json",
+      detail: "invalid fixture",
+      message: "Import failed",
+    });
+    expect(controller.current?.status.actionError).toBe(errors.at(-1));
+
+    await act(async () => {
+      controller.current?.status.clearActionError();
+    });
+
+    expect(controller.current?.status.actionError).toBeNull();
+  });
+
+  test("records copy fallback errors while preserving the in-memory clipboard payload", async () => {
+    const errors: GraphWorkbenchActionError[] = [];
+    const clipboard = {
+      writeText: vi.fn(async () => {
+        throw new Error("clipboard denied");
+      }),
+    };
+    vi.stubGlobal("navigator", { clipboard });
+    const { controller, getDocument } = renderClipboardWorkbench({
+      onActionError(error) {
+        errors.push(error);
+      },
+    });
+
+    await act(async () => {
+      await controller.current?.actions.copySelection();
+    });
+
+    expect(errors.at(-1)).toMatchObject({
+      code: "copy-selection",
+      message: "Copy failed",
+    });
+    expect(controller.current?.status.actionError).toBe(errors.at(-1));
+
+    await act(async () => {
+      await controller.current?.actions.pasteSelection();
+    });
+
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source", "source-2"]);
+    expect(controller.current?.status.actionError).toBeNull();
+  });
+
+  test("records paste action errors when no clipboard payload is usable", async () => {
+    const errors: GraphWorkbenchActionError[] = [];
+    const clipboard = {
+      readText: vi.fn(async () => ""),
+    };
+    vi.stubGlobal("navigator", { clipboard });
+    const { controller, getDocument } = renderClipboardWorkbench({
+      onActionError(error) {
+        errors.push(error);
+      },
+    });
+
+    await act(async () => {
+      await controller.current?.actions.pasteSelection();
+    });
+
+    expect(getDocument().nodes.map((node) => node.id)).toEqual(["source"]);
+    expect(errors.at(-1)).toMatchObject({
+      code: "paste-selection",
+      message: "Paste failed",
+    });
+    expect(controller.current?.status.actionError).toBe(errors.at(-1));
+  });
+
   test("supports controlled GraphWorkbench runtime updates", async () => {
     const controller: {
       current: GraphWorkbenchController<AppendNodeData, AppendEdgeData, AppendPortType> | null;
@@ -1386,6 +1609,8 @@ function renderWorkbenchHarness({
 
 function renderClipboardWorkbench({
   copySelection,
+  onActionError,
+  onImportDocument,
   onSelectionStateChange,
   pasteClipboardPayload,
   renderToolbarContent,
@@ -1394,6 +1619,8 @@ function renderClipboardWorkbench({
     document: ClipboardWorkbenchDocument,
     selection: GraphEditorSelectionState,
   ) => unknown;
+  onActionError?: (error: GraphWorkbenchActionError) => void;
+  onImportDocument?: (file: File) => Promise<ClipboardWorkbenchDocument>;
   onSelectionStateChange?: (selection: GraphEditorSelectionState) => void;
   pasteClipboardPayload?: (
     document: ClipboardWorkbenchDocument,
@@ -1423,10 +1650,12 @@ function renderClipboardWorkbench({
       document,
       initialSelection: { nodeIds: ["source"], edgeIds: [] },
       nodeTemplates: [],
+      onActionError,
       onDocumentChange(nextDocument) {
         latestDocument = nextDocument;
         setDocument(nextDocument);
       },
+      onImportDocument,
       onSelectionStateChange,
       pasteClipboardPayload,
       className: "clipboard-workbench",

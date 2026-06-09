@@ -13,9 +13,12 @@ export {
   type GraphCanvasEdge,
   type GraphCanvasGroup,
   type GraphCanvasNodeData,
+  type GraphCanvasMiniMapProps,
+  type GraphCanvasNodeProps,
   type GraphCanvasPort,
   type GraphCanvasProps,
   type GraphCanvasSelection,
+  type GraphCanvasToolbarProps,
   type GraphCanvasViewport,
 } from "./react/graph-canvas";
 export {
@@ -66,19 +69,29 @@ export {
 } from "./react/overlay-position";
 export {
   InspectorPanel,
+  type InspectorActionsProps,
   type InspectorFieldDefinition,
+  type InspectorFieldGroupProps,
+  type InspectorFieldOption,
+  type InspectorFieldProps,
   type InspectorFieldValue,
+  type InspectorPanelHeaderProps,
   type InspectorPanelProps,
+  type InspectorPanelSectionData,
+  type InspectorPanelSectionProps,
 } from "./react/inspector-panel";
 
 export {
   GraphWorkbench,
   GraphWorkbenchCanvas,
+  GraphWorkbenchContextPad,
   GraphWorkbenchInspector,
   GraphWorkbenchOverlayPanel,
   GraphWorkbenchPalette,
   GraphWorkbenchToolbar,
   useGraphWorkbenchController,
+  type GraphWorkbenchActionError,
+  type GraphWorkbenchActionErrorCode,
   type GraphWorkbenchController,
   type GraphWorkbenchInspectorSchema,
   type GraphWorkbenchProps,
