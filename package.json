@@ -98,7 +98,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
-    "@moritzbrantner/editor-core": "^0.2.2",
+    "@moritzbrantner/editor-core": "^0.3.0",
     "@moritzbrantner/ui": "^1.0.0",
     "lucide-react": "^1.17.0"
   },
