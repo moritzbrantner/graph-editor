@@ -102,6 +102,7 @@ export function renderClipboardWorkbench({
   onImportDocument,
   onSelectionStateChange,
   pasteClipboardPayload,
+  readOnly,
   renderToolbarContent,
 }: {
   copySelection?: (
@@ -120,6 +121,7 @@ export function renderClipboardWorkbench({
     edgeIds: string[];
     groupIds?: string[];
   };
+  readOnly?: boolean;
   renderToolbarContent?: React.ReactNode;
 } = {}) {
   const controller: { current: GraphWorkbenchController<ClipboardNodeData> | null } = {
@@ -147,6 +149,7 @@ export function renderClipboardWorkbench({
       onImportDocument,
       onSelectionStateChange,
       pasteClipboardPayload,
+      readOnly,
       className: "clipboard-workbench",
       renderContextPad: () => null,
       renderInspector: () => null,

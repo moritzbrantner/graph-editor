@@ -11,6 +11,8 @@
 
 - Published `editor-core` subpath consumption is checked in CI scripts.
 - Package smoke coverage now verifies every public graph-editor export subpath.
+- Workbench tests now lock document IO commands to graph-editor's public import/export ids while
+  using editor-core helpers internally.
 - Edge-case tests cover malformed serialized input, persistence failures, patch strictness,
   plugin diagnostics, interaction commits, and operation-log replay/rejection behavior.
 

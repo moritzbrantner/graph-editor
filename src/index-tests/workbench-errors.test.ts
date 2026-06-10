@@ -147,6 +147,18 @@ type PublicReactTypeSurface = {
 void (null as PublicReactTypeSurface | null);
 
 describe("@moritzbrantner/graph-editor", () => {
+  test("keeps document IO commands on graph workbench public ids", () => {
+    const { controller } = renderClipboardWorkbench({ readOnly: true });
+    const commands = controller.current?.commands ?? [];
+
+    expect(commands.map((command) => command.id)).toContain("export-json");
+    expect(commands.map((command) => command.id)).toContain("import-json");
+    expect(commands.find((command) => command.id === "export")).toBeUndefined();
+    expect(commands.find((command) => command.id === "import")).toBeUndefined();
+    expect(commands.find((command) => command.id === "export-json")?.disabled).toBe(false);
+    expect(commands.find((command) => command.id === "import-json")?.disabled).toBe(true);
+  });
+
   test("passes custom clipboard payloads to custom paste handlers", async () => {
     vi.stubGlobal("navigator", {});
     const customPayload = { kind: "custom" };
