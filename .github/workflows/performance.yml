@@ -2,6 +2,15 @@ name: Performance
 
 on:
   pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "bench/**"
+      - "benchmark/**"
+      - "package.json"
+      - "bun.lock"
+      - "vite.config.*"
+      - ".github/workflows/performance.yml"
   workflow_dispatch:
 
 permissions:

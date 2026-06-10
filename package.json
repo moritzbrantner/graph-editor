@@ -1,6 +1,6 @@
 {
   "name": "@moritzbrantner/graph-editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "homepage": "https://github.com/moritzbrantner/graph-editor#readme",
   "bugs": {
@@ -98,7 +98,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
-    "@moritzbrantner/editor-core": "^0.2.1",
+    "@moritzbrantner/editor-core": "^0.2.2",
     "@moritzbrantner/ui": "^1.0.0",
     "lucide-react": "^1.17.0"
   },

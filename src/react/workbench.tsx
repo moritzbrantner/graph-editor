@@ -38,6 +38,7 @@ import {
   matchesEditorHotkey,
   type EditorCommandDefinition,
 } from "@moritzbrantner/editor-core/hotkeys";
+import { createEditorDocumentIoCommands } from "@moritzbrantner/editor-core/runtime";
 import {
   addGraphEditorEdge,
   copyGraphEditorSelection,
@@ -1079,6 +1080,7 @@ export function useGraphWorkbenchController<
       hasSelection: selection.nodeIds.length > 0 || selection.edgeIds.length > 0,
       nodeSelectionCount: selection.nodeIds.length,
       readOnly,
+      runtime: runtimeState.runtime,
       selectedGroupCount: selection.groupIds?.length ?? 0,
     });
 
@@ -2152,6 +2154,7 @@ function createGraphWorkbenchActions<
   hasSelection,
   nodeSelectionCount,
   readOnly,
+  runtime,
   selectedGroupCount,
 }: {
   actions: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>["actions"];
@@ -2161,8 +2164,47 @@ function createGraphWorkbenchActions<
   hasSelection: boolean;
   nodeSelectionCount: number;
   readOnly: boolean;
+  runtime: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>["runtime"];
   selectedGroupCount: number;
 }): GraphWorkbenchAction[] {
+  const documentIoActions = createEditorDocumentIoCommands<
+    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    GraphEditorSelectionState
+  >({
+    runtime,
+    export: {
+      disabled: false,
+      run: actions.exportJson,
+    },
+    import: {
+      disabled: readOnly,
+      run: () => actions.importJson(),
+    },
+    include: ["export", "import"],
+    labels: {
+      export: "Export JSON",
+      import: "Import JSON",
+    },
+  });
+  const documentIoWorkbenchActions: GraphWorkbenchAction[] = documentIoActions.map((command) => ({
+    id: command.id === "export" ? "export-json" : "import-json",
+    label: command.label,
+    disabled: command.disabled,
+    run() {
+      if (!command.run) {
+        return;
+      }
+      return command.run({
+        altKey: false,
+        ctrlKey: false,
+        key: "",
+        metaKey: false,
+        shiftKey: false,
+        target: null,
+      });
+    },
+  }));
+
   return [
     {
       id: "undo",
@@ -2226,18 +2268,7 @@ function createGraphWorkbenchActions<
       disabled: readOnly,
       run: actions.autoLayout,
     },
-    {
-      id: "export-json",
-      label: "Export JSON",
-      disabled: false,
-      run: actions.exportJson,
-    },
-    {
-      id: "import-json",
-      label: "Import JSON",
-      disabled: readOnly,
-      run: () => actions.importJson(),
-    },
+    ...documentIoWorkbenchActions,
     {
       id: "group-selection",
       label: "Group selection",
