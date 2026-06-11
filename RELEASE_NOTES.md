@@ -1,4 +1,4 @@
-# Release Notes Draft
+# @moritzbrantner/graph-editor 0.2.0
 
 ## Added
 
@@ -6,10 +6,13 @@
   `/interaction`, and `/operation-log`.
 - Adapter-level graph persistence helpers, including local storage and in-memory storage adapters.
 - Deterministic graph operation-log serialization/replay helpers and replace-document operations.
+- Public graph-editor APIs now build on the published `@moritzbrantner/editor-core@0.3.0`
+  foundation for serialization, runtime, operations, selection, indexes, patches, plugins,
+  persistence, interaction, hotkeys, entities, JSON helpers, browser utilities, and viewport state.
 
 ## Hardened
 
-- Published `editor-core` subpath consumption is checked in CI scripts.
+- Published `editor-core` subpath consumption is checked locally and in CI before release.
 - Package smoke coverage now verifies every public graph-editor export subpath.
 - Workbench tests now lock document IO commands to graph-editor's public import/export ids while
   using editor-core helpers internally.
@@ -20,3 +23,5 @@
 
 - The package continues to avoid persistence backends/UI, sharing UI, collaboration transport,
   sync, presence, and a document-library shell. Persistence support is adapter-level and headless.
+- `@moritzbrantner/editor-core` remains a normal dependency at `^0.3.0`; React and React DOM remain
+  peer dependencies.

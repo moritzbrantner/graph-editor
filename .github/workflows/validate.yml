@@ -25,7 +25,7 @@ jobs:
       install_command: bun install --frozen-lockfile
       format_command: bun run format:check
       lint_command: bun run lint
-      typecheck_command: bun run check-types && bun run check-types:tests
+      typecheck_command: bun run check:editor-core && bun run check-types && bun run check-types:tests
       build_command: bun run build
       test_command: bun run test && bun run smoke:package && bun run pack:check
       timeout_minutes: 45
