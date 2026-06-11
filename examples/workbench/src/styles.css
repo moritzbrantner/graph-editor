@@ -2,7 +2,6 @@
 
 @source "../../../src/**/*.{ts,tsx}";
 @source "./**/*.{ts,tsx}";
-@source "../../../../diagrams/src/**/*.{ts,tsx}";
 
 html,
 body,

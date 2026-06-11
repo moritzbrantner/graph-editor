@@ -21,23 +21,19 @@ import {
   type GraphWorkbenchInspectorSchema,
 } from "@moritzbrantner/graph-editor";
 import {
-  OrgChart,
-  insertOrgChartNode,
-  removeOrgChartNode,
-  type OrgChartNodeData,
-} from "@moritzbrantner/diagrams/org-chart";
-import {
   ProcessMap,
   type ProcessMapStatus,
   type ProcessMapStepData,
   type ProcessMapTone,
-} from "@moritzbrantner/diagrams/process-map";
-import {
+  OrgChart,
   RelationshipMap,
+  insertOrgChartNode,
+  removeOrgChartNode,
+  type OrgChartNodeData,
   type RelationshipMapEdge,
   type RelationshipMapNode,
   type RelationshipMapTone,
-} from "@moritzbrantner/diagrams/relationship-map";
+} from "./diagram-examples";
 import {
   cloneWorkbenchExampleDocument,
   defaultWorkbenchExample,
@@ -484,7 +480,7 @@ function DiagramEditor() {
               ariaLabel="Editable relationship map preview"
               nodes={relationshipNodes}
               edges={relationshipEdges}
-              caption="RelationshipMap preview from @moritzbrantner/diagrams."
+              caption="Relationship map preview."
             />
           ) : diagramKind === "process" ? (
             <ProcessMap steps={processSteps} />
