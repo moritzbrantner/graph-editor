@@ -83,8 +83,8 @@
     "dev:source": "bun run source:prepare && bun run dev:examples",
     "source:prepare": "node scripts/source-deps.mjs prepare",
     "source:status": "node scripts/source-deps.mjs status",
+    "source:smoke": "node scripts/source-deps.mjs smoke",
     "source:restore": "node scripts/source-deps.mjs restore",
-    "source:watch": "node scripts/source-deps.mjs watch",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --format=github",
@@ -99,7 +99,7 @@
     "bench": "vitest bench --passWithNoTests --run",
     "check:editor-core": "node scripts/check-editor-core-consumption.mjs",
     "verify:checks": "bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package && bun run pack:check",
-    "verify:source": "bun run source:prepare && bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package",
+    "verify:source": "bun run source:prepare && bun run source:smoke && bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package",
     "verify:registry": "bun run source:restore && bun run verify:checks",
     "verify": "bun run verify:registry",
     "verify:full": "bun run verify && bun run test:coverage && bun run build:examples && bun run test:e2e"
