@@ -17,16 +17,13 @@ Use `EDITOR_CORE_SOURCE=/absolute/path/to/editor-core` when the repositories are
 ```sh
 bun run source:prepare
 bun run source:status
+bun run source:smoke
 bun run verify:source
 ```
 
-`source:prepare` installs the frozen dependency sets, recursively prepares upstream source dependencies when supported, builds the sibling checkout, and replaces only `node_modules/@moritzbrantner/editor-core` with a local symlink. It records the sibling Git revision under `node_modules/.editor-source-deps/` so the active source can be inspected without changing committed package metadata or the lockfile.
+`source:prepare` installs the frozen dependency sets, recursively prepares upstream source dependencies when supported, builds the sibling checkout, and materializes that build into `node_modules/@moritzbrantner/editor-core` under the package identity this consumer expects. It records the sibling Git revision under `node_modules/.editor-source-deps/` so the active source can be inspected without changing committed package metadata or the lockfile.
 
-For active editor-core development, run this in another terminal:
-
-```sh
-bun run source:watch
-```
+`source:smoke` proves the materialized package is active and importable. `verify:source` goes further and runs Graph Editor against that exact source build; it intentionally fails when Graph Editor still depends on an API that has changed on the selected editor-core revision. That compatibility work belongs in a coordinated migration, not in the source-mode plumbing itself.
 
 To switch back to the published dependency contract:
 
@@ -35,6 +32,4 @@ bun run source:restore
 bun run verify
 ```
 
-`verify` is intentionally release-oriented and restores the frozen registry install first. `verify:source` exercises the local source checkout without requiring a new editor-core publication.
-
-Source mode must fail when the expected checkout is absent or is not an editor-core package; it must not silently claim source verification while testing the registry package.
+`verify` is intentionally release-oriented and restores the frozen registry install first. Source mode must fail when the expected checkout is absent or is not an editor-core package; it must not silently claim source verification while testing the registry package.
