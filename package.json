@@ -80,6 +80,11 @@
     "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts src/runtime.ts src/operations.ts src/commands.ts src/serialization.ts src/persistence.ts src/patches.ts src/plugins.ts src/interaction.ts src/operation-log.ts --format esm --dts --clean --out-dir dist",
     "build:examples": "vite build --config examples/workbench/vite.config.ts --outDir ../../dist-examples --emptyOutDir",
     "dev:examples": "vite --config examples/workbench/vite.config.ts",
+    "dev:source": "bun run source:prepare && bun run dev:examples",
+    "source:prepare": "node scripts/source-deps.mjs prepare",
+    "source:status": "node scripts/source-deps.mjs status",
+    "source:restore": "node scripts/source-deps.mjs restore",
+    "source:watch": "node scripts/source-deps.mjs watch",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --format=github",
@@ -93,7 +98,10 @@
     "test:e2e": "playwright test",
     "bench": "vitest bench --passWithNoTests --run",
     "check:editor-core": "node scripts/check-editor-core-consumption.mjs",
-    "verify": "bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package && bun run pack:check",
+    "verify:checks": "bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package && bun run pack:check",
+    "verify:source": "bun run source:prepare && bun run format:check && bun run lint && bun run check:editor-core && bun run check-types && bun run check-types:tests && bun run test && bun run build && bun run smoke:package",
+    "verify:registry": "bun run source:restore && bun run verify:checks",
+    "verify": "bun run verify:registry",
     "verify:full": "bun run verify && bun run test:coverage && bun run build:examples && bun run test:e2e"
   },
   "dependencies": {
