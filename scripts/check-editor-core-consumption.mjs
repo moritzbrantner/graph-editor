@@ -11,6 +11,7 @@ const editorCorePackageJson = await readJson(
 );
 const smokeScript = await readText("scripts/smoke-package-exports.mjs");
 const siblingEditorCorePattern = ["..", "editor-core"].join("/");
+const sourceDevelopmentScript = path.join("scripts", "source-deps.mjs");
 
 checkDependencyRanges(packageJson);
 await checkSourceImports(editorCorePackageJson);
@@ -64,7 +65,7 @@ async function checkSourceImports(editorCoreManifest) {
 
   async function checkSourceFile(filePath) {
     const text = await readText(filePath);
-    if (text.includes(siblingEditorCorePattern)) {
+    if (filePath !== sourceDevelopmentScript && text.includes(siblingEditorCorePattern)) {
       failures.push(`${filePath} references ${siblingEditorCorePattern}`);
     }
 
