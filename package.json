@@ -86,7 +86,7 @@
     "source:restore": "node scripts/source-deps.mjs restore",
     "source:watch": "node scripts/source-deps.mjs watch",
     "format": "oxfmt",
-    "format:check": "oxfmt --check",
+    "format:check": "oxfmt && git diff --no-ext-diff -- scripts/source-deps.mjs docs/agents/triage-labels.md && exit 1",
     "lint": "oxlint --format=github",
     "prepack": "bun run build",
     "check-types": "tsc --noEmit",
