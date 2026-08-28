@@ -26,6 +26,7 @@ import {
   createGraphEditorDuplicateSelectionOperation,
   createGraphEditorGroup,
   createGraphEditorGraphAdapter,
+  createGraphEditorGraphIndex,
   createGraphEditorMoveNodesOperation,
   createGraphEditorPasteOperation,
   createGraphEditorPatchOperation,
@@ -101,7 +102,6 @@ import {
   redoEditorSnapshotHistory,
   undoEditorSnapshotHistory,
 } from "@moritzbrantner/editor-core/history";
-import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
 import {
   EditorJsonParseError,
   serializeEditorDocument,
@@ -192,7 +192,7 @@ describe("@moritzbrantner/graph-editor", () => {
     ).toThrow(EditorJsonParseError);
   });
 
-  test("projects graph documents through the editor-core graph adapter", () => {
+  test("keeps graph projection and indexing inside graph-editor", () => {
     const document = normalizeGraphEditorDocument({
       nodes: [
         {
@@ -223,17 +223,17 @@ describe("@moritzbrantner/graph-editor", () => {
     });
 
     const adapter = createGraphEditorGraphAdapter();
-    const indexes = createEditorGraphIndexes(adapter.getEdges(document));
+    const index = createGraphEditorGraphIndex(document);
 
     expect(adapter.getNodes(document)[0]?.type).toBe("workflow");
-    expect(adapter.getPorts?.(adapter.getNodes(document)[0]!)?.[0]).toMatchObject({
+    expect(adapter.getPorts(adapter.getNodes(document)[0]!)?.[0]).toMatchObject({
       id: "out",
       direction: "output",
     });
-    expect(indexes.outgoingEdgesByNodeId.get("source")?.[0]).toMatchObject({
+    expect(index.getEdgeById("edge-1")).toMatchObject({
       id: "edge-1",
-      sourceId: "source",
-      targetId: "target",
+      source: "source",
+      target: "target",
       properties: document.edges[0],
     });
   });
