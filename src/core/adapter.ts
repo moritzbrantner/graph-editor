@@ -12,11 +12,12 @@ export type GraphEditorFoundationNode<
   type: string;
 };
 
-export type GraphEditorFoundationEdge<TEdgeData = Record<string, unknown>> = GraphEditorEdge<TEdgeData> & {
-  sourceId: string;
-  targetId: string;
-  properties: GraphEditorEdge<TEdgeData>;
-};
+export type GraphEditorFoundationEdge<TEdgeData = Record<string, unknown>> =
+  GraphEditorEdge<TEdgeData> & {
+    sourceId: string;
+    targetId: string;
+    properties: GraphEditorEdge<TEdgeData>;
+  };
 
 export type GraphEditorFoundationPort<
   TPortType = unknown,
