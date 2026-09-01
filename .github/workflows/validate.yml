@@ -73,7 +73,7 @@ jobs:
 
   exact-editor-core-compatibility:
     name: Exact editor-core compatibility cleanup
-    if: github.event_name == 'pull_request' && github.head_ref == 'refactor/own-graph-vocabulary'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/refactor/own-graph-vocabulary') || (github.event_name == 'pull_request' && github.head_ref == 'refactor/own-graph-vocabulary')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
