@@ -1,16 +1,7 @@
-import type { EditorGraphConnection } from "@moritzbrantner/editor-core/constraints";
-import type {
-  EditorEntityBase,
-  EditorEntityId,
-  EditorGraphEdge,
-  EditorGraphPort,
-} from "@moritzbrantner/editor-core/entities";
+import type { EditorEntityBase, EditorEntityId } from "@moritzbrantner/editor-core/entities";
 import type { EditorViewportState } from "@moritzbrantner/editor-core/viewport";
 
-export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = Omit<
-  EditorGraphPort,
-  "label"
-> & {
+export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = {
   id: string;
   label: string;
   kind?: string;
@@ -51,10 +42,10 @@ export type GraphEditorNode<TNodeData = Record<string, unknown>, TPortType = unk
 export type GraphEditorEdge<TEdgeData = Record<string, unknown>> = {
   id: EditorEntityId;
   sourceNodeId: EditorEntityId;
-  sourcePortId: NonNullable<EditorGraphConnection["sourcePortId"]>;
+  sourcePortId: string;
   targetNodeId: EditorEntityId;
-  targetPortId: NonNullable<EditorGraphConnection["targetPortId"]>;
-  type?: EditorGraphEdge["type"];
+  targetPortId: string;
+  type?: string;
   color?: string;
   status?: "idle" | "running" | "success" | "error" | "warning" | string;
   data?: TEdgeData;
@@ -122,10 +113,10 @@ export type GraphEditorGroupBounds = {
 };
 
 export type GraphEditorConnectionInput = {
-  sourceNodeId: EditorGraphConnection["sourceId"];
-  sourcePortId: NonNullable<EditorGraphConnection["sourcePortId"]>;
-  targetNodeId: EditorGraphConnection["targetId"];
-  targetPortId: NonNullable<EditorGraphConnection["targetPortId"]>;
+  sourceNodeId: EditorEntityId;
+  sourcePortId: string;
+  targetNodeId: EditorEntityId;
+  targetPortId: string;
 };
 
 export type GraphEditorConnectionInvalidReason =

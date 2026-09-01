@@ -1,7 +1,5 @@
 import type { EditorEntityId } from "@moritzbrantner/editor-core/entities";
-import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
 
-import { toEditorGraphEdge } from "./adapter";
 import { addGraphEditorEdge } from "./mutations";
 import { wouldCreateGraphEditorCycle } from "./graph";
 import type {
@@ -22,34 +20,31 @@ export function createGraphEditorDocumentContext<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType> {
   const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
-  const editorGraphIndexes = createEditorGraphIndexes(document.edges.map(toEditorGraphEdge));
   const edgeById = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>>();
   const adjacencyByNodeId = new Map<EditorEntityId, EditorEntityId[]>();
   const incomingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
   const outgoingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
+
   for (const node of document.nodes) {
     adjacencyByNodeId.set(node.id, []);
     incomingEdgesByNodeId.set(node.id, []);
     outgoingEdgesByNodeId.set(node.id, []);
   }
-  for (const edge of editorGraphIndexes.edgesById.values()) {
-    edgeById.set(edge.id, edge.properties);
-  }
-  for (const [nodeId, edges] of editorGraphIndexes.outgoingEdgesByNodeId) {
-    adjacencyByNodeId.set(
-      nodeId,
-      edges.map((edge) => edge.targetId),
-    );
-    outgoingEdgesByNodeId.set(
-      nodeId,
-      edges.map((edge) => edge.properties),
-    );
-  }
-  for (const [nodeId, edges] of editorGraphIndexes.incomingEdgesByNodeId) {
-    incomingEdgesByNodeId.set(
-      nodeId,
-      edges.map((edge) => edge.properties),
-    );
+
+  for (const edge of document.edges) {
+    edgeById.set(edge.id, edge);
+    const outgoing = outgoingEdgesByNodeId.get(edge.sourceNodeId);
+    const incoming = incomingEdgesByNodeId.get(edge.targetNodeId);
+    const adjacent = adjacencyByNodeId.get(edge.sourceNodeId);
+    if (outgoing) {
+      outgoing.push(edge);
+    }
+    if (incoming) {
+      incoming.push(edge);
+    }
+    if (adjacent) {
+      adjacent.push(edge.targetNodeId);
+    }
   }
 
   const context: GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType> = {

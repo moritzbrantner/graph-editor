@@ -1,12 +1,4 @@
 import type {
-  EditorEntityBase,
-  EditorEntityId,
-  EditorGraphAdapter,
-  EditorGraphEdge,
-  EditorGraphPort,
-} from "@moritzbrantner/editor-core/entities";
-
-import type {
   GraphEditorDocument,
   GraphEditorEdge,
   GraphEditorNode,
@@ -16,25 +8,45 @@ import type {
 export type GraphEditorFoundationNode<
   TNodeData = Record<string, unknown>,
   TPortType = unknown,
-> = GraphEditorNode<TNodeData, TPortType> & EditorEntityBase;
+> = GraphEditorNode<TNodeData, TPortType> & {
+  type: string;
+};
 
-export type GraphEditorFoundationEdge<TEdgeData = Record<string, unknown>> = EditorGraphEdge & {
-  sourceNodeId: EditorEntityId;
-  sourcePortId: string;
-  targetNodeId: EditorEntityId;
-  targetPortId: string;
-  properties: GraphEditorEdge<TEdgeData>;
+export type GraphEditorFoundationEdge<TEdgeData = Record<string, unknown>> =
+  GraphEditorEdge<TEdgeData> & {
+    sourceId: string;
+    targetId: string;
+    properties: GraphEditorEdge<TEdgeData>;
+  };
+
+export type GraphEditorFoundationPort<
+  TPortType = unknown,
+  TPortData = Record<string, unknown>,
+> = GraphEditorPort<TPortType, TPortData> & {
+  direction: "input" | "output";
+};
+
+export type GraphEditorGraphAdapter<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+> = {
+  getNodes: (
+    document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  ) => readonly GraphEditorFoundationNode<TNodeData, TPortType>[];
+  getEdges: (
+    document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  ) => readonly GraphEditorFoundationEdge<TEdgeData>[];
+  getPorts: (
+    node: GraphEditorFoundationNode<TNodeData, TPortType>,
+  ) => readonly GraphEditorFoundationPort<TPortType>[];
 };
 
 export function createGraphEditorGraphAdapter<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
->(): EditorGraphAdapter<
-  GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
-  GraphEditorFoundationNode<TNodeData, TPortType>,
-  GraphEditorFoundationEdge<TEdgeData>
-> {
+>(): GraphEditorGraphAdapter<TNodeData, TEdgeData, TPortType> {
   return {
     getNodes: (document) => document.nodes.map(toEditorGraphNode),
     getEdges: (document) => document.edges.map(toEditorGraphEdge),
@@ -59,21 +71,16 @@ export function toEditorGraphEdge<TEdgeData>(
 ): GraphEditorFoundationEdge<TEdgeData> {
   return {
     ...edge,
-    id: edge.id,
     sourceId: edge.sourceNodeId,
-    sourceNodeId: edge.sourceNodeId,
-    sourcePortId: edge.sourcePortId,
     targetId: edge.targetNodeId,
-    targetNodeId: edge.targetNodeId,
-    targetPortId: edge.targetPortId,
     properties: edge,
   };
 }
 
-export function toEditorGraphPort<TPortType>(
-  port: GraphEditorPort<TPortType>,
-  direction: NonNullable<EditorGraphPort["direction"]>,
-): EditorGraphPort {
+export function toEditorGraphPort<TPortType, TPortData>(
+  port: GraphEditorPort<TPortType, TPortData>,
+  direction: GraphEditorFoundationPort<TPortType, TPortData>["direction"],
+): GraphEditorFoundationPort<TPortType, TPortData> {
   return {
     ...port,
     direction,

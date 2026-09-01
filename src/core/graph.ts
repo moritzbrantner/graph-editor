@@ -1,6 +1,3 @@
-import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
-
-import { toEditorGraphEdge } from "./adapter";
 import { createGraphEditorDocumentContext } from "./context";
 import type {
   GraphEditorConnectionInput,
@@ -58,7 +55,6 @@ export function createGraphEditorGraphIndex<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 >(document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) {
-  const editorGraphIndexes = createEditorGraphIndexes(document.edges.map(toEditorGraphEdge));
   const nodes = document.nodes.map(
     (node, index): GraphEditorIndexedNode<TNodeData, TPortType> => ({
       id: node.id,
@@ -79,12 +75,7 @@ export function createGraphEditorGraphIndex<
         properties: edge,
       }),
     )
-    .filter(
-      (edge) =>
-        editorGraphIndexes.edgesById.has(edge.id) &&
-        nodeLookup.has(edge.source) &&
-        nodeLookup.has(edge.target),
-    );
+    .filter((edge) => nodeLookup.has(edge.source) && nodeLookup.has(edge.target));
   const edgeLookup = new Map(edges.map((edge) => [edge.id, edge]));
   return {
     getEdgeById(edgeId: string) {
