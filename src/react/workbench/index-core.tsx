@@ -65,10 +65,7 @@ import {
   type GraphEditorOperation,
 } from "../../operations";
 import { getGraphEditorNodeSize } from "../../node-metrics";
-import {
-  type InspectorFieldValue,
-  type InspectorPanelSectionData,
-} from "../inspector-panel";
+import { type InspectorFieldValue, type InspectorPanelSectionData } from "../inspector-panel";
 import {
   graphWorkbenchCommandShortcuts,
   getGraphWorkbenchShortcutLabel,
@@ -1505,9 +1502,7 @@ function formatGraphWorkbenchActionErrorDetail(error: unknown) {
 export function getDefaultNodeInspectorSections<
   TNodeData = Record<string, unknown>,
   TPortType = unknown,
->(
-  node: GraphEditorNode<TNodeData, TPortType>,
-): InspectorPanelSectionData[] {
+>(node: GraphEditorNode<TNodeData, TPortType>): InspectorPanelSectionData[] {
   return [
     {
       id: "general",
@@ -1677,9 +1672,7 @@ export function getDefaultGroupInspectorSections(
 export function getDefaultNodeInspectorPatch<
   TNodeData = Record<string, unknown>,
   TPortType = unknown,
->(
-  values: Record<string, InspectorFieldValue>,
-): Partial<GraphEditorNode<TNodeData, TPortType>> {
+>(values: Record<string, InspectorFieldValue>): Partial<GraphEditorNode<TNodeData, TPortType>> {
   const variant: GraphEditorNode<TNodeData, TPortType>["variant"] =
     values.variant === "compact" ? "compact" : "default";
 

@@ -3,7 +3,7 @@
 import type * as React from "react";
 
 import type { GraphWorkbenchController } from "../index-core";
-import type { GraphWorkbenchCommandId } from "../workbench-commands";
+import type { GraphWorkbenchCommandId } from "../../workbench-commands";
 import { GraphWorkbenchIconButton } from "./GraphWorkbenchIconButton";
 
 export function GraphWorkbenchCommandButton<

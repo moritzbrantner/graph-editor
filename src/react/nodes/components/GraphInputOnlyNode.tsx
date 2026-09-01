@@ -9,9 +9,9 @@ import {
 } from "../index-core";
 import { GraphNode } from "./GraphNode";
 
-export function GraphInputOnlyNode<Inputs extends readonly GraphNodePort[] = readonly GraphNodePort[]>(
-  { node, ...props }: GraphInputOnlyNodeProps<Inputs>,
-) {
+export function GraphInputOnlyNode<
+  Inputs extends readonly GraphNodePort[] = readonly GraphNodePort[],
+>({ node, ...props }: GraphInputOnlyNodeProps<Inputs>) {
   const resolvedNode = React.useMemo<GraphNodeData<Inputs, []>>(
     () => ({ ...node, outputs: [] }),
     [node],

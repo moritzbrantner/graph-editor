@@ -6,12 +6,7 @@ import {
   getGraphEditorNodePortCenterOffset,
   getGraphEditorNodeSize,
 } from "../../node-metrics";
-import type {
-  GraphNodeData,
-  GraphNodeLayoutOptions,
-  GraphNodeSize,
-  GraphNodePort,
-} from "./index";
+import type { GraphNodeData, GraphNodeLayoutOptions, GraphNodeSize, GraphNodePort } from "./index";
 
 export const graphNodeMinimizedHeaderHeight = 54;
 export const graphNodeControlButtonClassName =
