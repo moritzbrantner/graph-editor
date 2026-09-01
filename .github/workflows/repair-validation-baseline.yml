@@ -48,6 +48,22 @@ jobs:
                   raise SystemExit(f'missing expected duplicate export {name}')
               canvas = canvas.replace(marker, '', 1)
           canvas_path.write_text(canvas)
+
+          import_fixes = {
+              Path('src/react/workbench/components/GraphWorkbenchCommandButton.tsx'): (
+                  '../workbench-commands',
+                  '../../workbench-commands',
+              ),
+              Path('src/react/workbench/components/GraphWorkbenchPaletteGroup.tsx'): (
+                  '../palette-model',
+                  '../../palette-model',
+              ),
+          }
+          for path, (old, new) in import_fixes.items():
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing expected stale import {old} in {path}')
+              path.write_text(text.replace(old, new, 1))
           PY
 
           bun x oxfmt \
@@ -57,6 +73,8 @@ jobs:
             src/react/nodes/components/GraphNodeInlinePort.tsx \
             src/react/nodes/components/GraphNodeMinimizeButton.tsx \
             src/react/nodes/utils.ts \
+            src/react/workbench/components/GraphWorkbenchCommandButton.tsx \
+            src/react/workbench/components/GraphWorkbenchPaletteGroup.tsx \
             src/react/workbench/index-core.tsx
 
           git diff --check
