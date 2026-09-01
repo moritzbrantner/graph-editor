@@ -3,7 +3,7 @@
 import { Button } from "@moritzbrantner/ui";
 
 import type { GraphWorkbenchController } from "../index-core";
-import type { GraphWorkbenchPaletteCategoryGroup } from "../palette-model";
+import type { GraphWorkbenchPaletteCategoryGroup } from "../../palette-model";
 
 export function GraphWorkbenchPaletteGroup<
   TNodeData = Record<string, unknown>,

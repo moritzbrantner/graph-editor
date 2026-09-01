@@ -4,11 +4,7 @@ import * as React from "react";
 
 import { cn } from "@moritzbrantner/ui";
 
-import {
-  getGraphNodePortColor,
-  type GraphNodeData,
-  type GraphNodePort,
-} from "../index-core";
+import { getGraphNodePortColor, type GraphNodeData, type GraphNodePort } from "../index-core";
 
 export function GraphNodeInlinePort({
   direction,

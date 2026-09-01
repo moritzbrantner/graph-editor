@@ -2,10 +2,7 @@
 
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 
-import {
-  graphNodeControlButtonClassName,
-  type GraphNodeData,
-} from "../index-core";
+import { graphNodeControlButtonClassName, type GraphNodeData } from "../index-core";
 
 export function GraphNodeMinimizeButton({
   node,
