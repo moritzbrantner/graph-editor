@@ -84,6 +84,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: refactor/own-graph-vocabulary
+          path: graph-editor
           fetch-depth: 0
       - name: Check out narrowed editor-core PR head
         uses: actions/checkout@v6
@@ -102,8 +103,10 @@ jobs:
             echo "//npm.pkg.github.com/:_authToken=$GH_PACKAGES_TOKEN" >> ~/.npmrc
           fi
       - name: Install dependencies
+        working-directory: graph-editor
         run: bun install --frozen-lockfile
       - name: Remove obsolete editor-core graph-index imports
+        working-directory: graph-editor
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -121,10 +124,12 @@ jobs:
           PY
           rm -f .github/workflows/fix-editor-core-index-imports.yml
       - name: Verify against exact narrowed editor-core source
+        working-directory: graph-editor
         env:
           EDITOR_CORE_SOURCE: ${{ github.workspace }}/editor-core
         run: bun run verify:source
       - name: Restore normal workflow and commit verified cleanup
+        working-directory: graph-editor
         run: |
           git show ec30af6c8b9888edee72f6ff838473794852bd72:.github/workflows/validate.yml > .github/workflows/validate.yml
           git diff --check
