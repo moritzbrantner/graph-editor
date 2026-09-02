@@ -1,6 +1,8 @@
 import fs from "node:fs";
 
-const report = JSON.parse(fs.readFileSync("coverage/coverage-summary.json", "utf8"));
+const report = JSON.parse(
+  fs.readFileSync("coverage/coverage-summary.json", "utf8"),
+);
 const metrics = ["lines", "branches", "functions", "statements"];
 const rows = metrics.map((metric) => {
   const item = report.total[metric];
@@ -24,8 +26,8 @@ if (summaryPath) {
     "",
     "| Metric | Covered | Total | Coverage |",
     "| --- | ---: | ---: | ---: |",
-    ...rows.map(
-      (row) => `| ${row.metric} | ${row.covered} | ${row.total} | ${row.pct}% |`,
+    ...rows.map((row) =>
+      `| ${row.metric} | ${row.covered} | ${row.total} | ${row.pct}% |`,
     ),
     "",
   ].join("\n");
