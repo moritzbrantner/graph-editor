@@ -1,0 +1,74 @@
+name: Preserve graph runtime issues across core cutover
+
+on:
+  push:
+    branches:
+      - fix/editor-core-opaque-runtime-compat
+    paths:
+      - .github/workflows/fix-runtime-issue-compat.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/editor-core-opaque-runtime-compat
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - name: Preserve issues and editable-target shortcut behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          commands = Path('src/commands.ts')
+          text = commands.read_text()
+          old = '''export function getGraphEditorCommandFromKeyboardEvent(\n  event: GraphEditorShortcutEvent,\n): GraphEditorCommandId | null {\n  const keyboardEvent = {'''
+          new = '''export function getGraphEditorCommandFromKeyboardEvent(\n  event: GraphEditorShortcutEvent,\n): GraphEditorCommandId | null {\n  if (isEditorEditableTarget(event.target)) {\n    return null;\n  }\n\n  const keyboardEvent = {'''
+          assert text.count(old) == 1
+          commands.write_text(text.replace(old, new))
+
+          compat = Path('src/runtime/core-compat.ts')
+          text = compat.read_text()
+          text = text.replace(
+            'options?: { clearOperationHistory?: boolean },',
+            'options?: { clearIssues?: boolean; clearOperationHistory?: boolean },',
+          )
+          text = text.replace(
+            'options: { clearOperationHistory?: boolean } = {},',
+            'options: { clearIssues?: boolean; clearOperationHistory?: boolean } = {},',
+          )
+          old = '''    mutable.issues = [];\n    mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
+          new = '''    mutable.issues = options.clearIssues ? [] : state.issues;\n    mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
+          assert text.count(old) == 1
+          compat.write_text(text.replace(old, new))
+
+          lifecycle = Path('src/runtime/lifecycle.ts')
+          text = lifecycle.read_text()
+          old = '''    replaceEditorOperationRuntimeCoreStateCompat(state, runtime, {\n      clearOperationHistory: true,\n    }),'''
+          new = '''    replaceEditorOperationRuntimeCoreStateCompat(state, runtime, {\n      clearIssues: true,\n      clearOperationHistory: true,\n    }),'''
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+          old = '''  options: {\n    clearOperationHistory?: boolean;\n  } = {},'''
+          new = '''  options: {\n    clearIssues?: boolean;\n    clearOperationHistory?: boolean;\n  } = {},'''
+          assert text.count(old) == 1
+          lifecycle.write_text(text.replace(old, new))
+          PY
+      - run: bun run format
+      - run: bun run check-types
+      - run: bun run check-types:tests
+      - run: bunx vitest run src/index-tests/plugins.test.ts src/index-tests/runtime-operations.test.ts src/index-tests/workbench-shortcuts.test.ts
+      - name: Commit semantic compatibility fixes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/commands.ts src/runtime/core-compat.ts src/runtime/lifecycle.ts
+          git commit -m "fix: preserve graph runtime issues across core cutover"
+          git push origin HEAD:fix/editor-core-opaque-runtime-compat
