@@ -2,13 +2,7 @@ import { normalizeGraphEditorDocument } from "./core/document";
 import type { GraphEditorDocument, GraphEditorNode } from "./core/types";
 import { getGraphEditorNodeSize } from "./node-metrics";
 
-export type GraphEditorAlignment =
-  | "left"
-  | "center-x"
-  | "right"
-  | "top"
-  | "center-y"
-  | "bottom";
+export type GraphEditorAlignment = "left" | "center-x" | "right" | "top" | "center-y" | "bottom";
 
 export type GraphEditorDistributionAxis = "horizontal" | "vertical";
 
@@ -139,9 +133,7 @@ export function distributeGraphEditorNodes<
   );
   const start = axis === "horizontal" ? first.node.x : first.node.y;
   const end =
-    axis === "horizontal"
-      ? last.node.x + last.size.width
-      : last.node.y + last.size.height;
+    axis === "horizontal" ? last.node.x + last.size.width : last.node.y + last.size.height;
   const gap = (end - start - totalSize) / (ordered.length - 1);
   let cursor = start;
   const positionByNodeId = new Map<string, number>();
@@ -156,9 +148,7 @@ export function distributeGraphEditorNodes<
     if (position === undefined) {
       return { x: node.x, y: node.y };
     }
-    return axis === "horizontal"
-      ? { x: position, y: node.y }
-      : { x: node.x, y: position };
+    return axis === "horizontal" ? { x: position, y: node.y } : { x: node.x, y: position };
   });
 }
 
