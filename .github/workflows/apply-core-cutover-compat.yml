@@ -189,6 +189,9 @@ jobs:
             return next;
           }
           EOF
+      - name: Install graph dependencies for formatting
+        working-directory: graph-editor
+        run: bun install --frozen-lockfile
       - name: Format compatibility slice
         working-directory: graph-editor
         run: bun run format
