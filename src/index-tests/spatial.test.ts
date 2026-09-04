@@ -61,14 +61,15 @@ describe("graph spatial editing", () => {
     const document = createDocument();
     const before = document.nodes.map((node) => ({ ...node, size: getGraphEditorNodeSize(node) }));
     const result = distributeGraphEditorNodes(document, ["a", "b", "c"], "horizontal");
-    const after = result.document.nodes.map((node) => ({ ...node, size: getGraphEditorNodeSize(node) }));
+    const after = result.document.nodes.map((node) => ({
+      ...node,
+      size: getGraphEditorNodeSize(node),
+    }));
     const firstGap = after[1]!.x - (after[0]!.x + after[0]!.size.width);
     const secondGap = after[2]!.x - (after[1]!.x + after[1]!.size.width);
 
     expect(after[0]!.x).toBe(before[0]!.x);
-    expect(after[2]!.x + after[2]!.size.width).toBeCloseTo(
-      before[2]!.x + before[2]!.size.width,
-    );
+    expect(after[2]!.x + after[2]!.size.width).toBeCloseTo(before[2]!.x + before[2]!.size.width);
     expect(firstGap).toBeCloseTo(secondGap);
     expect(after.map((node) => node.y)).toEqual(before.map((node) => node.y));
   });
