@@ -12,12 +12,29 @@ const modules = [
   {
     specifier: "@moritzbrantner/graph-editor",
     path: "../dist/index.js",
-    exports: ["GraphCanvas", "GraphNode", "normalizeGraphEditorDocument"],
+    exports: [
+      "GraphCanvas",
+      "GraphNode",
+      "connectGraphEditorNodes",
+      "createGraphEditorDocumentContext",
+      "createGraphEditorGraphAdapter",
+      "createGraphEditorGraphIndex",
+      "normalizeGraphEditorDocument",
+      "validateGraphEditorConnection",
+    ],
   },
   {
     specifier: "@moritzbrantner/graph-editor/core",
     path: "../dist/core.js",
-    exports: ["validateGraphEditorDocument", "normalizeGraphEditorDocument"],
+    exports: [
+      "connectGraphEditorNodes",
+      "createGraphEditorDocumentContext",
+      "createGraphEditorGraphAdapter",
+      "createGraphEditorGraphIndex",
+      "normalizeGraphEditorDocument",
+      "validateGraphEditorConnection",
+      "validateGraphEditorDocument",
+    ],
   },
   {
     specifier: "@moritzbrantner/graph-editor/react",
