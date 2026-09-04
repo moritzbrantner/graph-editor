@@ -1,0 +1,30 @@
+name: Sync PR 6 with main
+
+on:
+  push:
+    branches:
+      - refactor/own-graph-vocabulary
+    paths:
+      - .github/workflows/sync-pr6-main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: refactor/own-graph-vocabulary
+          fetch-depth: 0
+      - name: Merge current main
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/sync-pr6-main.yml
+          git commit --amend --no-edit
+          git push origin HEAD:refactor/own-graph-vocabulary
