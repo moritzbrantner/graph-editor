@@ -120,7 +120,7 @@ export function distributeGraphEditorNodes<
   }
 
   const measured = nodes.map((node) => ({ node, size: getGraphEditorNodeSize(node) }));
-  const ordered = measured.toSorted((a, b) =>
+  const ordered = [...measured].sort((a, b) =>
     axis === "horizontal"
       ? a.node.x - b.node.x || a.node.id.localeCompare(b.node.id)
       : a.node.y - b.node.y || a.node.id.localeCompare(b.node.id),
