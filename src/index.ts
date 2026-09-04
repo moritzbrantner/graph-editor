@@ -1,5 +1,6 @@
 export * from "./core";
 export * from "./layout";
+export * from "./spatial";
 export * from "./operations";
 export * from "./runtime";
 export * from "./commands";
