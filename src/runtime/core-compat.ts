@@ -1,8 +1,5 @@
 import * as editorOperations from "@moritzbrantner/editor-core/operations";
-import {
-  createEditorOperationRuntime,
-  type EditorOperationRuntimeState,
-} from "@moritzbrantner/editor-core/operations";
+import type { EditorOperationRuntimeState } from "@moritzbrantner/editor-core/operations";
 import type { EditorRuntimeState } from "@moritzbrantner/editor-core/runtime";
 
 type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
@@ -11,12 +8,13 @@ type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
   options?: { clearIssues?: boolean; clearOperationHistory?: boolean },
 ) => EditorOperationRuntimeState<TDocument, TSelection>;
 
-type EditorOperationRuntimeFactory<TDocument, TSelection> = () => EditorOperationRuntimeState<
-  TDocument,
-  TSelection
->;
+type EditorOperationRuntimeFactory<TDocument, TSelection> =
+  () => EditorOperationRuntimeState<TDocument, TSelection>;
 
-const legacyRuntimeFactoryByState = new WeakMap<object, EditorOperationRuntimeFactory<unknown, unknown>>();
+const legacyRuntimeFactoryByState = new WeakMap<
+  object,
+  EditorOperationRuntimeFactory<unknown, unknown>
+>();
 
 function getCoreStateReplacement() {
   return (
