@@ -19,6 +19,7 @@ const editorCorePackageJson = await readJson(
 const smokeScript = await readText("scripts/smoke-package-exports.mjs");
 const siblingEditorCorePattern = ["..", "editor-core"].join("/");
 const sourceDevelopmentScript = path.join("scripts", "source-deps.mjs");
+const consumptionCheckScript = path.join("scripts", "check-editor-core-consumption.mjs");
 
 checkDependencyRanges(packageJson);
 await checkSourceImports(editorCorePackageJson);
@@ -76,11 +77,13 @@ async function checkSourceImports(editorCoreManifest) {
       failures.push(`${filePath} references ${siblingEditorCorePattern}`);
     }
 
-    for (const identifier of forbiddenEditorCoreGraphVocabulary) {
-      if (new RegExp(`\\b${identifier}\\b`).test(text)) {
-        failures.push(
-          `${filePath} references ${identifier}; graph vocabulary must remain owned by graph-editor`,
-        );
+    if (filePath !== consumptionCheckScript) {
+      for (const identifier of forbiddenEditorCoreGraphVocabulary) {
+        if (new RegExp(`\\b${identifier}\\b`).test(text)) {
+          failures.push(
+            `${filePath} references ${identifier}; graph vocabulary must remain owned by graph-editor`,
+          );
+        }
       }
     }
 
