@@ -8,8 +8,10 @@ type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
   options?: { clearIssues?: boolean; clearOperationHistory?: boolean },
 ) => EditorOperationRuntimeState<TDocument, TSelection>;
 
-type EditorOperationRuntimeFactory<TDocument, TSelection> =
-  () => EditorOperationRuntimeState<TDocument, TSelection>;
+type EditorOperationRuntimeFactory<TDocument, TSelection> = () => EditorOperationRuntimeState<
+  TDocument,
+  TSelection
+>;
 
 const legacyRuntimeFactoryByState = new WeakMap<
   object,
@@ -66,10 +68,7 @@ export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelecti
 ): EditorOperationRuntimeState<TDocument, TSelection> {
   const replaceCoreState = getCoreStateReplacement();
   if (replaceCoreState) {
-    return inheritEditorOperationRuntimeCompat(
-      state,
-      replaceCoreState(state, runtime, options),
-    );
+    return inheritEditorOperationRuntimeCompat(state, replaceCoreState(state, runtime, options));
   }
 
   const operationHistory = options.clearOperationHistory
