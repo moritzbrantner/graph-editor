@@ -96,7 +96,6 @@ jobs:
           assert text.count(old) == 1, 'unexpected saved runtime replacement shape'
           text = text.replace(old, new)
           start = text.index('export function replaceGraphEditorRuntimeCoreState<')
-          old_tail = text[start:]
           new_tail = '''export function replaceGraphEditorRuntimeCoreState<\n  TNodeData = Record<string, unknown>,\n  TEdgeData = Record<string, unknown>,\n  TPortType = unknown,\n>(\n  state: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>,\n  runtime: EditorRuntimeState<\n    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,\n    GraphEditorSelectionState\n  >,\n  options: {\n    clearOperationHistory?: boolean;\n  } = {},\n): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {\n  return withGraphEditorRuntimeState(\n    replaceEditorOperationRuntimeCoreStateCompat(state, runtime, options),\n    getGraphEditorRuntimeStateOptions(state),\n  );\n}\n'''
           lifecycle.write_text(text[:start] + new_tail)
 
@@ -190,6 +189,9 @@ jobs:
             return next;
           }
           EOF
+      - name: Format compatibility slice
+        working-directory: graph-editor
+        run: bun run format
       - name: Verify exact narrowed core source
         working-directory: graph-editor
         env:
