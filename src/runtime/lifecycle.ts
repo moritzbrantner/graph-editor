@@ -180,6 +180,7 @@ export function resetGraphEditorRuntime<
 
   return withGraphEditorRuntimeState(
     replaceEditorOperationRuntimeCoreStateCompat(state, runtime, {
+      clearIssues: true,
       clearOperationHistory: true,
     }),
     runtimeOptions,
@@ -228,6 +229,7 @@ export function replaceGraphEditorRuntimeCoreState<
     GraphEditorSelectionState
   >,
   options: {
+    clearIssues?: boolean;
     clearOperationHistory?: boolean;
   } = {},
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {

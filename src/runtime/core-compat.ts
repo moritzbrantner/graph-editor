@@ -5,7 +5,7 @@ import type { EditorRuntimeState } from "@moritzbrantner/editor-core/runtime";
 type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
   state: EditorOperationRuntimeState<TDocument, TSelection>,
   runtime: EditorRuntimeState<TDocument, TSelection>,
-  options?: { clearOperationHistory?: boolean },
+  options?: { clearIssues?: boolean; clearOperationHistory?: boolean },
 ) => EditorOperationRuntimeState<TDocument, TSelection>;
 
 function getCoreStateReplacement() {
@@ -19,7 +19,7 @@ function getCoreStateReplacement() {
 export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelection = unknown>(
   state: EditorOperationRuntimeState<TDocument, TSelection>,
   runtime: EditorRuntimeState<TDocument, TSelection>,
-  options: { clearOperationHistory?: boolean } = {},
+  options: { clearIssues?: boolean; clearOperationHistory?: boolean } = {},
 ): EditorOperationRuntimeState<TDocument, TSelection> {
   const replaceCoreState = getCoreStateReplacement();
   if (replaceCoreState) {
@@ -41,7 +41,7 @@ export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelecti
   mutable.operationHistory = operationHistory;
   mutable.canUndo = operationHistory.undoStack.length > 0;
   mutable.canRedo = operationHistory.redoStack.length > 0;
-  mutable.issues = [];
+  mutable.issues = options.clearIssues ? [] : state.issues;
   mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;
   return state;
 }

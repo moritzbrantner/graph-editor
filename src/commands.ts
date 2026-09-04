@@ -93,6 +93,10 @@ export function getGraphEditorShortcutLabel(commandId: GraphEditorCommandId) {
 export function getGraphEditorCommandFromKeyboardEvent(
   event: GraphEditorShortcutEvent,
 ): GraphEditorCommandId | null {
+  if (isEditorEditableTarget(event.target)) {
+    return null;
+  }
+
   const keyboardEvent = {
     altKey: Boolean(event.altKey),
     ctrlKey: Boolean(event.ctrlKey),
