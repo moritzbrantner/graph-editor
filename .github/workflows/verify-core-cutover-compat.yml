@@ -35,4 +35,4 @@ jobs:
         working-directory: graph-editor
         run: bun run verify:registry
 
-# Re-run after operation-issue and editable-target compatibility fixes.
+# Re-run after semantic selection equality compatibility fix.
