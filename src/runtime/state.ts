@@ -15,6 +15,7 @@ import {
   type GraphEditorSelectionState,
 } from "../core";
 import type { GraphEditorOperation } from "../operations";
+import { replaceEditorOperationRuntimeCoreStateCompat } from "./core-compat";
 import type {
   GraphEditorRuntimeOptions,
   GraphEditorRuntimeState,
@@ -94,12 +95,16 @@ export function withGraphEditorRuntimeState<
     document,
     state.runtime.selection ?? { nodeIds: [], edgeIds: [] },
   );
-  if (selection !== state.runtime.selection) {
-    state.runtime = setEditorRuntimeSelection(state.runtime, selection);
-  }
+  const coreState =
+    selection === state.runtime.selection
+      ? state
+      : replaceEditorOperationRuntimeCoreStateCompat(
+          state,
+          setEditorRuntimeSelection(state.runtime, selection),
+        );
   const diagnostics = validateGraphEditorDocument(document, options.validationOptions);
   const selectedDiagnostics = getGraphEditorSelectedDiagnostics(diagnostics, selection);
-  const graphState = Object.assign(state, {
+  const graphState = Object.assign(coreState, {
     document,
     selection,
     diagnostics,

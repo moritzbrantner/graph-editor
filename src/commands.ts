@@ -7,8 +7,8 @@ import {
 } from "@moritzbrantner/editor-core/commands";
 import {
   formatEditorShortcutLabel,
-  getEditorCommandIdFromKeyboardEvent,
   isEditorEditableTarget,
+  matchesEditorHotkey,
   type EditorHotkeyMap,
 } from "@moritzbrantner/editor-core/hotkeys";
 
@@ -93,16 +93,18 @@ export function getGraphEditorShortcutLabel(commandId: GraphEditorCommandId) {
 export function getGraphEditorCommandFromKeyboardEvent(
   event: GraphEditorShortcutEvent,
 ): GraphEditorCommandId | null {
-  return getEditorCommandIdFromKeyboardEvent(
-    {
-      altKey: Boolean(event.altKey),
-      ctrlKey: Boolean(event.ctrlKey),
-      key: event.key,
-      metaKey: Boolean(event.metaKey),
-      shiftKey: Boolean(event.shiftKey),
-      target: event.target,
-    },
-    graphEditorCommandDefinitions,
+  const keyboardEvent = {
+    altKey: Boolean(event.altKey),
+    ctrlKey: Boolean(event.ctrlKey),
+    key: event.key,
+    metaKey: Boolean(event.metaKey),
+    shiftKey: Boolean(event.shiftKey),
+    target: event.target,
+  };
+  return (
+    graphEditorCommandDefinitions.find((command) =>
+      command.hotkeys?.some((hotkey) => matchesEditorHotkey(keyboardEvent, hotkey)),
+    )?.id ?? null
   );
 }
 

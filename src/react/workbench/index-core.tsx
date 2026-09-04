@@ -12,7 +12,6 @@ import {
 import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
 import { createStableEditorJsonEquals } from "@moritzbrantner/editor-core/json";
 import {
-  getEditorCommandIdFromKeyboardEvent,
   isEditorEditableTarget,
   matchesEditorHotkey,
   type EditorCommandDefinition,
@@ -1187,7 +1186,11 @@ export function useGraphWorkbenchHotkeys<TId extends string>({
               !command.disabled &&
               command.hotkeys?.some((hotkey) => matchesEditorHotkey(event, hotkey)),
           )?.id ?? null)
-        : getEditorCommandIdFromKeyboardEvent(event, commands);
+        : (commands.find(
+            (command) =>
+              !command.disabled &&
+              command.hotkeys?.some((hotkey) => matchesEditorHotkey(event, hotkey)),
+          )?.id ?? null);
       const command = commands.find((candidate) => candidate.id === commandId);
       if (!command?.run) {
         return;
