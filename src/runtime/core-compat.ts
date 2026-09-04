@@ -1,5 +1,8 @@
 import * as editorOperations from "@moritzbrantner/editor-core/operations";
-import type { EditorOperationRuntimeState } from "@moritzbrantner/editor-core/operations";
+import {
+  createEditorOperationRuntime,
+  type EditorOperationRuntimeState,
+} from "@moritzbrantner/editor-core/operations";
 import type { EditorRuntimeState } from "@moritzbrantner/editor-core/runtime";
 
 type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
@@ -7,6 +10,13 @@ type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
   runtime: EditorRuntimeState<TDocument, TSelection>,
   options?: { clearIssues?: boolean; clearOperationHistory?: boolean },
 ) => EditorOperationRuntimeState<TDocument, TSelection>;
+
+type EditorOperationRuntimeFactory<TDocument, TSelection> = () => EditorOperationRuntimeState<
+  TDocument,
+  TSelection
+>;
+
+const legacyRuntimeFactoryByState = new WeakMap<object, EditorOperationRuntimeFactory<unknown, unknown>>();
 
 function getCoreStateReplacement() {
   return (
@@ -16,6 +26,41 @@ function getCoreStateReplacement() {
   ).replaceEditorOperationRuntimeCoreState;
 }
 
+export function registerEditorOperationRuntimeCompat<TDocument, TSelection = unknown>(
+  state: EditorOperationRuntimeState<TDocument, TSelection>,
+  factory: EditorOperationRuntimeFactory<TDocument, TSelection>,
+): EditorOperationRuntimeState<TDocument, TSelection> {
+  legacyRuntimeFactoryByState.set(
+    state,
+    factory as EditorOperationRuntimeFactory<unknown, unknown>,
+  );
+  return state;
+}
+
+export function inheritEditorOperationRuntimeCompat<TDocument, TSelection = unknown>(
+  previous: EditorOperationRuntimeState<TDocument, TSelection>,
+  next: EditorOperationRuntimeState<TDocument, TSelection>,
+): EditorOperationRuntimeState<TDocument, TSelection> {
+  const factory = legacyRuntimeFactoryByState.get(previous);
+  if (factory) {
+    legacyRuntimeFactoryByState.set(next, factory);
+  }
+  return next;
+}
+
+function createLegacyReplacementState<TDocument, TSelection>(
+  state: EditorOperationRuntimeState<TDocument, TSelection>,
+): EditorOperationRuntimeState<TDocument, TSelection> {
+  const factory = legacyRuntimeFactoryByState.get(state);
+  if (!factory) {
+    throw new Error("Legacy editor-core compatibility state is missing its runtime factory.");
+  }
+
+  const replacement = factory() as EditorOperationRuntimeState<TDocument, TSelection>;
+  legacyRuntimeFactoryByState.set(replacement, factory);
+  return replacement;
+}
+
 export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelection = unknown>(
   state: EditorOperationRuntimeState<TDocument, TSelection>,
   runtime: EditorRuntimeState<TDocument, TSelection>,
@@ -23,13 +68,17 @@ export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelecti
 ): EditorOperationRuntimeState<TDocument, TSelection> {
   const replaceCoreState = getCoreStateReplacement();
   if (replaceCoreState) {
-    return replaceCoreState(state, runtime, options);
+    return inheritEditorOperationRuntimeCompat(
+      state,
+      replaceCoreState(state, runtime, options),
+    );
   }
 
   const operationHistory = options.clearOperationHistory
     ? { undoStack: [], redoStack: [] }
     : state.operationHistory;
-  const mutable = state as unknown as {
+  const replacement = createLegacyReplacementState(state);
+  const mutable = replacement as unknown as {
     runtime: EditorRuntimeState<TDocument, TSelection>;
     operationHistory: EditorOperationRuntimeState<TDocument, TSelection>["operationHistory"];
     canUndo: boolean;
@@ -43,7 +92,7 @@ export function replaceEditorOperationRuntimeCoreStateCompat<TDocument, TSelecti
   mutable.canRedo = operationHistory.redoStack.length > 0;
   mutable.issues = options.clearIssues ? [] : state.issues;
   mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;
-  return state;
+  return replacement;
 }
 
 export function preserveEditorOperationRuntimeHistoryCompat<TDocument, TSelection = unknown>(
@@ -51,7 +100,7 @@ export function preserveEditorOperationRuntimeHistoryCompat<TDocument, TSelectio
   next: EditorOperationRuntimeState<TDocument, TSelection>,
 ): EditorOperationRuntimeState<TDocument, TSelection> {
   if (getCoreStateReplacement()) {
-    return next;
+    return inheritEditorOperationRuntimeCompat(previous, next);
   }
 
   const mutable = next as unknown as {
@@ -62,5 +111,5 @@ export function preserveEditorOperationRuntimeHistoryCompat<TDocument, TSelectio
   mutable.operationHistory = previous.operationHistory;
   mutable.canUndo = previous.operationHistory.undoStack.length > 0;
   mutable.canRedo = previous.operationHistory.redoStack.length > 0;
-  return next;
+  return inheritEditorOperationRuntimeCompat(previous, next);
 }
