@@ -15,6 +15,7 @@ import {
   type GraphEditorSelectionState,
 } from "../core";
 import type { GraphEditorOperation } from "../operations";
+import { replaceEditorOperationRuntimeCoreStateCompat } from "./core-compat";
 import type {
   GraphEditorRuntimeOptions,
   GraphEditorRuntimeState,
@@ -24,6 +25,7 @@ import type {
 const runtimeOptionsByState = new WeakMap<object, GraphEditorRuntimeStateOptions<any, any, any>>();
 export const graphEditorDocumentsEqual =
   createStableEditorJsonEquals<GraphEditorDocument<any, any, any>>();
+const graphEditorSelectionsEqual = createStableEditorJsonEquals<GraphEditorSelectionState>();
 
 export function resolveGraphEditorOperation<
   TNodeData = Record<string, unknown>,
@@ -90,16 +92,17 @@ export function withGraphEditorRuntimeState<
   options: GraphEditorRuntimeStateOptions<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
   const document = state.runtime.document;
-  const selection = normalizeGraphEditorSelection(
-    document,
-    state.runtime.selection ?? { nodeIds: [], edgeIds: [] },
-  );
-  if (selection !== state.runtime.selection) {
-    state.runtime = setEditorRuntimeSelection(state.runtime, selection);
-  }
+  const runtimeSelection = state.runtime.selection ?? { nodeIds: [], edgeIds: [] };
+  const selection = normalizeGraphEditorSelection(document, runtimeSelection);
+  const coreState = graphEditorSelectionsEqual(selection, runtimeSelection)
+    ? state
+    : replaceEditorOperationRuntimeCoreStateCompat(
+        state,
+        setEditorRuntimeSelection(state.runtime, selection),
+      );
   const diagnostics = validateGraphEditorDocument(document, options.validationOptions);
   const selectedDiagnostics = getGraphEditorSelectedDiagnostics(diagnostics, selection);
-  const graphState = Object.assign(state, {
+  const graphState = Object.assign(coreState, {
     document,
     selection,
     diagnostics,

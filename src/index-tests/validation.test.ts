@@ -101,7 +101,6 @@ import {
   redoEditorSnapshotHistory,
   undoEditorSnapshotHistory,
 } from "@moritzbrantner/editor-core/history";
-import { createEditorGraphIndexes } from "@moritzbrantner/editor-core/indexes";
 import {
   EditorJsonParseError,
   serializeEditorDocument,
