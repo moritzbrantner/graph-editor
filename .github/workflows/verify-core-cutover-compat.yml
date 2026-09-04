@@ -7,8 +7,38 @@ on:
     paths:
       - .github/workflows/verify-core-cutover-compat.yml
 
+permissions:
+  contents: write
+
 jobs:
+  format-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out graph branch
+        uses: actions/checkout@v6
+        with:
+          ref: fix/editor-core-opaque-runtime-compat
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Format compatibility helper
+        run: bun run format -- src/runtime/core-compat.ts
+      - name: Commit formatter output
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/runtime/core-compat.ts
+          git commit -m "style: apply oxfmt to core compatibility helper"
+          git push origin HEAD:fix/editor-core-opaque-runtime-compat
+
   verify:
+    needs: format-compat
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -34,5 +64,3 @@ jobs:
       - name: Verify against frozen published core dependency
         working-directory: graph-editor
         run: bun run verify:registry
-
-# Re-run after semantic selection equality compatibility fix.
