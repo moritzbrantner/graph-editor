@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const failures = [];
+const forbiddenEditorCoreGraphVocabulary = [
+  "EditorGraphAdapter",
+  "EditorGraphEdge",
+  "EditorGraphIndexes",
+  "EditorGraphPort",
+  "createEditorGraphIndexes",
+];
 
 const packageJson = await readJson("package.json");
 const editorCorePackageJson = await readJson(
@@ -67,6 +74,14 @@ async function checkSourceImports(editorCoreManifest) {
     const text = await readText(filePath);
     if (filePath !== sourceDevelopmentScript && text.includes(siblingEditorCorePattern)) {
       failures.push(`${filePath} references ${siblingEditorCorePattern}`);
+    }
+
+    for (const identifier of forbiddenEditorCoreGraphVocabulary) {
+      if (new RegExp(`\\b${identifier}\\b`).test(text)) {
+        failures.push(
+          `${filePath} references ${identifier}; graph vocabulary must remain owned by graph-editor`,
+        );
+      }
     }
 
     for (const match of text.matchAll(
