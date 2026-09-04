@@ -1,0 +1,36 @@
+name: Verify editor-core cutover compatibility
+
+on:
+  push:
+    branches:
+      - fix/editor-core-opaque-runtime-compat
+    paths:
+      - .github/workflows/verify-core-cutover-compat.yml
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out graph branch
+        uses: actions/checkout@v6
+        with:
+          ref: fix/editor-core-opaque-runtime-compat
+          path: graph-editor
+      - name: Check out narrowed editor-core
+        uses: actions/checkout@v6
+        with:
+          repository: moritzbrantner/editor-core
+          ref: refactor/narrow-editor-kernel
+          path: editor-core
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Verify against exact narrowed core source
+        working-directory: graph-editor
+        env:
+          EDITOR_CORE_SOURCE: ${{ github.workspace }}/editor-core
+        run: bun run verify:source
+      - name: Verify against frozen published core dependency
+        working-directory: graph-editor
+        run: bun run verify:registry
