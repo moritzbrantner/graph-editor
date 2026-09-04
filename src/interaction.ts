@@ -1,7 +1,3 @@
-import {
-  createEditorInteractionSession,
-  type EditorInteractionState,
-} from "@moritzbrantner/editor-core/interaction";
 import type { EditorEntityId, EditorPoint } from "@moritzbrantner/editor-core/entities";
 
 import {
@@ -13,7 +9,7 @@ import { createGraphEditorMoveNodesOperation, type GraphEditorOperation } from "
 import { applyGraphEditorOperation, type GraphEditorRuntimeState } from "./runtime";
 
 export type GraphEditorInteractionState =
-  | EditorInteractionState
+  | { kind: "idle" }
   | {
       kind: "graph-moving-nodes";
       nodeIds: readonly EditorEntityId[];
@@ -54,7 +50,12 @@ export function createGraphEditorInteractionSession<
 >(
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorInteractionSession<TNodeData, TEdgeData, TPortType> {
-  return createEditorInteractionSession(normalizeGraphEditorDocument(document));
+  const normalizedDocument = normalizeGraphEditorDocument(document);
+  return {
+    committedDocument: normalizedDocument,
+    previewDocument: normalizedDocument,
+    state: { kind: "idle" },
+  };
 }
 
 export function beginGraphEditorMoveInteraction<
@@ -102,7 +103,7 @@ export function cancelGraphEditorInteraction<
 >(
   session: GraphEditorInteractionSession<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorInteractionSession<TNodeData, TEdgeData, TPortType> {
-  return createEditorInteractionSession(session.committedDocument);
+  return createGraphEditorInteractionSession(session.committedDocument);
 }
 
 export function commitGraphEditorInteraction<
@@ -112,7 +113,7 @@ export function commitGraphEditorInteraction<
 >(
   session: GraphEditorInteractionSession<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorInteractionSession<TNodeData, TEdgeData, TPortType> {
-  return createEditorInteractionSession(session.previewDocument);
+  return createGraphEditorInteractionSession(session.previewDocument);
 }
 
 export function commitGraphEditorInteractionOperation<
