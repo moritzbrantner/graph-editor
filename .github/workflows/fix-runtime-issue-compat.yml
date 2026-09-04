@@ -45,8 +45,8 @@ jobs:
             'options: { clearOperationHistory?: boolean } = {},',
             'options: { clearIssues?: boolean; clearOperationHistory?: boolean } = {},',
           )
-          old = '''    mutable.issues = [];\n    mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
-          new = '''    mutable.issues = options.clearIssues ? [] : state.issues;\n    mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
+          old = '''  mutable.issues = [];\n  mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
+          new = '''  mutable.issues = options.clearIssues ? [] : state.issues;\n  mutable.lastMergeKey = options.clearOperationHistory ? null : state.lastMergeKey;'''
           assert text.count(old) == 1
           compat.write_text(text.replace(old, new))
 
