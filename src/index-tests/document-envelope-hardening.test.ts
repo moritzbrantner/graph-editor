@@ -14,6 +14,8 @@ describe("graph document envelope hardening", () => {
       groups: { id: "not-an-array" },
       viewport: { x: "bad", y: Number.NaN, zoom: Number.POSITIVE_INFINITY },
     };
+    const normalizeMalformed = () =>
+      normalizeGraphEditorDocument(malformed as unknown as GraphEditorDocument);
 
     const diagnostics = validateGraphEditorDocument(malformed);
 
@@ -29,9 +31,7 @@ describe("graph document envelope hardening", () => {
       "$.viewport.y",
       "$.viewport.zoom",
     ]);
-    expect(() =>
-      normalizeGraphEditorDocument(malformed as unknown as GraphEditorDocument),
-    ).toThrow("Graph document is invalid");
+    expect(normalizeMalformed).toThrow("Graph document is invalid");
   });
 
   test("repairs malformed optional envelope fields to a valid document", () => {
