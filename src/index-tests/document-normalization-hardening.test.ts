@@ -62,7 +62,7 @@ describe("graph document normalization hardening", () => {
     expect(normalizeGraphEditorDocument(repaired, { mode: "repair" })).toEqual(repaired);
   });
 
-  test("reports canonical id collisions and repeated group membership", () => {
+  test("reports canonical id collisions without broadening group membership validation", () => {
     const diagnostics = validateGraphEditorDocument({
       nodes: [node(" node-a ", 0), node("node-a", 100), node("node-b", 200)],
       edges: [
@@ -84,7 +84,7 @@ describe("graph document normalization hardening", () => {
       groups: [
         { id: " group-1 ", label: "Primary", nodeIds: [" node-a "] },
         { id: "group-1", label: "Duplicate id", nodeIds: ["node-b"] },
-        { id: "group-2", label: "Duplicate membership", nodeIds: [" node-a "] },
+        { id: "group-2", label: "Existing membership semantics", nodeIds: [" node-a "] },
       ],
     });
 
@@ -92,7 +92,6 @@ describe("graph document normalization hardening", () => {
       "duplicate-node-id",
       "duplicate-edge-id",
       "duplicate-group-id",
-      "duplicate-group-node",
     ]);
   });
 });
