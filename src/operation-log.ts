@@ -69,6 +69,24 @@ export type GraphEditorSerializedOperationPayload<
   | { type: "graph.duplicate-selection"; unsupported: true; reason?: string }
   | { type: "graph.paste"; unsupported: true; reason?: string };
 
+const graphEditorOperationTypes = {
+  "graph.add-node": true,
+  "graph.update-node": true,
+  "graph.move-nodes": true,
+  "graph.remove-selection": true,
+  "graph.add-edge": true,
+  "graph.update-edge": true,
+  "graph.remove-edge": true,
+  "graph.create-group": true,
+  "graph.ungroup": true,
+  "graph.layout": true,
+  "graph.update-viewport": true,
+  "graph.replace-document": true,
+  "graph.patch": true,
+  "graph.duplicate-selection": true,
+  "graph.paste": true,
+} satisfies Record<GraphEditorSerializedOperationPayload["type"], true>;
+
 export type GraphEditorSerializedOperation<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,
@@ -118,9 +136,9 @@ export const graphEditorOperationLogAdapter: EditorOperationLogAdapter<GraphEdit
           { path: joinPath(path, "id"), message: "Operation id is required." },
         ]);
       }
-      if (typeof operation.type !== "string" || !operation.type.startsWith("graph.")) {
+      if (typeof operation.type !== "string" || graphEditorOperationTypes[operation.type] !== true) {
         throw new EditorJsonParseError([
-          { path: joinPath(path, "type"), message: "Graph operation type is required." },
+          { path: joinPath(path, "type"), message: "Graph operation type is unsupported." },
         ]);
       }
       if (!isRecord(operation.payload) || operation.payload.type !== operation.type) {
@@ -284,11 +302,13 @@ export function graphEditorOperationFromSerializedOperation<
     case "graph.duplicate-selection":
     case "graph.paste":
       throw new Error(`${payload.type} cannot be replayed without materialized generated ids.`);
+    default:
+      throw new Error("Unsupported graph operation type.");
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function joinPath(root: string, segment: string) {
