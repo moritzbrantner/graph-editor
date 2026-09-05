@@ -138,6 +138,7 @@ export type GraphEditorDocumentDiagnosticCode =
   | "invalid-document"
   | "invalid-node"
   | "invalid-edge"
+  | "invalid-viewport"
   | "duplicate-node-id"
   | "duplicate-edge-id"
   | "duplicate-group-id"

@@ -35,6 +35,14 @@ export function validateGraphEditorDocument(
       path: "$.edges",
     });
   }
+  if (value.groups !== undefined && !Array.isArray(value.groups)) {
+    diagnostics.push({
+      code: "invalid-group",
+      message: "Graph document groups must be an array",
+      path: "$.groups",
+    });
+  }
+  validateGraphEditorViewport(value.viewport, diagnostics);
   if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
     return diagnostics;
   }
@@ -280,4 +288,31 @@ export function validateGraphEditorDocument(
   }
 
   return diagnostics;
+}
+
+function validateGraphEditorViewport(
+  viewport: unknown,
+  diagnostics: GraphEditorDocumentDiagnostic[],
+) {
+  if (viewport === undefined) {
+    return;
+  }
+  if (!isRecord(viewport)) {
+    diagnostics.push({
+      code: "invalid-viewport",
+      message: "Graph viewport must be an object",
+      path: "$.viewport",
+    });
+    return;
+  }
+
+  for (const field of ["x", "y", "zoom"] as const) {
+    if (!Number.isFinite(viewport[field])) {
+      diagnostics.push({
+        code: "invalid-viewport",
+        message: `Graph viewport ${field} must be a finite number`,
+        path: `$.viewport.${field}`,
+      });
+    }
+  }
 }
