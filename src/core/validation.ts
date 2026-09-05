@@ -202,7 +202,6 @@ export function validateGraphEditorDocument(
   });
 
   const groupIds = new Set<string>();
-  const assignedGroupNodeIds = new Set<string>();
   (Array.isArray(value.groups) ? value.groups : []).forEach((group, index) => {
     const path = `$.groups[${index}]`;
     if (!isRecord(group)) {
@@ -255,10 +254,10 @@ export function validateGraphEditorDocument(
         return;
       }
       const canonicalNodeId = nodeId.trim();
-      if (groupNodeIds.has(canonicalNodeId) || assignedGroupNodeIds.has(canonicalNodeId)) {
+      if (groupNodeIds.has(canonicalNodeId)) {
         diagnostics.push({
           code: "duplicate-group-node",
-          message: `Graph node belongs to more than one group membership: ${canonicalNodeId}`,
+          message: `Graph group contains duplicate node: ${canonicalNodeId}`,
           path: `${path}.nodeIds[${nodeIndex}]`,
           groupId,
           nodeId: canonicalNodeId,
@@ -266,7 +265,6 @@ export function validateGraphEditorDocument(
         return;
       }
       groupNodeIds.add(canonicalNodeId);
-      assignedGroupNodeIds.add(canonicalNodeId);
     });
   });
 
