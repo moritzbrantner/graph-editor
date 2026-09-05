@@ -40,6 +40,7 @@ export function validateGraphEditorDocument(
   }
 
   const nodeIds = new Set<string>();
+  const canonicalNodeIds = new Set<string>();
   const validInputPortIdsByNodeId = new Map<string, Set<string>>();
   const validOutputPortIdsByNodeId = new Map<string, Set<string>>();
   value.nodes.forEach((node, index) => {
@@ -49,23 +50,25 @@ export function validateGraphEditorDocument(
       return;
     }
     const nodeId = typeof node.id === "string" ? node.id : undefined;
-    if (!nodeId?.trim()) {
+    const canonicalNodeId = nodeId?.trim();
+    if (!canonicalNodeId) {
       diagnostics.push({
         code: "invalid-node",
         message: "Graph node id must be a non-empty string",
         path: `${path}.id`,
       });
-    } else if (nodeIds.has(nodeId)) {
+    } else if (canonicalNodeIds.has(canonicalNodeId)) {
       diagnostics.push({
         code: "duplicate-node-id",
-        message: `Duplicate graph node id: ${nodeId}`,
+        message: `Duplicate graph node id: ${canonicalNodeId}`,
         path: `${path}.id`,
-        nodeId,
+        nodeId: canonicalNodeId,
       });
     } else {
-      nodeIds.add(nodeId);
+      canonicalNodeIds.add(canonicalNodeId);
     }
-    if (nodeId) {
+    if (nodeId?.trim()) {
+      nodeIds.add(nodeId);
       if (Array.isArray(node.inputs)) {
         validInputPortIdsByNodeId.set(
           nodeId,
@@ -121,25 +124,26 @@ export function validateGraphEditorDocument(
       return;
     }
     const edgeId = typeof edge.id === "string" ? edge.id : undefined;
+    const canonicalEdgeId = edgeId?.trim();
     const sourceNodeId = typeof edge.sourceNodeId === "string" ? edge.sourceNodeId : undefined;
     const targetNodeId = typeof edge.targetNodeId === "string" ? edge.targetNodeId : undefined;
     const sourcePortId = typeof edge.sourcePortId === "string" ? edge.sourcePortId : undefined;
     const targetPortId = typeof edge.targetPortId === "string" ? edge.targetPortId : undefined;
-    if (!edgeId?.trim()) {
+    if (!canonicalEdgeId) {
       diagnostics.push({
         code: "invalid-edge",
         message: "Graph edge id must be a non-empty string",
         path: `${path}.id`,
       });
-    } else if (edgeIds.has(edgeId)) {
+    } else if (edgeIds.has(canonicalEdgeId)) {
       diagnostics.push({
         code: "duplicate-edge-id",
-        message: `Duplicate graph edge id: ${edgeId}`,
+        message: `Duplicate graph edge id: ${canonicalEdgeId}`,
         path: `${path}.id`,
-        edgeId,
+        edgeId: canonicalEdgeId,
       });
     } else {
-      edgeIds.add(edgeId);
+      edgeIds.add(canonicalEdgeId);
     }
     if (!sourceNodeId || !nodeIds.has(sourceNodeId)) {
       diagnostics.push({
@@ -205,21 +209,22 @@ export function validateGraphEditorDocument(
       return;
     }
     const groupId = typeof group.id === "string" ? group.id : undefined;
-    if (!groupId?.trim()) {
+    const canonicalGroupId = groupId?.trim();
+    if (!canonicalGroupId) {
       diagnostics.push({
         code: "invalid-group",
         message: "Graph group id must be a non-empty string",
         path: `${path}.id`,
       });
-    } else if (groupIds.has(groupId)) {
+    } else if (groupIds.has(canonicalGroupId)) {
       diagnostics.push({
         code: "duplicate-group-id",
-        message: `Duplicate graph group id: ${groupId}`,
+        message: `Duplicate graph group id: ${canonicalGroupId}`,
         path: `${path}.id`,
-        groupId,
+        groupId: canonicalGroupId,
       });
     } else {
-      groupIds.add(groupId);
+      groupIds.add(canonicalGroupId);
     }
     if (typeof group.label !== "string") {
       diagnostics.push({
@@ -248,17 +253,18 @@ export function validateGraphEditorDocument(
         });
         return;
       }
-      if (groupNodeIds.has(nodeId)) {
+      const canonicalNodeId = nodeId.trim();
+      if (groupNodeIds.has(canonicalNodeId)) {
         diagnostics.push({
           code: "duplicate-group-node",
-          message: `Graph group contains duplicate node: ${nodeId}`,
+          message: `Graph group contains duplicate node: ${canonicalNodeId}`,
           path: `${path}.nodeIds[${nodeIndex}]`,
           groupId,
-          nodeId,
+          nodeId: canonicalNodeId,
         });
         return;
       }
-      groupNodeIds.add(nodeId);
+      groupNodeIds.add(canonicalNodeId);
     });
   });
 
