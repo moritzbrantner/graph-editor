@@ -62,6 +62,20 @@ describe("graph document normalization hardening", () => {
     expect(normalizeGraphEditorDocument(repaired, { mode: "repair" })).toEqual(repaired);
   });
 
+  test("drops a group collection when every group is rejected", () => {
+    const repaired = normalizeGraphEditorDocument(
+      {
+        nodes: [node("node-a", 0)],
+        edges: [],
+        groups: [{ id: "   ", label: "Invalid", nodeIds: ["node-a"] }],
+      },
+      { mode: "repair" },
+    );
+
+    expect(repaired.groups).toBeUndefined();
+    expect(validateGraphEditorDocument(repaired)).toEqual([]);
+  });
+
   test("reports canonical id collisions without broadening group membership validation", () => {
     const diagnostics = validateGraphEditorDocument({
       nodes: [node(" node-a ", 0), node("node-a", 100), node("node-b", 200)],
