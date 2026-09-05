@@ -85,12 +85,10 @@ export function normalizeGraphEditorDocument<
     return [normalizedEdge];
   });
   const groups = normalizeGraphEditorGroups(document.groups, nodeIds);
-
-  return {
+  const normalizedDocument = {
     ...document,
     nodes,
     edges,
-    ...(groups.length > 0 ? { groups } : {}),
     viewport: document.viewport
       ? {
           ...createEditorViewportState({
@@ -102,6 +100,13 @@ export function normalizeGraphEditorDocument<
         }
       : undefined,
   };
+
+  if (groups.length > 0) {
+    normalizedDocument.groups = groups;
+  } else {
+    delete normalizedDocument.groups;
+  }
+  return normalizedDocument;
 }
 
 function normalizeGraphEditorGroups(
