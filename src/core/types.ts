@@ -180,20 +180,42 @@ export type GraphEditorConnectionValidationOptions<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 > = {
-  isPortTypeCompatible?: (input: {
-    sourceNode: GraphEditorNode<TNodeData, TPortType>;
-    sourcePort: GraphEditorPort<TPortType>;
-    targetNode: GraphEditorNode<TNodeData, TPortType>;
-    targetPort: GraphEditorPort<TPortType>;
-  }) => boolean;
-  isPortKindCompatible?: (input: {
-    sourceNode: GraphEditorNode<TNodeData, TPortType>;
-    sourcePort: GraphEditorPort<TPortType>;
-    targetNode: GraphEditorNode<TNodeData, TPortType>;
-    targetPort: GraphEditorPort<TPortType>;
-  }) => boolean;
   allowCycles?: boolean;
   allowDuplicateEdges?: boolean;
-  allowMultipleInputConnections?: boolean;
+  allowOccupiedInputs?: boolean;
   allowSelfConnections?: boolean;
+  ignoreEdgeId?: string;
+  arePortsCompatible?: (
+    sourcePort: GraphEditorPort<TPortType>,
+    targetPort: GraphEditorPort<TPortType>,
+    context: GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType>,
+  ) => GraphEditorConnectionValidity | boolean;
+};
+
+export type GraphEditorDocumentContext<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+> = {
+  nodeById: ReadonlyMap<EditorEntityId, GraphEditorNode<TNodeData, TPortType>>;
+  edgeById: ReadonlyMap<EditorEntityId, GraphEditorEdge<TEdgeData>>;
+  adjacencyByNodeId: ReadonlyMap<EditorEntityId, readonly EditorEntityId[]>;
+  incomingEdgesByNodeId: ReadonlyMap<EditorEntityId, readonly GraphEditorEdge<TEdgeData>[]>;
+  outgoingEdgesByNodeId: ReadonlyMap<EditorEntityId, readonly GraphEditorEdge<TEdgeData>[]>;
+  getInputPort(nodeId: string, portId: string): GraphEditorPort<TPortType> | null;
+  getOutputPort(nodeId: string, portId: string): GraphEditorPort<TPortType> | null;
+  getIncomingEdgeToPort(nodeId: string, portId: string): GraphEditorEdge<TEdgeData> | null;
+  canReach(sourceNodeId: string, targetNodeId: string): boolean;
+};
+
+export type GraphEditorDuplicateNodeOptions = {
+  offsetX?: number;
+  offsetY?: number;
+  createId?: (baseId: string, existingIds: ReadonlySet<string>) => string;
+};
+
+export type GraphEditorCreateGroupOptions = {
+  id?: string;
+  label?: string;
+  nodeIds: readonly string[];
 };
