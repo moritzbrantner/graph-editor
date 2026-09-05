@@ -25,45 +25,64 @@ export function normalizeGraphEditorDocument<
     throw new GraphEditorDocumentValidationError(diagnostics);
   }
 
+  const seenNodeIds = new Set<string>();
   const nodes = Array.isArray(document.nodes)
-    ? document.nodes.flatMap((node) =>
-        isRecord(node)
-          ? [
-              {
-                ...node,
-                id: String(node.id ?? "").trim(),
-                label: typeof node.label === "string" ? node.label : "",
-                x: Number.isFinite(node.x) ? Number(node.x) : 0,
-                y: Number.isFinite(node.y) ? Number(node.y) : 0,
-              } as GraphEditorNode<TNodeData, TPortType>,
-            ]
-          : [],
-      )
+    ? document.nodes.flatMap((node) => {
+        if (!isRecord(node)) {
+          return [];
+        }
+        const id = String(node.id ?? "").trim();
+        if (!id || seenNodeIds.has(id)) {
+          return [];
+        }
+        seenNodeIds.add(id);
+        return [
+          {
+            ...node,
+            id,
+            label: typeof node.label === "string" ? node.label : "",
+            x: Number.isFinite(node.x) ? Number(node.x) : 0,
+            y: Number.isFinite(node.y) ? Number(node.y) : 0,
+          } as GraphEditorNode<TNodeData, TPortType>,
+        ];
+      })
     : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const seenEdgeIds = new Set<string>();
   const edges = (Array.isArray(document.edges) ? document.edges : []).flatMap((edge) => {
-    if (!isRecord(edge) || typeof edge.id !== "string" || seenEdgeIds.has(edge.id)) {
+    if (!isRecord(edge) || typeof edge.id !== "string") {
+      return [];
+    }
+    const id = edge.id.trim();
+    const sourceNodeId = typeof edge.sourceNodeId === "string" ? edge.sourceNodeId.trim() : "";
+    const targetNodeId = typeof edge.targetNodeId === "string" ? edge.targetNodeId.trim() : "";
+    if (!id || seenEdgeIds.has(id)) {
       return [];
     }
     if (
-      typeof edge.sourceNodeId !== "string" ||
-      typeof edge.targetNodeId !== "string" ||
-      !nodeIds.has(edge.sourceNodeId) ||
-      !nodeIds.has(edge.targetNodeId) ||
-      (!options.allowSelfEdges && edge.sourceNodeId === edge.targetNodeId)
+      !sourceNodeId ||
+      !targetNodeId ||
+      !nodeIds.has(sourceNodeId) ||
+      !nodeIds.has(targetNodeId) ||
+      (!options.allowSelfEdges && sourceNodeId === targetNodeId)
     ) {
       return [];
     }
+    const normalizedEdge = {
+      ...edge,
+      id,
+      sourceNodeId,
+      targetNodeId,
+    } as GraphEditorEdge<TEdgeData>;
     if (
       !options.allowMissingDeclaredPorts &&
-      !graphEditorEdgeReferencesDeclaredPorts(edge as GraphEditorEdge<TEdgeData>, nodeById)
+      !graphEditorEdgeReferencesDeclaredPorts(normalizedEdge, nodeById)
     ) {
       return [];
     }
-    seenEdgeIds.add(edge.id);
-    return [edge as GraphEditorEdge<TEdgeData>];
+    seenEdgeIds.add(id);
+    return [normalizedEdge];
   });
   const groups = normalizeGraphEditorGroups(document.groups, nodeIds);
 
@@ -92,23 +111,32 @@ function normalizeGraphEditorGroups(
   const seenGroupIds = new Set<string>();
   const seenNodeIds = new Set<string>();
   return (Array.isArray(groups) ? groups : []).flatMap((group) => {
-    if (!isRecord(group) || typeof group.id !== "string" || seenGroupIds.has(group.id)) {
+    if (!isRecord(group) || typeof group.id !== "string") {
       return [];
     }
-    const groupNodeIds = orderedUnique(
-      [...nodeIds],
-      Array.isArray(group.nodeIds) ? group.nodeIds : [],
-    ).filter((nodeId) => !seenNodeIds.has(nodeId));
+    const id = group.id.trim();
+    if (!id || seenGroupIds.has(id)) {
+      return [];
+    }
+    const requestedNodeIds = Array.isArray(group.nodeIds)
+      ? group.nodeIds.flatMap((nodeId) =>
+          typeof nodeId === "string" && nodeId.trim() ? [nodeId.trim()] : [],
+        )
+      : [];
+    const groupNodeIds = orderedUnique([...nodeIds], requestedNodeIds).filter(
+      (nodeId) => !seenNodeIds.has(nodeId),
+    );
     for (const nodeId of groupNodeIds) {
       seenNodeIds.add(nodeId);
     }
     if (groupNodeIds.length === 0) {
       return [];
     }
-    seenGroupIds.add(group.id);
+    seenGroupIds.add(id);
     return [
       {
         ...group,
+        id,
         label: typeof group.label === "string" ? group.label : "Group",
         nodeIds: groupNodeIds,
       } as GraphEditorGroup,
