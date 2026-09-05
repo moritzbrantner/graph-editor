@@ -136,7 +136,10 @@ export const graphEditorOperationLogAdapter: EditorOperationLogAdapter<GraphEdit
           { path: joinPath(path, "id"), message: "Operation id is required." },
         ]);
       }
-      if (typeof operation.type !== "string" || graphEditorOperationTypes[operation.type] !== true) {
+      if (
+        typeof operation.type !== "string" ||
+        graphEditorOperationTypes[operation.type] !== true
+      ) {
         throw new EditorJsonParseError([
           { path: joinPath(path, "type"), message: "Graph operation type is unsupported." },
         ]);
