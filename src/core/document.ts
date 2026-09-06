@@ -22,7 +22,7 @@ export function normalizeGraphEditorDocument<
 ): GraphEditorDocument<TNodeData, TEdgeData, TPortType> {
   const mode = options.mode ?? "strict";
   const diagnostics = validateGraphEditorDocument(document, options);
-  if (mode === "strict" && diagnostics.length > 0) {
+  if (!isRecord(document) || (mode === "strict" && diagnostics.length > 0)) {
     throw new GraphEditorDocumentValidationError(diagnostics);
   }
 
