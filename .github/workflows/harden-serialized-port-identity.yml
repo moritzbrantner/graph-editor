@@ -1,0 +1,77 @@
+name: Harden serialized port identity
+
+on:
+  push:
+    branches:
+      - harden/serialized-port-identity
+    paths:
+      - .github/workflows/harden-serialized-port-identity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: harden/serialized-port-identity
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - name: Reject canonical duplicate ports
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/operation-log.ts')
+          text = path.read_text()
+          old = '''function assertGraphEditorPortArrayShape(value: unknown, path: string) {
+            if (!Array.isArray(value)) {
+              throwParseIssue(path, "Node ports must be an array.");
+            }
+            value.forEach((portValue, index) => {
+              const portPath = `${path}.${index}`;
+              const port = requireRecord(portValue, portPath, "Port");
+              requireNonEmptyString(port.id, joinPath(portPath, "id"), "Port id");
+              if (typeof port.label !== "string") {
+                throwParseIssue(joinPath(portPath, "label"), "Port label must be a string.");
+              }
+            });
+          }'''.replace('          ', '')
+          new = '''function assertGraphEditorPortArrayShape(value: unknown, path: string) {
+            if (!Array.isArray(value)) {
+              throwParseIssue(path, "Node ports must be an array.");
+            }
+            const canonicalPortIds = new Set<string>();
+            value.forEach((portValue, index) => {
+              const portPath = `${path}.${index}`;
+              const port = requireRecord(portValue, portPath, "Port");
+              const portIdPath = joinPath(portPath, "id");
+              requireNonEmptyString(port.id, portIdPath, "Port id");
+              const canonicalPortId = String(port.id).trim();
+              if (canonicalPortIds.has(canonicalPortId)) {
+                throwParseIssue(portIdPath, `Duplicate port id: ${canonicalPortId}.`);
+              }
+              canonicalPortIds.add(canonicalPortId);
+              if (typeof port.label !== "string") {
+                throwParseIssue(joinPath(portPath, "label"), "Port label must be a string.");
+              }
+            });
+          }'''.replace('          ', '')
+          if old not in text:
+              raise SystemExit('expected port validator block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          bun run format
+      - name: Commit hardening
+        run: |
+          rm .github/workflows/harden-serialized-port-identity.yml
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/operation-log.ts src/index-tests/serialized-port-identity.test.ts .github/workflows/harden-serialized-port-identity.yml
+          git commit -m "fix: reject duplicate serialized port ids"
+          git push origin HEAD:harden/serialized-port-identity
