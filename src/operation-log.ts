@@ -463,7 +463,11 @@ function assertGraphEditorSelectionShape(value: unknown, path: string) {
     requireStringArray(selection.groupIds, joinPath(path, "groupIds"), "Selection group ids");
   }
   if (selection.primary !== undefined) {
-    const primary = requireRecord(selection.primary, joinPath(path, "primary"), "Primary selection");
+    const primary = requireRecord(
+      selection.primary,
+      joinPath(path, "primary"),
+      "Primary selection",
+    );
     if (primary.type !== "node" && primary.type !== "edge" && primary.type !== "group") {
       throwParseIssue(
         joinPath(joinPath(path, "primary"), "type"),
@@ -486,7 +490,11 @@ function assertGraphEditorLayoutOptionsShape(value: unknown, path: string) {
   if (options.nodeIds !== undefined) {
     requireStringArray(options.nodeIds, joinPath(path, "nodeIds"), "Layout node ids");
   }
-  if (options.direction !== undefined && options.direction !== "right" && options.direction !== "down") {
+  if (
+    options.direction !== undefined &&
+    options.direction !== "right" &&
+    options.direction !== "down"
+  ) {
     throwParseIssue(joinPath(path, "direction"), "Layout direction is unsupported.");
   }
   for (const field of [
@@ -555,7 +563,10 @@ function assertGraphEditorPatchShape(value: unknown, path: string) {
           (typeof segment === "number" && !Number.isFinite(segment)),
       )
     ) {
-      throwParseIssue(joinPath(operationPath, "path"), "Patch path must contain strings or numbers.");
+      throwParseIssue(
+        joinPath(operationPath, "path"),
+        "Patch path must contain strings or numbers.",
+      );
     }
     if ((operation.op === "add" || operation.op === "replace") && !("value" in operation)) {
       throwParseIssue(joinPath(operationPath, "value"), "Patch operation value is required.");
@@ -592,10 +603,7 @@ function requireNonEmptyString(value: unknown, path: string, label: string) {
 }
 
 function requireStringArray(value: unknown, path: string, label: string) {
-  if (
-    !Array.isArray(value) ||
-    value.some((item) => typeof item !== "string" || !item.trim())
-  ) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
     throwParseIssue(path, `${label} must be an array of non-empty strings.`);
   }
 }

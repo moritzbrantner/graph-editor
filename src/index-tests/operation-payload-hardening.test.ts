@@ -119,9 +119,7 @@ describe("graph operation payload hardening", () => {
     };
 
     expect(
-      readGraphEditorOperationLog(
-        operationLogEnvelope("graph.replace-document", { document }),
-      ),
+      readGraphEditorOperationLog(operationLogEnvelope("graph.replace-document", { document })),
     ).toHaveLength(1);
   });
 });
