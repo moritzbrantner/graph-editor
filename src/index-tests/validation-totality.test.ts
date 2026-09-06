@@ -52,11 +52,7 @@ describe("graph document validation totality", () => {
 
   test("keeps cycle policy independent from malformed-record diagnostics", () => {
     const document = {
-      nodes: [
-        null,
-        { id: "a", label: "A", x: 0, y: 0 },
-        { id: "b", label: "B", x: 240, y: 0 },
-      ],
+      nodes: [null, { id: "a", label: "A", x: 0, y: 0 }, { id: "b", label: "B", x: 240, y: 0 }],
       edges: [
         {
           id: "a-b",
