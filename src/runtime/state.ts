@@ -39,18 +39,31 @@ export function resolveGraphEditorOperation<
   GraphEditorSelectionState
 > {
   const before = state.document;
-  const after = operation.apply(before);
   const selectionBefore = operation.selectionBefore ?? state.selection;
-  const selectionAfter =
-    operation.getSelectionAfter?.(before, after) ?? operation.selectionAfter ?? state.selection;
+  let after: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
+  try {
+    after = operation.apply(before);
+  } catch {
+    return {
+      ...operation,
+      selectionBefore,
+      selectionAfter: operation.selectionAfter ?? state.selection,
+    };
+  }
+
+  const canNormalizeSelection = canNormalizeGraphEditorSelection(after);
+  const selectionAfter = canNormalizeSelection
+    ? (operation.getSelectionAfter?.(before, after) ?? operation.selectionAfter ?? state.selection)
+    : (operation.selectionAfter ?? state.selection);
 
   return {
     ...operation,
     apply: (document) => (document === before ? after : operation.apply(document)),
     selectionBefore,
-    selectionAfter: selectionAfter
-      ? normalizeGraphEditorSelection(after, selectionAfter)
-      : { nodeIds: [], edgeIds: [] },
+    selectionAfter:
+      selectionAfter && canNormalizeSelection
+        ? normalizeGraphEditorSelection(after, selectionAfter)
+        : state.selection,
   };
 }
 
@@ -110,6 +123,31 @@ export function withGraphEditorRuntimeState<
   });
   runtimeOptionsByState.set(graphState, options);
   return graphState;
+}
+
+function canNormalizeGraphEditorSelection(document: unknown): document is GraphEditorDocument {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) {
+    return false;
+  }
+  const record = document as Record<string, unknown>;
+  return (
+    isGraphEditorEntityCollection(record.nodes) &&
+    isGraphEditorEntityCollection(record.edges) &&
+    (record.groups === undefined || isGraphEditorEntityCollection(record.groups))
+  );
+}
+
+function isGraphEditorEntityCollection(value: unknown) {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entity) =>
+        typeof entity === "object" &&
+        entity !== null &&
+        !Array.isArray(entity) &&
+        typeof (entity as Record<string, unknown>).id === "string",
+    )
+  );
 }
 
 function getGraphEditorSelectedDiagnostics(
