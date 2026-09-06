@@ -73,7 +73,7 @@ describe("graph patch root hardening", () => {
   test("runtime preflight also handles malformed custom operation candidates", () => {
     const runtime = createGraphEditorRuntime({ initialDocument: createDocument() });
     const invalidOperation: GraphEditorOperation = {
-      id: "graph.invalid-candidate",
+      id: "graph.patch",
       label: "Invalid candidate",
       apply: () => null as unknown as GraphEditorDocument,
     };
