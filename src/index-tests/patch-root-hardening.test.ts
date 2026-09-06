@@ -50,9 +50,7 @@ describe("graph patch root hardening", () => {
 
   test("public patch application fails closed on a non-object root replacement", () => {
     expect(() =>
-      applyGraphEditorDocumentPatch(createDocument(), [
-        { op: "replace", path: [], value: null },
-      ]),
+      applyGraphEditorDocumentPatch(createDocument(), [{ op: "replace", path: [], value: null }]),
     ).toThrow(GraphEditorDocumentValidationError);
   });
 
