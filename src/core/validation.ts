@@ -77,26 +77,27 @@ export function validateGraphEditorDocument(
     }
     if (nodeId?.trim()) {
       nodeIds.add(nodeId);
-      if (Array.isArray(node.inputs)) {
-        validInputPortIdsByNodeId.set(
-          nodeId,
-          new Set(
-            node.inputs.flatMap((port) =>
-              isRecord(port) && typeof port.id === "string" ? [port.id] : [],
-            ),
-          ),
-        );
+      const inputPortIds = validateGraphEditorPorts(
+        node.inputs,
+        `${path}.inputs`,
+        nodeId,
+        diagnostics,
+      );
+      const outputPortIds = validateGraphEditorPorts(
+        node.outputs,
+        `${path}.outputs`,
+        nodeId,
+        diagnostics,
+      );
+      if (inputPortIds) {
+        validInputPortIdsByNodeId.set(nodeId, inputPortIds);
       }
-      if (Array.isArray(node.outputs)) {
-        validOutputPortIdsByNodeId.set(
-          nodeId,
-          new Set(
-            node.outputs.flatMap((port) =>
-              isRecord(port) && typeof port.id === "string" ? [port.id] : [],
-            ),
-          ),
-        );
+      if (outputPortIds) {
+        validOutputPortIdsByNodeId.set(nodeId, outputPortIds);
       }
+    } else {
+      validateGraphEditorPorts(node.inputs, `${path}.inputs`, nodeId, diagnostics);
+      validateGraphEditorPorts(node.outputs, `${path}.outputs`, nodeId, diagnostics);
     }
     if (typeof node.label !== "string") {
       diagnostics.push({
@@ -169,6 +170,26 @@ export function validateGraphEditorDocument(
         path: `${path}.targetNodeId`,
         edgeId,
         targetNodeId,
+      });
+    }
+    if (!sourcePortId?.trim()) {
+      diagnostics.push({
+        code: "invalid-edge",
+        message: "Graph edge source port id must be a non-empty string",
+        path: `${path}.sourcePortId`,
+        edgeId,
+        sourceNodeId,
+        sourcePortId,
+      });
+    }
+    if (!targetPortId?.trim()) {
+      diagnostics.push({
+        code: "invalid-edge",
+        message: "Graph edge target port id must be a non-empty string",
+        path: `${path}.targetPortId`,
+        edgeId,
+        targetNodeId,
+        targetPortId,
       });
     }
     if (!options.allowMissingDeclaredPorts && sourceNodeId && nodeIds.has(sourceNodeId)) {
@@ -288,6 +309,70 @@ export function validateGraphEditorDocument(
   }
 
   return diagnostics;
+}
+
+function validateGraphEditorPorts(
+  ports: unknown,
+  path: string,
+  nodeId: string | undefined,
+  diagnostics: GraphEditorDocumentDiagnostic[],
+): Set<string> | undefined {
+  if (ports === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(ports)) {
+    diagnostics.push({
+      code: "invalid-port",
+      message: "Graph node ports must be an array",
+      path,
+      nodeId,
+    });
+    return new Set();
+  }
+
+  const portIds = new Set<string>();
+  const canonicalPortIds = new Set<string>();
+  ports.forEach((port, index) => {
+    const portPath = `${path}[${index}]`;
+    if (!isRecord(port)) {
+      diagnostics.push({
+        code: "invalid-port",
+        message: "Graph port must be an object",
+        path: portPath,
+        nodeId,
+      });
+      return;
+    }
+    const portId = typeof port.id === "string" ? port.id : undefined;
+    const canonicalPortId = portId?.trim();
+    if (!canonicalPortId) {
+      diagnostics.push({
+        code: "invalid-port",
+        message: "Graph port id must be a non-empty string",
+        path: `${portPath}.id`,
+        nodeId,
+      });
+    } else if (canonicalPortIds.has(canonicalPortId)) {
+      diagnostics.push({
+        code: "duplicate-port-id",
+        message: `Duplicate graph port id: ${canonicalPortId}`,
+        path: `${portPath}.id`,
+        nodeId,
+      });
+    } else {
+      canonicalPortIds.add(canonicalPortId);
+      portIds.add(portId!);
+    }
+    if (typeof port.label !== "string") {
+      diagnostics.push({
+        code: "invalid-port",
+        message: "Graph port label must be a string",
+        path: `${portPath}.label`,
+        nodeId,
+      });
+    }
+  });
+  return portIds;
 }
 
 function validateGraphEditorViewport(

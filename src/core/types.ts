@@ -137,9 +137,11 @@ export type GraphEditorConnectionValidity = {
 export type GraphEditorDocumentDiagnosticCode =
   | "invalid-document"
   | "invalid-node"
+  | "invalid-port"
   | "invalid-edge"
   | "invalid-viewport"
   | "duplicate-node-id"
+  | "duplicate-port-id"
   | "duplicate-edge-id"
   | "duplicate-group-id"
   | "duplicate-group-node"
