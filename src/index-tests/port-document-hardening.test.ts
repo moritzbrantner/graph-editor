@@ -97,9 +97,7 @@ describe("graph port document hardening", () => {
     expect(repaired.nodes[0]?.outputs).toEqual([
       expect.objectContaining({ id: "out", label: "Out" }),
     ]);
-    expect(repaired.nodes[1]?.inputs).toEqual([
-      expect.objectContaining({ id: "in", label: "" }),
-    ]);
+    expect(repaired.nodes[1]?.inputs).toEqual([expect.objectContaining({ id: "in", label: "" })]);
     expect(repaired.edges).toEqual([
       expect.objectContaining({
         id: "edge",
