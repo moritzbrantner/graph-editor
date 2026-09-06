@@ -537,10 +537,11 @@ function assertGraphEditorDocumentShape(value: unknown, path: string) {
       })),
     );
   }
-  for (const [index, node] of document.nodes.entries()) {
+  const graphDocument = document as unknown as GraphEditorDocument;
+  for (const [index, node] of graphDocument.nodes.entries()) {
     assertGraphEditorNodeShape(node, `${joinPath(path, "nodes")}.${index}`);
   }
-  for (const [index, edge] of document.edges.entries()) {
+  for (const [index, edge] of graphDocument.edges.entries()) {
     assertGraphEditorEdgeShape(edge, `${joinPath(path, "edges")}.${index}`);
   }
 }
