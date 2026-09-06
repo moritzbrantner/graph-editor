@@ -1,0 +1,34 @@
+name: Format operation payload hardening
+
+on:
+  push:
+    branches:
+      - harden/operation-payload-shapes
+    paths:
+      - .github/workflows/format-operation-payload-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: harden/operation-payload-shapes
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - run: bun run format
+      - name: Commit formatter output
+        run: |
+          rm .github/workflows/format-operation-payload-hardening.yml
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/operation-log.ts src/index-tests/operation-payload-hardening.test.ts .github/workflows/format-operation-payload-hardening.yml
+          git commit -m "style: format operation payload hardening"
+          git push origin HEAD:harden/operation-payload-shapes
