@@ -429,10 +429,17 @@ function assertGraphEditorPortArrayShape(value: unknown, path: string) {
   if (!Array.isArray(value)) {
     throwParseIssue(path, "Node ports must be an array.");
   }
+  const canonicalPortIds = new Set<string>();
   value.forEach((portValue, index) => {
     const portPath = `${path}.${index}`;
     const port = requireRecord(portValue, portPath, "Port");
-    requireNonEmptyString(port.id, joinPath(portPath, "id"), "Port id");
+    const portIdPath = joinPath(portPath, "id");
+    requireNonEmptyString(port.id, portIdPath, "Port id");
+    const canonicalPortId = String(port.id).trim();
+    if (canonicalPortIds.has(canonicalPortId)) {
+      throwParseIssue(portIdPath, `Duplicate port id: ${canonicalPortId}.`);
+    }
+    canonicalPortIds.add(canonicalPortId);
     if (typeof port.label !== "string") {
       throwParseIssue(joinPath(portPath, "label"), "Port label must be a string.");
     }
