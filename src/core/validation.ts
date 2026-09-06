@@ -297,8 +297,9 @@ export function validateGraphEditorDocument(
     });
   });
 
-  if (!options.allowCycles && Array.isArray(value.nodes) && Array.isArray(value.edges)) {
-    for (const cycle of detectGraphEditorCycles(value as GraphEditorDocument)) {
+  if (!options.allowCycles) {
+    const cycleDocument = createGraphEditorCycleValidationDocument(value.nodes, value.edges);
+    for (const cycle of detectGraphEditorCycles(cycleDocument)) {
       diagnostics.push({
         code: "cycle",
         message: `Graph contains a cycle: ${cycle.join(" -> ")}`,
@@ -309,6 +310,51 @@ export function validateGraphEditorDocument(
   }
 
   return diagnostics;
+}
+
+function createGraphEditorCycleValidationDocument(
+  nodes: unknown[],
+  edges: unknown[],
+): GraphEditorDocument {
+  const projectedNodes: GraphEditorDocument["nodes"] = [];
+  const nodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (!isRecord(node) || typeof node.id !== "string" || !node.id.trim() || nodeIds.has(node.id)) {
+      continue;
+    }
+    nodeIds.add(node.id);
+    projectedNodes.push({
+      id: node.id,
+      label: typeof node.label === "string" ? node.label : "",
+      x: Number.isFinite(node.x) ? Number(node.x) : 0,
+      y: Number.isFinite(node.y) ? Number(node.y) : 0,
+    });
+  }
+
+  const projectedEdges: GraphEditorDocument["edges"] = [];
+  for (const edge of edges) {
+    if (!isRecord(edge)) {
+      continue;
+    }
+    const sourceNodeId = typeof edge.sourceNodeId === "string" ? edge.sourceNodeId : undefined;
+    const targetNodeId = typeof edge.targetNodeId === "string" ? edge.targetNodeId : undefined;
+    if (
+      !sourceNodeId ||
+      !targetNodeId ||
+      !nodeIds.has(sourceNodeId) ||
+      !nodeIds.has(targetNodeId)
+    ) {
+      continue;
+    }
+    projectedEdges.push({
+      id: typeof edge.id === "string" ? edge.id : "",
+      sourceNodeId,
+      sourcePortId: typeof edge.sourcePortId === "string" ? edge.sourcePortId : "",
+      targetNodeId,
+      targetPortId: typeof edge.targetPortId === "string" ? edge.targetPortId : "",
+    });
+  }
+  return { nodes: projectedNodes, edges: projectedEdges };
 }
 
 function validateGraphEditorPorts(
