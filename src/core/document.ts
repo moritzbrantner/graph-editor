@@ -8,6 +8,7 @@ import type {
   GraphEditorEdge,
   GraphEditorGroup,
   GraphEditorNode,
+  GraphEditorPort,
 } from "./types";
 import { clamp, isRecord, orderedUnique } from "./utils";
 
@@ -36,15 +37,24 @@ export function normalizeGraphEditorDocument<
           return [];
         }
         seenNodeIds.add(id);
-        return [
-          {
-            ...node,
-            id,
-            label: typeof node.label === "string" ? node.label : "",
-            x: Number.isFinite(node.x) ? Number(node.x) : 0,
-            y: Number.isFinite(node.y) ? Number(node.y) : 0,
-          } as GraphEditorNode<TNodeData, TPortType>,
-        ];
+        const normalizedNode = {
+          ...node,
+          id,
+          label: typeof node.label === "string" ? node.label : "",
+          x: Number.isFinite(node.x) ? Number(node.x) : 0,
+          y: Number.isFinite(node.y) ? Number(node.y) : 0,
+        } as GraphEditorNode<TNodeData, TPortType>;
+        if (node.inputs !== undefined) {
+          normalizedNode.inputs = normalizeGraphEditorPorts<TPortType>(node.inputs);
+        } else {
+          delete normalizedNode.inputs;
+        }
+        if (node.outputs !== undefined) {
+          normalizedNode.outputs = normalizeGraphEditorPorts<TPortType>(node.outputs);
+        } else {
+          delete normalizedNode.outputs;
+        }
+        return [normalizedNode];
       })
     : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
@@ -57,12 +67,16 @@ export function normalizeGraphEditorDocument<
     const id = edge.id.trim();
     const sourceNodeId = typeof edge.sourceNodeId === "string" ? edge.sourceNodeId.trim() : "";
     const targetNodeId = typeof edge.targetNodeId === "string" ? edge.targetNodeId.trim() : "";
+    const sourcePortId = typeof edge.sourcePortId === "string" ? edge.sourcePortId.trim() : "";
+    const targetPortId = typeof edge.targetPortId === "string" ? edge.targetPortId.trim() : "";
     if (!id || seenEdgeIds.has(id)) {
       return [];
     }
     if (
       !sourceNodeId ||
       !targetNodeId ||
+      !sourcePortId ||
+      !targetPortId ||
       !nodeIds.has(sourceNodeId) ||
       !nodeIds.has(targetNodeId) ||
       (!options.allowSelfEdges && sourceNodeId === targetNodeId)
@@ -73,7 +87,9 @@ export function normalizeGraphEditorDocument<
       ...edge,
       id,
       sourceNodeId,
+      sourcePortId,
       targetNodeId,
+      targetPortId,
     } as GraphEditorEdge<TEdgeData>;
     if (
       !options.allowMissingDeclaredPorts &&
@@ -107,6 +123,27 @@ export function normalizeGraphEditorDocument<
     delete normalizedDocument.groups;
   }
   return normalizedDocument;
+}
+
+function normalizeGraphEditorPorts<TPortType>(ports: unknown): Array<GraphEditorPort<TPortType>> {
+  const seenPortIds = new Set<string>();
+  return (Array.isArray(ports) ? ports : []).flatMap((port) => {
+    if (!isRecord(port) || typeof port.id !== "string") {
+      return [];
+    }
+    const id = port.id.trim();
+    if (!id || seenPortIds.has(id)) {
+      return [];
+    }
+    seenPortIds.add(id);
+    return [
+      {
+        ...port,
+        id,
+        label: typeof port.label === "string" ? port.label : "",
+      } as GraphEditorPort<TPortType>,
+    ];
+  });
 }
 
 function normalizeGraphEditorGroups(
