@@ -1,7 +1,7 @@
 import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
 
 import {
-  addGraphEditorEdge,
+  normalizeGraphEditorDocument,
   removeGraphEditorEdge,
   updateGraphEditorEdge,
   validateGraphEditorConnection,
@@ -32,11 +32,19 @@ export function createGraphEditorAddEdgeOperation<
       if (!edge || document.edges.some((candidate) => candidate.id === edge.id)) {
         return document;
       }
+
+      const normalizationOptions =
+        "edge" in options
+          ? {}
+          : {
+              allowCycles: options.validationOptions?.allowCycles,
+              allowSelfEdges: options.validationOptions?.allowSelfConnections,
+            };
       const nextDocument = { ...document, edges: [...document.edges, edge] };
-      if (validateGraphEditorDocument(nextDocument).length > 0) {
-        return nextDocument;
+      if (validateGraphEditorDocument(nextDocument, normalizationOptions).length > 0) {
+        return document;
       }
-      return addGraphEditorEdge(document, edge);
+      return normalizeGraphEditorDocument(nextDocument, normalizationOptions);
     },
     selectionBefore: options.selectionBefore,
     selectionAfter: options.selectionAfter,
