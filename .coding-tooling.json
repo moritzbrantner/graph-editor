@@ -25,5 +25,12 @@
       ],
       "benchmark:smoke": ["bun", "run", "bench"]
     }
+  },
+  "merge": {
+    "authority": "hosted",
+    "requiredChecks": [
+      "Fast Validation / Fast Validation",
+      "Workflow Validation"
+    ]
   }
 }
