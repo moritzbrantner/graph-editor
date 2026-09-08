@@ -4,10 +4,7 @@ import {
   type EditorHotkeyMap,
 } from "@moritzbrantner/editor-core/hotkeys";
 
-import {
-  graphEditorCommandShortcuts,
-  type GraphEditorCommandId,
-} from "./commands";
+import { graphEditorCommandShortcuts, type GraphEditorCommandId } from "./commands";
 
 export type GraphEditorCanvasHotkeyId =
   | "selection.clear"
