@@ -105,9 +105,7 @@ function GraphWorkbenchHotkeyRow({
 }) {
   const bindings = hotkeys[id];
   const conflicts = Array.from(
-    new Set(
-      bindings.flatMap((binding) => getGraphEditorHotkeyConflicts(id, binding, hotkeys)),
-    ),
+    new Set(bindings.flatMap((binding) => getGraphEditorHotkeyConflicts(id, binding, hotkeys))),
   );
 
   return (
@@ -122,7 +120,10 @@ function GraphWorkbenchHotkeyRow({
             <span className="text-xs text-muted-foreground">Unbound</span>
           ) : (
             bindings.map((binding) => (
-              <span key={binding} className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5">
+              <span
+                key={binding}
+                className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5"
+              >
                 <kbd className="text-xs">{binding}</kbd>
                 <button
                   type="button"
@@ -162,7 +163,8 @@ function GraphWorkbenchHotkeyRow({
         />
         {conflicts.length > 0 ? (
           <p role="alert" className="mt-1 text-xs text-destructive">
-            Conflicts with {conflicts.map((conflict) => hotkeyLabels.get(conflict) ?? conflict).join(", ")}.
+            Conflicts with{" "}
+            {conflicts.map((conflict) => hotkeyLabels.get(conflict) ?? conflict).join(", ")}.
           </p>
         ) : null}
       </div>
