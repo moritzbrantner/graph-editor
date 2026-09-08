@@ -15,11 +15,13 @@ const modules = [
     exports: [
       "GraphCanvas",
       "GraphNode",
+      "GraphWorkbenchHotkeySettings",
       "connectGraphEditorNodes",
       "createGraphEditorDocumentContext",
       "createGraphEditorGraphAdapter",
       "createGraphEditorGraphIndex",
       "normalizeGraphEditorDocument",
+      "resolveGraphEditorHotkeys",
       "validateGraphEditorConnection",
     ],
   },
@@ -45,6 +47,7 @@ const modules = [
       "GraphNode",
       "GraphWorkbench",
       "GraphWorkbenchContextPad",
+      "GraphWorkbenchHotkeySettings",
       "InspectorPanel",
     ],
   },
@@ -71,6 +74,16 @@ const modules = [
     specifier: "@moritzbrantner/graph-editor/commands",
     path: "../dist/commands.js",
     exports: ["createGraphEditorCommands", "getGraphEditorCommandFromKeyboardEvent"],
+  },
+  {
+    specifier: "@moritzbrantner/graph-editor/hotkeys",
+    path: "../dist/hotkeys.js",
+    exports: [
+      "getGraphEditorHotkeyConflicts",
+      "graphEditorDefaultHotkeys",
+      "graphEditorHotkeyDefinitions",
+      "resolveGraphEditorHotkeys",
+    ],
   },
   {
     specifier: "@moritzbrantner/graph-editor/serialization",
