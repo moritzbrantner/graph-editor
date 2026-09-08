@@ -2,10 +2,7 @@
 
 import * as React from "react";
 
-import {
-  isEditorEditableTarget,
-  matchesEditorHotkey,
-} from "@moritzbrantner/editor-core/hotkeys";
+import { isEditorEditableTarget, matchesEditorHotkey } from "@moritzbrantner/editor-core/hotkeys";
 
 import {
   createGraphEditorAddEdgeOperation,
@@ -39,10 +36,7 @@ import {
   type GraphCanvasKeyboardDirection,
 } from "../../graph-canvas/index-core";
 import type { GraphWorkbenchCommitOptions, GraphWorkbenchController } from "../index-core";
-import {
-  createGraphWorkbenchConnectionValidationOptions,
-  emptySelection,
-} from "../index-core";
+import { createGraphWorkbenchConnectionValidationOptions, emptySelection } from "../index-core";
 import { GraphWorkbenchContextPad } from "./GraphWorkbenchContextPad";
 
 export function GraphWorkbenchCanvas<
