@@ -9,6 +9,7 @@ import {
   formatEditorShortcutLabel,
   isEditorEditableTarget,
   matchesEditorHotkey,
+  resolveEditorHotkeys,
   type EditorHotkeyMap,
 } from "@moritzbrantner/editor-core/hotkeys";
 
@@ -54,6 +55,7 @@ export type CreateGraphEditorCommandsOptions<
   actions: Record<GraphEditorCommandId, () => void | Promise<void>>;
   labels?: Partial<Record<GraphEditorCommandId, React.ReactNode>>;
   disabled?: Partial<Record<GraphEditorCommandId, boolean>>;
+  hotkeys?: Partial<EditorHotkeyMap<GraphEditorCommandId>>;
 };
 
 export const graphEditorCommandShortcuts: EditorHotkeyMap<GraphEditorCommandId> = {
@@ -86,12 +88,17 @@ export function createGraphEditorCommands<
   });
 }
 
-export function getGraphEditorShortcutLabel(commandId: GraphEditorCommandId) {
-  return formatEditorShortcutLabel(graphEditorCommandShortcuts[commandId][0] ?? "");
+export function getGraphEditorShortcutLabel(
+  commandId: GraphEditorCommandId,
+  hotkeys: Partial<EditorHotkeyMap<GraphEditorCommandId>> = {},
+) {
+  const resolvedHotkeys = resolveEditorHotkeys(graphEditorCommandShortcuts, hotkeys);
+  return formatEditorShortcutLabel(resolvedHotkeys[commandId][0] ?? "");
 }
 
 export function getGraphEditorCommandFromKeyboardEvent(
   event: GraphEditorShortcutEvent,
+  hotkeys: Partial<EditorHotkeyMap<GraphEditorCommandId>> = {},
 ): GraphEditorCommandId | null {
   if (isEditorEditableTarget(event.target)) {
     return null;
@@ -105,10 +112,12 @@ export function getGraphEditorCommandFromKeyboardEvent(
     shiftKey: Boolean(event.shiftKey),
     target: event.target,
   };
+  const resolvedHotkeys = resolveEditorHotkeys(graphEditorCommandShortcuts, hotkeys);
   return (
-    graphEditorCommandDefinitions.find((command) =>
-      command.hotkeys?.some((hotkey) => matchesEditorHotkey(keyboardEvent, hotkey)),
-    )?.id ?? null
+    (Object.entries(resolvedHotkeys) as Array<[GraphEditorCommandId, readonly string[]]>).find(
+      ([, commandHotkeys]) =>
+        commandHotkeys.some((hotkey) => matchesEditorHotkey(keyboardEvent, hotkey)),
+    )?.[0] ?? null
   );
 }
 
@@ -140,24 +149,25 @@ function createGraphEditorCommandDefinitions<
   const canUndo = options.context.canUndo ?? false;
   const canRedo = options.context.canRedo ?? false;
   const canPaste = options.context.canPaste ?? false;
+  const hotkeys = resolveEditorHotkeys(graphEditorCommandShortcuts, options.hotkeys);
 
   return [
-    command("undo", options, { canRun: () => canUndo }),
-    command("redo", options, { canRun: () => canRedo }),
-    command("copy", options, { canRun: () => hasSelection }),
-    command("paste", options, { canRun: () => canPaste }),
-    command("duplicate", options, { canRun: () => nodeSelectionCount > 0 }),
-    command("delete", options, {
+    command("undo", options, hotkeys, { canRun: () => canUndo }),
+    command("redo", options, hotkeys, { canRun: () => canRedo }),
+    command("copy", options, hotkeys, { canRun: () => hasSelection }),
+    command("paste", options, hotkeys, { canRun: () => canPaste }),
+    command("duplicate", options, hotkeys, { canRun: () => nodeSelectionCount > 0 }),
+    command("delete", options, hotkeys, {
       canRun: () => hasSelection,
       destructive: true,
     }),
-    command("select-all", options, { canRun: () => true }),
-    command("fit-view", options, { canRun: () => true }),
-    command("auto-layout", options, { canRun: () => true }),
-    command("export-json", options, { canRun: () => true }),
-    command("import-json", options, { canRun: () => true }),
-    command("group-selection", options, { canRun: () => nodeSelectionCount > 0 }),
-    command("ungroup-selection", options, { canRun: () => selectedGroupCount > 0 }),
+    command("select-all", options, hotkeys, { canRun: () => true }),
+    command("fit-view", options, hotkeys, { canRun: () => true }),
+    command("auto-layout", options, hotkeys, { canRun: () => true }),
+    command("export-json", options, hotkeys, { canRun: () => true }),
+    command("import-json", options, hotkeys, { canRun: () => true }),
+    command("group-selection", options, hotkeys, { canRun: () => nodeSelectionCount > 0 }),
+    command("ungroup-selection", options, hotkeys, { canRun: () => selectedGroupCount > 0 }),
   ];
 }
 
@@ -168,6 +178,7 @@ function command<
 >(
   id: GraphEditorCommandId,
   options: CreateGraphEditorCommandsOptions<TNodeData, TEdgeData, TPortType>,
+  hotkeys: EditorHotkeyMap<GraphEditorCommandId>,
   config: {
     canRun: () => boolean;
     destructive?: boolean;
@@ -182,7 +193,7 @@ function command<
     id,
     label:
       typeof options.labels?.[id] === "string" ? options.labels[id] : graphEditorCommandLabels[id],
-    hotkeys: graphEditorCommandShortcuts[id],
+    hotkeys: hotkeys[id],
     canRun: (context) =>
       options.disabled?.[id] !== true &&
       (isReadOnlyAllowedCommand(id) || context.readOnly !== true) &&
@@ -211,11 +222,3 @@ const graphEditorCommandLabels: Record<GraphEditorCommandId, string> = {
   "group-selection": "Group selection",
   "ungroup-selection": "Ungroup selection",
 };
-
-const graphEditorCommandDefinitions = Object.entries(graphEditorCommandShortcuts).map(
-  ([id, hotkeys]) => ({
-    id: id as GraphEditorCommandId,
-    label: id,
-    hotkeys,
-  }),
-);
