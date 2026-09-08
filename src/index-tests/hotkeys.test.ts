@@ -71,7 +71,7 @@ describe("configurable graph editor hotkeys", () => {
 
   test("uses configured navigation, movement, clear, and delete bindings in the workbench", async () => {
     const selections: GraphEditorSelectionState[] = [];
-    let latestDocument: GraphEditorDocument = {
+    let latestDocument: GraphEditorDocument<unknown, unknown, unknown> = {
       nodes: [
         { id: "source", label: "Source", x: 0, y: 0 },
         { id: "target", label: "Target", x: 260, y: 0 },
@@ -90,7 +90,7 @@ describe("configurable graph editor hotkeys", () => {
         document: latestDocument,
         defaultHotkeys: hotkeys,
         showMiniMap: false,
-        onDocumentChange(document: GraphEditorDocument) {
+        onDocumentChange(document: GraphEditorDocument<unknown, unknown, unknown>) {
           latestDocument = document;
         },
         onSelectionStateChange(selection: GraphEditorSelectionState) {
