@@ -1,6 +1,7 @@
 export { useGraphWorkbenchController } from "./useGraphWorkbenchController";
-export { GraphWorkbench } from "./GraphWorkbench";
+export { GraphWorkbench, type GraphWorkbenchKeyboardProps } from "./GraphWorkbench";
 export { GraphWorkbenchCanvas } from "./GraphWorkbenchCanvas";
+export { GraphWorkbenchHotkeySettings } from "./GraphWorkbenchHotkeySettings";
 export { GraphWorkbenchToolbar } from "./GraphWorkbenchToolbar";
 export { GraphWorkbenchPalette } from "./GraphWorkbenchPalette";
 export { GraphWorkbenchPaletteGroup } from "./GraphWorkbenchPaletteGroup";
