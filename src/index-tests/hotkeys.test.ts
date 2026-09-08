@@ -137,6 +137,57 @@ describe("configurable graph editor hotkeys", () => {
     expect(latestDocument.nodes).toHaveLength(1);
   });
 
+  test("routes a remapped clear binding through canvas interaction cancellation", async () => {
+    const fixture = render(
+      React.createElement(GraphWorkbench, {
+        document: {
+          nodes: [
+            {
+              id: "source",
+              label: "Source",
+              x: 0,
+              y: 0,
+              outputs: [{ id: "out", label: "Out" }],
+            },
+            {
+              id: "target",
+              label: "Target",
+              x: 260,
+              y: 0,
+              inputs: [{ id: "in", label: "In" }],
+            },
+          ],
+          edges: [],
+        },
+        defaultHotkeys: { "selection.clear": ["q"] },
+        showMiniMap: false,
+      }),
+    );
+    const canvas = fixture.container.querySelector<HTMLElement>('[data-slot="workflow-builder"]')!;
+    const output = screen.getByRole("button", { name: "Source Out" });
+
+    await act(async () => {
+      fireEvent.pointerDown(output, { button: 0, clientX: 10, clientY: 10 });
+    });
+    expect(
+      fixture.container.querySelector('[data-slot="workflow-builder-connection-preview"]'),
+    ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "Escape" });
+    });
+    expect(
+      fixture.container.querySelector('[data-slot="workflow-builder-connection-preview"]'),
+    ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(canvas, { key: "q" });
+    });
+    expect(
+      fixture.container.querySelector('[data-slot="workflow-builder-connection-preview"]'),
+    ).toBeNull();
+  });
+
   test("lets users add bindings from the keyboard settings surface", async () => {
     const onHotkeysChange = vi.fn();
     render(
