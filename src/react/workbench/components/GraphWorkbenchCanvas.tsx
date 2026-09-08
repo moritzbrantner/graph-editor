@@ -36,7 +36,7 @@ import {
   type GraphCanvasKeyboardDirection,
 } from "../../graph-canvas/index-core";
 import type { GraphWorkbenchCommitOptions, GraphWorkbenchController } from "../index-core";
-import { createGraphWorkbenchConnectionValidationOptions, emptySelection } from "../index-core";
+import { createGraphWorkbenchConnectionValidationOptions } from "../index-core";
 import { GraphWorkbenchContextPad } from "./GraphWorkbenchContextPad";
 
 export function GraphWorkbenchCanvas<
@@ -129,6 +129,10 @@ export function GraphWorkbenchCanvas<
     }
 
     const nativeEvent = event.nativeEvent;
+    if (matchesConfiguredHotkey(nativeEvent, "selection.clear", hotkeys)) {
+      return;
+    }
+
     const fineMoveDirection = getConfiguredDirection(nativeEvent, "move-fine", hotkeys);
     if (fineMoveDirection) {
       consumeKeyboardEvent(event);
@@ -168,12 +172,6 @@ export function GraphWorkbenchCanvas<
           primary: { type: "node", id: nextNode.id },
         });
       }
-      return;
-    }
-
-    if (matchesConfiguredHotkey(nativeEvent, "selection.clear", hotkeys)) {
-      consumeKeyboardEvent(event);
-      controller.actions.setSelection(emptySelection);
       return;
     }
 
@@ -271,6 +269,9 @@ export function GraphWorkbenchCanvas<
           );
           return group ? { type: "group", id: group.id } : undefined;
         }}
+        isCancelKeyboardEvent={(event) =>
+          matchesConfiguredHotkey(event.nativeEvent, "selection.clear", hotkeys)
+        }
         showMiniMap={showMiniMap}
         showToolbar={false}
         showPortColumnHeaders={false}
