@@ -3,6 +3,11 @@
 import * as React from "react";
 
 import {
+  isEditorEditableTarget,
+  matchesEditorHotkey,
+} from "@moritzbrantner/editor-core/hotkeys";
+
+import {
   createGraphEditorAddEdgeOperation,
   createGraphEditorRemoveSelectionOperation,
   createGraphEditorUpdateEdgeOperation,
@@ -17,13 +22,27 @@ import {
   type GraphEditorViewport,
 } from "../../../core";
 import {
+  graphEditorDefaultHotkeys,
+  type GraphEditorHotkeyId,
+  type GraphEditorHotkeyMap,
+} from "../../../hotkeys";
+import {
   GraphCanvas,
   type GraphCanvasConnection,
   type GraphCanvasEdge,
   type GraphCanvasNodeData,
 } from "../../graph-canvas";
+import {
+  getGraphCanvasKeyboardNudgeDelta,
+  getNextGraphCanvasNodeSelection,
+  nudgeGraphCanvasNodes,
+  type GraphCanvasKeyboardDirection,
+} from "../../graph-canvas/index-core";
 import type { GraphWorkbenchCommitOptions, GraphWorkbenchController } from "../index-core";
-import { createGraphWorkbenchConnectionValidationOptions } from "../index-core";
+import {
+  createGraphWorkbenchConnectionValidationOptions,
+  emptySelection,
+} from "../index-core";
 import { GraphWorkbenchContextPad } from "./GraphWorkbenchContextPad";
 
 export function GraphWorkbenchCanvas<
@@ -32,6 +51,7 @@ export function GraphWorkbenchCanvas<
   TPortType = unknown,
 >({
   controller,
+  hotkeys = graphEditorDefaultHotkeys,
   showMiniMap = true,
   onViewportChange,
   connectionValidationOptions,
@@ -43,6 +63,7 @@ export function GraphWorkbenchCanvas<
   onCanvasDoubleClickCapture,
 }: {
   controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>;
+  hotkeys?: GraphEditorHotkeyMap;
   showMiniMap?: boolean;
   onViewportChange?: (viewport: GraphEditorViewport) => void;
   connectionValidationOptions?: GraphEditorConnectionValidationOptions<
@@ -108,10 +129,102 @@ export function GraphWorkbenchCanvas<
     });
   };
 
+  const handleConfiguredKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isEditorEditableTarget(event.target)) {
+      return;
+    }
+
+    const nativeEvent = event.nativeEvent;
+    const fineMoveDirection = getConfiguredDirection(nativeEvent, "move-fine", hotkeys);
+    if (fineMoveDirection) {
+      consumeKeyboardEvent(event);
+      if (!controller.readOnly) {
+        moveSelection(fineMoveDirection, 1);
+      }
+      return;
+    }
+
+    const moveDirection = getConfiguredDirection(nativeEvent, "move", hotkeys);
+    if (moveDirection) {
+      consumeKeyboardEvent(event);
+      if (!controller.readOnly) {
+        moveSelection(moveDirection, 10);
+      }
+      return;
+    }
+
+    const navigationDirection = getConfiguredDirection(nativeEvent, "navigate", hotkeys);
+    if (navigationDirection) {
+      consumeKeyboardEvent(event);
+      const currentNodeId =
+        controller.selection.primary?.type === "node"
+          ? controller.selection.primary.id
+          : (controller.selection.nodeIds.at(-1) ?? null);
+      const nextNode = getNextGraphCanvasNodeSelection(
+        canvasNodes,
+        currentNodeId,
+        navigationDirection,
+        { showPortColumnHeaders: false },
+        new Set(),
+      );
+      if (nextNode) {
+        controller.actions.setSelection({
+          nodeIds: [nextNode.id],
+          edgeIds: [],
+          primary: { type: "node", id: nextNode.id },
+        });
+      }
+      return;
+    }
+
+    if (matchesConfiguredHotkey(nativeEvent, "selection.clear", hotkeys)) {
+      consumeKeyboardEvent(event);
+      controller.actions.setSelection(emptySelection);
+      return;
+    }
+
+    if (matchesConfiguredHotkey(nativeEvent, "delete", hotkeys)) {
+      consumeKeyboardEvent(event);
+      controller.actions.deleteSelection();
+      return;
+    }
+
+    const command = controller.commands.find((candidate) => {
+      if (candidate.disabled) {
+        return false;
+      }
+      const commandHotkeys = hotkeys[candidate.id as GraphEditorHotkeyId];
+      return commandHotkeys?.some((hotkey) => matchesEditorHotkey(nativeEvent, hotkey)) ?? false;
+    });
+    if (command) {
+      consumeKeyboardEvent(event);
+      void controller.actions.runCommand(command.id);
+      return;
+    }
+
+    if (isLegacyGraphCanvasKeyboardEvent(nativeEvent)) {
+      consumeKeyboardEvent(event);
+    }
+  };
+
+  const moveSelection = (direction: GraphCanvasKeyboardDirection, distance: number) => {
+    const delta = getGraphCanvasKeyboardNudgeDelta(direction, distance);
+    const nextNodes = nudgeGraphCanvasNodes(
+      canvasNodes,
+      controller.selection.nodeIds,
+      delta,
+      new Set(),
+    );
+    if (nextNodes !== canvasNodes) {
+      updateCanvasNodes(nextNodes, {});
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className="relative min-h-0"
+      onKeyDownCapture={handleConfiguredKeyDownCapture}
       onContextMenuCapture={(event) => onCanvasContextMenuCapture?.(event, controller)}
       onDoubleClickCapture={(event) => onCanvasDoubleClickCapture?.(event, controller)}
       onDragOver={(event) => {
@@ -263,4 +376,50 @@ export function GraphWorkbenchCanvas<
       {renderCanvasOverlay?.(controller, { containerRef })}
     </div>
   );
+}
+
+const graphCanvasDirections = ["up", "right", "down", "left"] as const;
+
+function getConfiguredDirection(
+  event: KeyboardEvent,
+  action: "navigate" | "move" | "move-fine",
+  hotkeys: GraphEditorHotkeyMap,
+): GraphCanvasKeyboardDirection | null {
+  return (
+    graphCanvasDirections.find((direction) =>
+      hotkeys[`${action}.${direction}`].some((hotkey) => matchesEditorHotkey(event, hotkey)),
+    ) ?? null
+  );
+}
+
+function matchesConfiguredHotkey(
+  event: KeyboardEvent,
+  id: GraphEditorHotkeyId,
+  hotkeys: GraphEditorHotkeyMap,
+) {
+  return hotkeys[id].some((hotkey) => matchesEditorHotkey(event, hotkey));
+}
+
+function consumeKeyboardEvent(event: React.KeyboardEvent<HTMLDivElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function isLegacyGraphCanvasKeyboardEvent(event: KeyboardEvent) {
+  if (event.key === "Delete" || event.key === "Backspace" || event.key === "Escape") {
+    return true;
+  }
+  if (!graphCanvasDirections.some((direction) => event.key === `Arrow${capitalize(direction)}`)) {
+    return false;
+  }
+
+  if (event.shiftKey && !event.ctrlKey && !event.metaKey) {
+    return true;
+  }
+
+  return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
