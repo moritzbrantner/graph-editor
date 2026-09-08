@@ -130,6 +130,8 @@ describe("configurable graph editor hotkeys", () => {
 
     await act(async () => {
       fireEvent.keyDown(canvas, { key: "l" });
+    });
+    await act(async () => {
       fireEvent.keyDown(canvas, { key: "x" });
     });
     expect(latestDocument.nodes).toHaveLength(1);
