@@ -164,7 +164,7 @@ describe("configurable graph editor hotkeys", () => {
       }),
     );
     const canvas = fixture.container.querySelector<HTMLElement>('[data-slot="workflow-builder"]')!;
-    const output = screen.getByRole("button", { name: "Source Out" });
+    const output = screen.getByRole("button", { name: "Start Source Out" });
 
     await act(async () => {
       fireEvent.pointerDown(output, { button: 0, clientX: 10, clientY: 10 });
