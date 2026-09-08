@@ -4,6 +4,7 @@ export * from "./spatial";
 export * from "./operations";
 export * from "./runtime";
 export * from "./commands";
+export * from "./hotkeys";
 export * from "./serialization";
 export * from "./persistence";
 export * from "./patches";
