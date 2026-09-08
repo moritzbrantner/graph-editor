@@ -37,9 +37,7 @@ export function GraphWorkbench<
   TNodeData = Record<string, unknown>,
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
->(
-  props: GraphWorkbenchProps<TNodeData, TEdgeData, TPortType> & GraphWorkbenchKeyboardProps,
-) {
+>(props: GraphWorkbenchProps<TNodeData, TEdgeData, TPortType> & GraphWorkbenchKeyboardProps) {
   const {
     className,
     showMiniMap = true,
