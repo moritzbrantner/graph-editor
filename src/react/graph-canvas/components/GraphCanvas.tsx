@@ -65,6 +65,10 @@ import { GraphCanvasToolbar } from "./GraphCanvasToolbar";
 
 const graphCanvasConnectionDragThreshold = 4;
 
+type GraphCanvasKeyboardCancelProps = {
+  isCancelKeyboardEvent?: (event: React.KeyboardEvent<HTMLDivElement>) => boolean;
+};
+
 export function GraphCanvas({
   nodes,
   edges,
@@ -100,6 +104,7 @@ export function GraphCanvas({
   onConnectionCreate,
   onConnectionRewire,
   onConnectionDelete,
+  isCancelKeyboardEvent,
   minZoom = 0.5,
   maxZoom = 1.75,
   surfaceHeight = "32rem",
@@ -114,7 +119,7 @@ export function GraphCanvas({
   measurePorts = "auto",
   className,
   ...props
-}: GraphCanvasProps) {
+}: GraphCanvasProps & GraphCanvasKeyboardCancelProps) {
   const [internalZoom, setInternalZoom] = React.useState(defaultZoom);
   const [internalViewport, setInternalViewport] = React.useState<GraphCanvasViewport>(
     defaultViewport ?? { x: 0, y: 0, zoom: defaultZoom },
@@ -738,8 +743,8 @@ export function GraphCanvas({
         nodeIds: dragNodeIds,
         startX: pointer.x,
         startY: pointer.y,
-        originalX: node.x,
-        originalY: node.y,
+        originalX: firstNodePosition(node).x,
+        originalY: firstNodePosition(node).y,
         originalPositions,
       });
     },
@@ -1030,6 +1035,22 @@ export function GraphCanvas({
       return;
     }
 
+    const shouldCancel = isCancelKeyboardEvent
+      ? isCancelKeyboardEvent(event)
+      : event.key === "Escape";
+    if (shouldCancel) {
+      event.preventDefault();
+      if (pendingConnection || connectionDrag?.type === "new") {
+        onConnectionCancel?.();
+      }
+      setPendingConnection(null);
+      setConnectionDrag(null);
+      setMarqueeState(null);
+      setPanState(null);
+      commitSelectionState(clearGraphEditorSelection());
+      return;
+    }
+
     const keyboardDirection = getGraphCanvasKeyboardDirection(event.key);
 
     if (keyboardDirection) {
@@ -1080,16 +1101,6 @@ export function GraphCanvas({
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       deleteSelection();
-    }
-    if (event.key === "Escape") {
-      if (pendingConnection || connectionDrag?.type === "new") {
-        onConnectionCancel?.();
-      }
-      setPendingConnection(null);
-      setConnectionDrag(null);
-      setMarqueeState(null);
-      setPanState(null);
-      commitSelectionState(clearGraphEditorSelection());
     }
   };
 
@@ -1493,4 +1504,8 @@ export function GraphCanvas({
       </div>
     </div>
   );
+}
+
+function firstNodePosition(node: GraphCanvasNodeData) {
+  return { x: node.x, y: node.y };
 }

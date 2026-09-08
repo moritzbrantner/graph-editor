@@ -85,6 +85,7 @@ export {
   GraphWorkbench,
   GraphWorkbenchCanvas,
   GraphWorkbenchContextPad,
+  GraphWorkbenchHotkeySettings,
   GraphWorkbenchInspector,
   GraphWorkbenchOverlayPanel,
   GraphWorkbenchPalette,
@@ -94,5 +95,6 @@ export {
   type GraphWorkbenchActionErrorCode,
   type GraphWorkbenchController,
   type GraphWorkbenchInspectorSchema,
+  type GraphWorkbenchKeyboardProps,
   type GraphWorkbenchProps,
 } from "./react/workbench";

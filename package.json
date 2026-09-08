@@ -47,6 +47,10 @@
       "types": "./dist/commands.d.ts",
       "import": "./dist/commands.js"
     },
+    "./hotkeys": {
+      "types": "./dist/hotkeys.d.ts",
+      "import": "./dist/hotkeys.js"
+    },
     "./serialization": {
       "types": "./dist/serialization.d.ts",
       "import": "./dist/serialization.js"
@@ -77,7 +81,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts src/runtime.ts src/operations.ts src/commands.ts src/serialization.ts src/persistence.ts src/patches.ts src/plugins.ts src/interaction.ts src/operation-log.ts --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/core.ts src/react.tsx src/layout.ts src/runtime.ts src/operations.ts src/commands.ts src/hotkeys.ts src/serialization.ts src/persistence.ts src/patches.ts src/plugins.ts src/interaction.ts src/operation-log.ts --format esm --dts --clean --out-dir dist",
     "build:examples": "vite build --config examples/workbench/vite.config.ts --outDir ../../dist-examples --emptyOutDir",
     "dev:examples": "vite --config examples/workbench/vite.config.ts",
     "dev:source": "bun run source:prepare && bun run dev:examples",
@@ -118,7 +122,6 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-istanbul": "4.1.9",
     "jsdom": "^29.1.1",
     "oxfmt": "0.55.0",
     "oxlint": "^1.70.0",
