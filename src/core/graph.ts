@@ -55,28 +55,42 @@ export function createGraphEditorGraphIndex<
   TEdgeData = Record<string, unknown>,
   TPortType = unknown,
 >(document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>) {
-  const nodes = document.nodes.map(
-    (node, index): GraphEditorIndexedNode<TNodeData, TPortType> => ({
+  const nodes: Array<GraphEditorIndexedNode<TNodeData, TPortType>> = [];
+  const nodeLookup = new Map<string, GraphEditorIndexedNode<TNodeData, TPortType>>();
+
+  for (let index = 0; index < document.nodes.length; index += 1) {
+    const node = document.nodes[index]!;
+    const indexedNode: GraphEditorIndexedNode<TNodeData, TPortType> = {
       id: node.id,
       index,
       label: node.label,
       properties: node,
-    }),
-  );
-  const nodeLookup = new Map(nodes.map((node) => [node.id, node]));
-  const edges = document.edges
-    .map(
-      (edge, index): GraphEditorIndexedEdge<TEdgeData> => ({
-        directed: true,
-        id: edge.id,
-        index,
-        source: edge.sourceNodeId,
-        target: edge.targetNodeId,
-        properties: edge,
-      }),
-    )
-    .filter((edge) => nodeLookup.has(edge.source) && nodeLookup.has(edge.target));
-  const edgeLookup = new Map(edges.map((edge) => [edge.id, edge]));
+    };
+    nodes.push(indexedNode);
+    nodeLookup.set(indexedNode.id, indexedNode);
+  }
+
+  const edges: Array<GraphEditorIndexedEdge<TEdgeData>> = [];
+  const edgeLookup = new Map<string, GraphEditorIndexedEdge<TEdgeData>>();
+
+  for (let index = 0; index < document.edges.length; index += 1) {
+    const edge = document.edges[index]!;
+    if (!nodeLookup.has(edge.sourceNodeId) || !nodeLookup.has(edge.targetNodeId)) {
+      continue;
+    }
+
+    const indexedEdge: GraphEditorIndexedEdge<TEdgeData> = {
+      directed: true,
+      id: edge.id,
+      index,
+      source: edge.sourceNodeId,
+      target: edge.targetNodeId,
+      properties: edge,
+    };
+    edges.push(indexedEdge);
+    edgeLookup.set(indexedEdge.id, indexedEdge);
+  }
+
   return {
     getEdgeById(edgeId: string) {
       return edgeLookup.get(edgeId) ?? null;
