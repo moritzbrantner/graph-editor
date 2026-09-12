@@ -111,10 +111,9 @@ export function validateGraphEditorConnection<
   }
   if (
     !options.allowDuplicateEdges &&
-    document.edges.some(
+    (context.outgoingEdgesByNodeId.get(connection.sourceNodeId) ?? []).some(
       (edge) =>
         edge.id !== options.ignoreEdgeId &&
-        edge.sourceNodeId === connection.sourceNodeId &&
         edge.sourcePortId === connection.sourcePortId &&
         edge.targetNodeId === connection.targetNodeId &&
         edge.targetPortId === connection.targetPortId,
@@ -124,11 +123,8 @@ export function validateGraphEditorConnection<
   }
   if (
     !options.allowOccupiedInputs &&
-    document.edges.some(
-      (edge) =>
-        edge.id !== options.ignoreEdgeId &&
-        edge.targetNodeId === connection.targetNodeId &&
-        edge.targetPortId === connection.targetPortId,
+    (context.incomingEdgesByNodeId.get(connection.targetNodeId) ?? []).some(
+      (edge) => edge.id !== options.ignoreEdgeId && edge.targetPortId === connection.targetPortId,
     )
   ) {
     return { valid: false, reason: "input-occupied" };

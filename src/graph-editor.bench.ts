@@ -5,6 +5,7 @@ import {
   layoutGraphEditorDocument,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
+  validateGraphEditorConnection,
   validateGraphEditorDocument,
   type GraphEditorDocument,
 } from "@moritzbrantner/graph-editor";
@@ -31,6 +32,15 @@ describe("graph editor document operations", () => {
 
   bench("validate 10k nodes", () => {
     validateGraphEditorDocument(large);
+  });
+
+  bench("validate connection in 10k-node graph", () => {
+    validateGraphEditorConnection(large, {
+      sourceNodeId: "node-0",
+      sourcePortId: "out",
+      targetNodeId: "node-5000",
+      targetPortId: "in",
+    });
   });
 
   bench("normalize 1k nodes", () => {
