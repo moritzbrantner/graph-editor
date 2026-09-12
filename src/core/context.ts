@@ -19,13 +19,14 @@ export function createGraphEditorDocumentContext<
 >(
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorDocumentContext<TNodeData, TEdgeData, TPortType> {
-  const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
+  const nodeById = new Map<string, (typeof document.nodes)[number]>();
   const edgeById = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>>();
   const adjacencyByNodeId = new Map<EditorEntityId, EditorEntityId[]>();
   const incomingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
   const outgoingEdgesByNodeId = new Map<EditorEntityId, GraphEditorEdge<TEdgeData>[]>();
 
   for (const node of document.nodes) {
+    nodeById.set(node.id, node);
     adjacencyByNodeId.set(node.id, []);
     incomingEdgesByNodeId.set(node.id, []);
     outgoingEdgesByNodeId.set(node.id, []);
@@ -174,7 +175,10 @@ function createGraphEditorEdgeId<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   connection: GraphEditorConnectionInput,
 ) {
-  const existingIds = new Set(document.edges.map((edge) => edge.id));
+  const existingIds = new Set<string>();
+  for (const edge of document.edges) {
+    existingIds.add(edge.id);
+  }
   return createUniqueId(
     `${connection.sourceNodeId}:${connection.sourcePortId}->${connection.targetNodeId}:${connection.targetPortId}`,
     existingIds,

@@ -2,6 +2,7 @@ import { bench, describe } from "vitest";
 
 import {
   copyGraphEditorSelection,
+  createGraphEditorDocumentContext,
   createGraphEditorGraphIndex,
   layoutGraphEditorDocument,
   normalizeGraphEditorDocument,
@@ -37,6 +38,10 @@ describe("graph editor document operations", () => {
 
   bench("index 10k-node graph", () => {
     createGraphEditorGraphIndex(large);
+  });
+
+  bench("build 10k-node graph context", () => {
+    createGraphEditorDocumentContext(large);
   });
 
   bench("validate connection in 10k-node graph", () => {
