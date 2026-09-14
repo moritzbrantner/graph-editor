@@ -27,11 +27,8 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Prepare editor-core source
-        run: bun run source:prepare
-
-      - name: Smoke-test source package resolution
-        run: bun run source:smoke
+      - name: Verify against editor-core source
+        run: bun run verify:source
 
       - name: Report active source
         if: always()
