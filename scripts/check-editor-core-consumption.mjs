@@ -84,7 +84,7 @@ async function checkSourceImports(editorCoreManifest) {
     }
 
     for (const match of text.matchAll(
-      /from\s+["'](@moritzbrantner\/editor-core(?:\/[^"']+)?)["']/g,
+      /from\s+["'](@moenarch\/editor-core(?:\/[^"']+)?)["']/g,
     )) {
       const specifier = match[1];
       if (specifier === "@moenarch/editor-core") {
