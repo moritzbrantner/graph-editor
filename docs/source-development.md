@@ -21,7 +21,7 @@ bun run source:smoke
 bun run verify:source
 ```
 
-`source:prepare` installs the frozen dependency sets, recursively prepares upstream source dependencies when supported, builds the sibling checkout, and materializes that build into `node_modules/@moritzbrantner/editor-core` under the package identity this consumer expects. It records the sibling Git revision under `node_modules/.editor-source-deps/` so the active source can be inspected without changing committed package metadata or the lockfile.
+`source:prepare` installs the frozen dependency sets, recursively prepares upstream source dependencies when supported, builds the sibling checkout, and materializes that build into `node_modules/@moenarch/editor-core` under the package identity this consumer expects. It records the sibling Git revision under `node_modules/.editor-source-deps/` so the active source can be inspected without changing committed package metadata or the lockfile.
 
 `source:smoke` proves the materialized package is active and importable. `verify:source` goes further and runs Graph Editor against that exact source build; it intentionally fails when Graph Editor still depends on an API that has changed on the selected editor-core revision. That compatibility work belongs in a coordinated migration, not in the source-mode plumbing itself.
 

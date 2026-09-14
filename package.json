@@ -110,7 +110,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
-    "@moritzbrantner/editor-core": "^0.3.0",
+    "@moenarch/editor-core": "^0.4.1",
     "@moritzbrantner/ui": "^1.1.0",
     "lucide-react": "^1.21.0"
   },

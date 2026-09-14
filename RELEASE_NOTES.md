@@ -6,7 +6,7 @@
   `/interaction`, and `/operation-log`.
 - Adapter-level graph persistence helpers, including local storage and in-memory storage adapters.
 - Deterministic graph operation-log serialization/replay helpers and replace-document operations.
-- Public graph-editor APIs now build on the published `@moritzbrantner/editor-core@0.3.0`
+- Public graph-editor APIs now build on the published `@moenarch/editor-core@0.3.0`
   foundation for serialization, runtime, operations, selection, indexes, patches, plugins,
   persistence, interaction, hotkeys, entities, JSON helpers, browser utilities, and viewport state.
 
@@ -23,5 +23,5 @@
 
 - The package continues to avoid persistence backends/UI, sharing UI, collaboration transport,
   sync, presence, and a document-library shell. Persistence support is adapter-level and headless.
-- `@moritzbrantner/editor-core` remains a normal dependency at `^0.3.0`; React and React DOM remain
+- `@moenarch/editor-core` remains a normal dependency at `^0.3.0`; React and React DOM remain
   peer dependencies.

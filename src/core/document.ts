@@ -1,4 +1,4 @@
-import { createEditorViewportState } from "@moritzbrantner/editor-core/viewport";
+import { createEditorViewportState } from "@moenarch/editor-core/viewport";
 
 import { GraphEditorDocumentValidationError } from "./document-io";
 import { validateGraphEditorDocument } from "./validation";

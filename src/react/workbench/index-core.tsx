@@ -8,15 +8,15 @@ import {
   readEditorJsonFile,
   writeEditorClipboardJson,
   type EditorClipboardFallback,
-} from "@moritzbrantner/editor-core/browser";
-import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
-import { createStableEditorJsonEquals } from "@moritzbrantner/editor-core/json";
+} from "@moenarch/editor-core/browser";
+import { createUniqueEditorId } from "@moenarch/editor-core/entities";
+import { createStableEditorJsonEquals } from "@moenarch/editor-core/json";
 import {
   isEditorEditableTarget,
   matchesEditorHotkey,
   type EditorCommandDefinition,
-} from "@moritzbrantner/editor-core/hotkeys";
-import { createEditorDocumentIoCommands } from "@moritzbrantner/editor-core/runtime";
+} from "@moenarch/editor-core/hotkeys";
+import { createEditorDocumentIoCommands } from "@moenarch/editor-core/runtime";
 import {
   addGraphEditorEdge,
   copyGraphEditorSelection,

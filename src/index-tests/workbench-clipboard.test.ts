@@ -100,19 +100,16 @@ import {
   createEditorSnapshotHistory,
   redoEditorSnapshotHistory,
   undoEditorSnapshotHistory,
-} from "@moritzbrantner/editor-core/history";
-import {
-  EditorJsonParseError,
-  serializeEditorDocument,
-} from "@moritzbrantner/editor-core/serialization";
+} from "@moenarch/editor-core/history";
+import { EditorJsonParseError, serializeEditorDocument } from "@moenarch/editor-core/serialization";
 import {
   createEditorEntitySelection,
   getEditorSelectedEntityIds,
-} from "@moritzbrantner/editor-core/selection";
+} from "@moenarch/editor-core/selection";
 import {
   assertEditorDocumentAdapter,
   assertEditorOperationLogAdapter,
-} from "@moritzbrantner/editor-core/testing";
+} from "@moenarch/editor-core/testing";
 import { workbenchExamples } from "../../examples/workbench/src/workbench-examples";
 import {
   appendMetricTemplate,

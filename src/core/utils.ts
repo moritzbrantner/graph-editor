@@ -1,4 +1,4 @@
-import { createUniqueEditorId } from "@moritzbrantner/editor-core/entities";
+import { createUniqueEditorId } from "@moenarch/editor-core/entities";
 
 import type {
   GraphEditorDocumentDiagnostic,

@@ -6,11 +6,8 @@ import {
   type ReadEditorOperationLogOptions,
   type SerializedEditorOperation,
   type SerializedEditorOperationLog,
-} from "@moritzbrantner/editor-core/operations";
-import {
-  EditorJsonParseError,
-  type EditorParseIssue,
-} from "@moritzbrantner/editor-core/serialization";
+} from "@moenarch/editor-core/operations";
+import { EditorJsonParseError, type EditorParseIssue } from "@moenarch/editor-core/serialization";
 
 import {
   validateGraphEditorDocument,

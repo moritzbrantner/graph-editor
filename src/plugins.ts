@@ -6,17 +6,17 @@ import {
   type EditorPlugin,
   type EditorPluginDiagnostic,
   type EditorPluginRegistry,
-} from "@moritzbrantner/editor-core/plugins";
+} from "@moenarch/editor-core/plugins";
 import type {
   EditorCommandContext,
   EditorCommandDiagnostic,
   EditorResolvedCommandDefinition,
-} from "@moritzbrantner/editor-core/commands";
+} from "@moenarch/editor-core/commands";
 import type {
   EditorOperationPreflightContext,
   EditorOperationPreflightIssue,
-} from "@moritzbrantner/editor-core/operations";
-import type { EditorRuntimeOptions } from "@moritzbrantner/editor-core/runtime";
+} from "@moenarch/editor-core/operations";
+import type { EditorRuntimeOptions } from "@moenarch/editor-core/runtime";
 
 import type { GraphEditorDocument, GraphEditorSelectionState, GraphEditorViewport } from "./core";
 

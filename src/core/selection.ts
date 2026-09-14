@@ -4,7 +4,7 @@ import {
   getEditorSelectionPrimaryEntityId,
   normalizeEditorSelection,
   type EditorSelection,
-} from "@moritzbrantner/editor-core/selection";
+} from "@moenarch/editor-core/selection";
 
 import { graphEditorBoundsIntersect } from "./bounds";
 import type {

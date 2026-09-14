@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const roots = ["src", "docs", "scripts", "README.md", "RELEASE_NOTES.md", "package.json"];
-const oldName = "@moritzbrantner/editor-core";
+const oldName = "@moenarch/editor-core";
 const newName = "@moenarch/editor-core";
 
 for (const root of roots) {

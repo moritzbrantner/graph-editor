@@ -1,4 +1,4 @@
-import type { EditorEntityId } from "@moritzbrantner/editor-core/entities";
+import type { EditorEntityId } from "@moenarch/editor-core/entities";
 
 import { addGraphEditorEdge } from "./mutations";
 import { wouldCreateGraphEditorCycle } from "./graph";

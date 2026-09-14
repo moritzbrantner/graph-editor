@@ -2,14 +2,14 @@ import {
   createLocalStorageEditorStorage,
   type EditorStorageAdapter,
   type LocalStorageEditorStorageOptions,
-} from "@moritzbrantner/editor-core/browser";
+} from "@moenarch/editor-core/browser";
 import {
   loadEditorRuntimePersistence,
   saveEditorRuntimePersistence,
   type EditorPersistenceState,
   type LoadEditorRuntimePersistenceOptions,
   type SaveEditorRuntimePersistenceOptions,
-} from "@moritzbrantner/editor-core/persistence";
+} from "@moenarch/editor-core/persistence";
 
 import {
   normalizeGraphEditorDocument,

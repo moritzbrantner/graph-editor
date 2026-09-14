@@ -13,9 +13,7 @@ const forbiddenEditorCoreGraphVocabulary = [
 ];
 
 const packageJson = await readJson("package.json");
-const editorCorePackageJson = await readJson(
-  "node_modules/@moritzbrantner/editor-core/package.json",
-);
+const editorCorePackageJson = await readJson("node_modules/@moenarch/editor-core/package.json");
 const smokeScript = await readText("scripts/smoke-package-exports.mjs");
 const siblingEditorCorePattern = ["..", "editor-core"].join("/");
 const sourceDevelopmentScript = path.join("scripts", "source-deps.mjs");
@@ -62,9 +60,7 @@ function checkDependencyRanges(manifest) {
 async function checkSourceImports(editorCoreManifest) {
   const declaredEditorCoreSpecifiers = new Set(
     Object.keys(editorCoreManifest.exports ?? {}).map((specifier) =>
-      specifier === "."
-        ? "@moritzbrantner/editor-core"
-        : `@moritzbrantner/editor-core/${specifier.slice(2)}`,
+      specifier === "." ? "@moenarch/editor-core" : `@moenarch/editor-core/${specifier.slice(2)}`,
     ),
   );
   const sourceFiles = await listFiles(["src", "scripts"], [".ts", ".tsx", ".mjs"]);
@@ -91,7 +87,7 @@ async function checkSourceImports(editorCoreManifest) {
       /from\s+["'](@moritzbrantner\/editor-core(?:\/[^"']+)?)["']/g,
     )) {
       const specifier = match[1];
-      if (specifier === "@moritzbrantner/editor-core") {
+      if (specifier === "@moenarch/editor-core") {
         failures.push(`${filePath} imports the editor-core root entrypoint; use explicit subpaths`);
       } else if (!declaredEditorCoreSpecifiers.has(specifier)) {
         failures.push(`${filePath} imports undeclared editor-core subpath ${specifier}`);
