@@ -6,7 +6,7 @@ import {
   formatEditorShortcutLabel,
   isEditorEditableTarget,
   matchesEditorHotkey,
-} from "@moritzbrantner/editor-core/hotkeys";
+} from "@moenarch/editor-core/hotkeys";
 import { cn } from "@moritzbrantner/ui";
 
 import {

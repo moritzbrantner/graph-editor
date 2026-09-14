@@ -4,13 +4,13 @@ import {
   redoEditorOperationRuntime,
   undoEditorOperationRuntime,
   type ApplyEditorOperationOptions,
-} from "@moritzbrantner/editor-core/operations";
+} from "@moenarch/editor-core/operations";
 import {
   markEditorRuntimeSaved,
   resetEditorRuntime,
   setEditorRuntimeSelection,
   type EditorRuntimeState,
-} from "@moritzbrantner/editor-core/runtime";
+} from "@moenarch/editor-core/runtime";
 
 import {
   normalizeGraphEditorDocument,

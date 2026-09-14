@@ -1,6 +1,6 @@
-import * as editorOperations from "@moritzbrantner/editor-core/operations";
-import type { EditorOperationRuntimeState } from "@moritzbrantner/editor-core/operations";
-import type { EditorRuntimeState } from "@moritzbrantner/editor-core/runtime";
+import * as editorOperations from "@moenarch/editor-core/operations";
+import type { EditorOperationRuntimeState } from "@moenarch/editor-core/operations";
+import type { EditorRuntimeState } from "@moenarch/editor-core/runtime";
 
 type ReplaceEditorOperationRuntimeCoreState = <TDocument, TSelection = unknown>(
   state: EditorOperationRuntimeState<TDocument, TSelection>,

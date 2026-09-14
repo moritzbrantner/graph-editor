@@ -1,4 +1,4 @@
-import type { EditorOperation } from "@moritzbrantner/editor-core/operations";
+import type { EditorOperation } from "@moenarch/editor-core/operations";
 
 import type {
   GraphEditorConnectionInput,

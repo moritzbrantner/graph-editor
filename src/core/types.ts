@@ -1,5 +1,5 @@
-import type { EditorEntityBase, EditorEntityId } from "@moritzbrantner/editor-core/entities";
-import type { EditorViewportState } from "@moritzbrantner/editor-core/viewport";
+import type { EditorEntityBase, EditorEntityId } from "@moenarch/editor-core/entities";
+import type { EditorViewportState } from "@moenarch/editor-core/viewport";
 
 export type GraphEditorPort<TPortType = unknown, TPortData = Record<string, unknown>> = {
   id: string;

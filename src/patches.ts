@@ -6,7 +6,7 @@ import {
   type ApplyEditorPatchOptions,
   type DiffEditorJsonOptions,
   type EditorPatch,
-} from "@moritzbrantner/editor-core/patches";
+} from "@moenarch/editor-core/patches";
 
 import { normalizeGraphEditorDocument, type GraphEditorDocument } from "./core";
 

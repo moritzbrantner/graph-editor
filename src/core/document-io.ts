@@ -1,7 +1,7 @@
 import {
   EditorJsonParseError,
   type EditorDocumentAdapter,
-} from "@moritzbrantner/editor-core/serialization";
+} from "@moenarch/editor-core/serialization";
 
 import { graphEditorDocumentFormat, graphEditorSchemaVersion } from "./constants";
 import { normalizeGraphEditorDocument } from "./document";

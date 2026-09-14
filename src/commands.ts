@@ -4,14 +4,14 @@ import {
   type EditorCommandContext,
   type EditorContextualCommandDefinition,
   type EditorResolvedCommandDefinition,
-} from "@moritzbrantner/editor-core/commands";
+} from "@moenarch/editor-core/commands";
 import {
   formatEditorShortcutLabel,
   isEditorEditableTarget,
   matchesEditorHotkey,
   resolveEditorHotkeys,
   type EditorHotkeyMap,
-} from "@moritzbrantner/editor-core/hotkeys";
+} from "@moenarch/editor-core/hotkeys";
 
 import type { GraphEditorDocument, GraphEditorSelectionState, GraphEditorViewport } from "./core";
 

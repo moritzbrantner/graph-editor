@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { isEditorEditableTarget, matchesEditorHotkey } from "@moritzbrantner/editor-core/hotkeys";
+import { isEditorEditableTarget, matchesEditorHotkey } from "@moenarch/editor-core/hotkeys";
 
 import {
   createGraphEditorAddEdgeOperation,

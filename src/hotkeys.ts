@@ -2,7 +2,7 @@ import {
   getEditorHotkeyConflicts as getEditorCoreHotkeyConflicts,
   resolveEditorHotkeys,
   type EditorHotkeyMap,
-} from "@moritzbrantner/editor-core/hotkeys";
+} from "@moenarch/editor-core/hotkeys";
 
 import { graphEditorCommandShortcuts, type GraphEditorCommandId } from "./commands";
 

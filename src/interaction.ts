@@ -1,4 +1,4 @@
-import type { EditorEntityId, EditorPoint } from "@moritzbrantner/editor-core/entities";
+import type { EditorEntityId, EditorPoint } from "@moenarch/editor-core/entities";
 
 import {
   normalizeGraphEditorDocument,

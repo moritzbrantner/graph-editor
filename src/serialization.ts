@@ -7,7 +7,7 @@ import {
   type ReadEditorDocumentOptions,
   type SerializeEditorDocumentOptions,
   type SerializedEditorDocument,
-} from "@moritzbrantner/editor-core/serialization";
+} from "@moenarch/editor-core/serialization";
 
 import {
   graphEditorDocumentAdapter,

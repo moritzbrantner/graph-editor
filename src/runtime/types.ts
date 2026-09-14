@@ -1,4 +1,4 @@
-import type { EditorOperationRuntimeState } from "@moritzbrantner/editor-core/operations";
+import type { EditorOperationRuntimeState } from "@moenarch/editor-core/operations";
 
 import type {
   GraphEditorConnectionValidationOptions,

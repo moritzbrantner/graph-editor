@@ -5,7 +5,7 @@ import * as React from "react";
 import {
   getEditorHotkeyFromKeyboardEvent,
   isEditorHotkeyValid,
-} from "@moritzbrantner/editor-core/hotkeys";
+} from "@moenarch/editor-core/hotkeys";
 
 import {
   getGraphEditorHotkeyConflicts,

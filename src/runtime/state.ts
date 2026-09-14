@@ -1,10 +1,10 @@
-import { createStableEditorJsonEquals } from "@moritzbrantner/editor-core/json";
+import { createStableEditorJsonEquals } from "@moenarch/editor-core/json";
 import {
   type EditorOperation,
   type EditorOperationPreflightIssue,
   type EditorOperationRuntimeState,
-} from "@moritzbrantner/editor-core/operations";
-import { setEditorRuntimeSelection } from "@moritzbrantner/editor-core/runtime";
+} from "@moenarch/editor-core/operations";
+import { setEditorRuntimeSelection } from "@moenarch/editor-core/runtime";
 
 import {
   normalizeGraphEditorSelection,
