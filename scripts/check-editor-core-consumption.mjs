@@ -83,9 +83,7 @@ async function checkSourceImports(editorCoreManifest) {
       }
     }
 
-    for (const match of text.matchAll(
-      /from\s+["'](@moenarch\/editor-core(?:\/[^"']+)?)["']/g,
-    )) {
+    for (const match of text.matchAll(/from\s+["'](@moenarch\/editor-core(?:\/[^"']+)?)["']/g)) {
       const specifier = match[1];
       if (specifier === "@moenarch/editor-core") {
         failures.push(`${filePath} imports the editor-core root entrypoint; use explicit subpaths`);
