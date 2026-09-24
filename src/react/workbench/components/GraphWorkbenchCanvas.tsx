@@ -28,6 +28,7 @@ import {
   type GraphCanvasConnection,
   type GraphCanvasEdge,
   type GraphCanvasNodeData,
+  type GraphCanvasNodeRenderer,
 } from "../../graph-canvas";
 import {
   getGraphCanvasKeyboardNudgeDelta,
@@ -53,6 +54,7 @@ export function GraphWorkbenchCanvas<
   connectDocument,
   renderContextPad,
   renderCanvasOverlay,
+  renderNode,
   onCanvasContextMenuCapture,
   onCanvasDoubleClickCapture,
 }: {
@@ -88,6 +90,7 @@ export function GraphWorkbenchCanvas<
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
     context: { containerRef: React.RefObject<HTMLDivElement | null> },
   ) => React.ReactNode;
+  renderNode?: GraphCanvasNodeRenderer;
   onCanvasContextMenuCapture?: (
     event: React.MouseEvent<HTMLDivElement>,
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
@@ -275,6 +278,7 @@ export function GraphWorkbenchCanvas<
         showMiniMap={showMiniMap}
         showToolbar={false}
         showPortColumnHeaders={false}
+        renderNode={renderNode}
         viewport={controller.document.viewport}
         onViewportChange={(viewport) => {
           controller.actions.updateDocument(
