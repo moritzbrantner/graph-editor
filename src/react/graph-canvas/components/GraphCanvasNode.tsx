@@ -4,7 +4,11 @@ import * as React from "react";
 
 import { cn } from "@moritzbrantner/ui";
 
-import { GraphNode, getGraphNodeSize } from "../../nodes";
+import {
+  GraphNode,
+  getGraphNodeSize,
+  type GraphNodeProps,
+} from "../../nodes";
 import { type GraphCanvasNodeProps } from "../index-core";
 
 export const GraphCanvasNode = React.memo(function GraphCanvasNode({
@@ -15,6 +19,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   pendingConnection,
   inputsConnectable,
   showPortColumnHeaders = true,
+  renderNode,
   onNodeSelect,
   onNodeMinimizedChange,
   onStartConnection,
@@ -28,6 +33,31 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
 }: GraphCanvasNodeProps) {
   const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
   const nodeSize = getGraphNodeSize(node, layoutOptions);
+  const graphNodeProps = {
+    node,
+    selected,
+    readOnly,
+    inputDisabled: readOnly || !(pendingConnection || inputsConnectable),
+    outputDisabled: readOnly,
+    showPortColumnHeaders,
+    onNodeSelect: () => onNodeSelect?.(node),
+    onMinimizedChange: (_node, minimized) => onNodeMinimizedChange?.(node.id, minimized),
+    onInputClick: (port) => onCompleteConnection?.(node.id, port.id),
+    onOutputClick: (port) => onStartConnection?.(node.id, port.id),
+    onInputPointerUp: (port, _node, event) => onInputPointerUp?.(event, node.id, port.id),
+    onOutputPointerDown: (port, _node, event) => onOutputPointerDown?.(event, node.id, port.id),
+    onOutputPointerUp: (port, _node, event) => onOutputPointerUp?.(event, node.id, port.id),
+    getInputAriaLabel: (port) => `Connect to ${node.label} ${port.label}`,
+    getOutputAriaLabel: (port) => `Start ${node.label} ${port.label}`,
+  } satisfies GraphNodeProps;
+  const renderedNode =
+    renderNode?.({
+      node,
+      selected: selected === true,
+      readOnly: readOnly === true,
+      size: nodeSize,
+      graphNodeProps,
+    }) ?? <GraphNode {...graphNodeProps} />;
 
   return (
     <div
@@ -49,23 +79,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
       onMouseDown={(event) => onNodePointerDown?.(event, node)}
       {...props}
     >
-      <GraphNode
-        node={node}
-        selected={selected}
-        readOnly={readOnly}
-        inputDisabled={readOnly || !(pendingConnection || inputsConnectable)}
-        outputDisabled={readOnly}
-        showPortColumnHeaders={showPortColumnHeaders}
-        onNodeSelect={() => onNodeSelect?.(node)}
-        onMinimizedChange={(_, minimized) => onNodeMinimizedChange?.(node.id, minimized)}
-        onInputClick={(port) => onCompleteConnection?.(node.id, port.id)}
-        onOutputClick={(port) => onStartConnection?.(node.id, port.id)}
-        onInputPointerUp={(port, _, event) => onInputPointerUp?.(event, node.id, port.id)}
-        onOutputPointerDown={(port, _, event) => onOutputPointerDown?.(event, node.id, port.id)}
-        onOutputPointerUp={(port, _, event) => onOutputPointerUp?.(event, node.id, port.id)}
-        getInputAriaLabel={(port) => `Connect to ${node.label} ${port.label}`}
-        getOutputAriaLabel={(port) => `Start ${node.label} ${port.label}`}
-      />
+      {renderedNode}
     </div>
   );
 });
