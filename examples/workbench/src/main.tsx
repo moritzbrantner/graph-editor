@@ -13,10 +13,16 @@ import {
 } from "lucide-react";
 
 import {
+  GraphNode,
+  GraphNodeFrame,
+  GraphNodeHeader,
+  GraphNodeInteractiveBody,
+  GraphNodePorts,
   GraphWorkbench,
   createGraphEditorRuntime,
   normalizeGraphEditorDocument,
   validateGraphEditorDocument,
+  type GraphCanvasNodeRenderContext,
   type GraphEditorRuntimeState,
   type GraphWorkbenchInspectorSchema,
 } from "@moritzbrantner/graph-editor";
@@ -364,10 +370,63 @@ function WorkflowExample() {
         nodeTemplates={selectedExample.nodeTemplates}
         inspectorSchema={workflowInspectorSchema}
         readOnly={readOnly}
+        getNodeSize={(node, { defaultSize }) =>
+          node.id === "enrich-account"
+            ? { width: defaultSize.width, height: defaultSize.height + 44 }
+            : defaultSize
+        }
+        renderNode={renderExampleWorkflowNode}
         className="h-[calc(100vh-12rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
         onRuntimeChange={commitWorkbenchRuntime}
       />
     </section>
+  );
+}
+
+function renderExampleWorkflowNode(context: GraphCanvasNodeRenderContext) {
+  if (context.node.id !== "enrich-account") {
+    return <GraphNode {...context.graphNodeProps} />;
+  }
+
+  const { graphNodeProps, node, selected, size } = context;
+
+  return (
+    <GraphNodeFrame node={node} selected={selected} size={size}>
+      <GraphNodeHeader
+        node={node}
+        minimized={node.minimized ?? false}
+        onNodeSelect={graphNodeProps.onNodeSelect}
+        onMinimizedChange={(minimized) => graphNodeProps.onMinimizedChange?.(node, minimized)}
+      />
+      {node.minimized ? null : (
+        <GraphNodeInteractiveBody className="border-b px-3 py-2">
+          <label className="grid gap-1 text-[11px] font-medium text-zinc-600">
+            Inline setting
+            <input
+              aria-label={`Inline setting for ${node.label}`}
+              className="h-7 rounded border border-zinc-300 bg-white px-2 text-xs text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/40"
+              defaultValue={String(node.data?.setting ?? "")}
+            />
+          </label>
+        </GraphNodeInteractiveBody>
+      )}
+      {node.minimized ? null : (
+        <GraphNodePorts
+          node={node}
+          readOnly={graphNodeProps.readOnly}
+          inputDisabled={graphNodeProps.inputDisabled}
+          outputDisabled={graphNodeProps.outputDisabled}
+          showPortColumnHeaders={false}
+          onInputClick={graphNodeProps.onInputClick}
+          onOutputClick={graphNodeProps.onOutputClick}
+          onInputPointerUp={graphNodeProps.onInputPointerUp}
+          onOutputPointerDown={graphNodeProps.onOutputPointerDown}
+          onOutputPointerUp={graphNodeProps.onOutputPointerUp}
+          getInputAriaLabel={graphNodeProps.getInputAriaLabel}
+          getOutputAriaLabel={graphNodeProps.getOutputAriaLabel}
+        />
+      )}
+    </GraphNodeFrame>
   );
 }
 
