@@ -77,7 +77,7 @@ function validateThroughCore(input: GraphCanvasConnectionValidityInput) {
     { nodes, edges } as unknown as GraphEditorDocument,
     { sourceNodeId, sourcePortId, targetNodeId, targetPortId },
     {
-      ignoreEdgeId,
+      ...(ignoreEdgeId === undefined ? {} : { ignoreEdgeId }),
       arePortsCompatible(sourcePort, targetPort) {
         const sourceType = portTypeSource(sourcePort.type);
         const targetType = portTypeSource(targetPort.type);
