@@ -19,6 +19,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   pendingConnection,
   inputsConnectable,
   showPortColumnHeaders = true,
+  size,
   renderNode,
   onNodeSelect,
   onNodeMinimizedChange,
@@ -32,7 +33,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   ...props
 }: GraphCanvasNodeProps) {
   const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
-  const nodeSize = getGraphNodeSize(node, layoutOptions);
+  const nodeSize = size ?? getGraphNodeSize(node, layoutOptions);
   const graphNodeProps = {
     node,
     selected,
