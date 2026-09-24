@@ -10,6 +10,8 @@ export {
   type GraphCanvasGroup,
   type GraphCanvasMiniMapProps,
   type GraphCanvasNodeData,
+  type GraphCanvasNodeRenderContext,
+  type GraphCanvasNodeRenderer,
   type GraphCanvasNodeProps,
   type GraphCanvasPort,
   type GraphCanvasProps,
