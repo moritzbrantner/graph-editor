@@ -67,6 +67,16 @@ type GraphCanvasNodeRenderContext = {
 
 type GraphCanvasNodeRenderer = (context: GraphCanvasNodeRenderContext) => React.ReactNode;
 
+type GraphCanvasNodeSizeContext = {
+  defaultSize: GraphNodeSize;
+  layoutOptions: GraphNodeLayoutOptions;
+};
+
+type GraphCanvasNodeSizeResolver = (
+  node: GraphCanvasNodeData,
+  context: GraphCanvasNodeSizeContext,
+) => GraphNodeSize;
+
 type GraphCanvasConnectionValidityInput = {
   nodes: GraphCanvasNodeData[];
   edges: GraphCanvasEdge[];
@@ -126,6 +136,7 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   hiddenNodeIds?: readonly string[];
   hiddenEdgeIds?: readonly string[];
   getNodeDragGroupIds?: (nodeId: string) => readonly string[];
+  getNodeSize?: GraphCanvasNodeSizeResolver;
   renderNode?: GraphCanvasNodeRenderer;
   onNodePointerSelect?: (nodeId: string) => GraphCanvasSelection | undefined;
   onSelectionChange?: (selection: GraphCanvasSelection) => void;
@@ -172,6 +183,7 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   pendingConnection?: PendingConnection | null;
   inputsConnectable?: boolean;
   showPortColumnHeaders?: boolean;
+  size?: GraphNodeSize;
   renderNode?: GraphCanvasNodeRenderer;
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
@@ -215,6 +227,7 @@ export type GraphCanvasMiniMapProps = React.ComponentProps<"div"> & {
   edges?: GraphCanvasEdge[];
   selectedNodeId?: string | null;
   showPortColumnHeaders?: boolean;
+  getNodeSize?: GraphCanvasNodeSizeResolver;
 };
 
 type PendingConnection = {
@@ -377,14 +390,29 @@ function getWorkflowEdgeLine(
   edge: GraphCanvasEdge,
   portPoints: GraphCanvasPortPointMap = {},
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
   const sourceNode = nodeById.get(edge.sourceNodeId);
   const targetNode = nodeById.get(edge.targetNodeId);
   const source = sourceNode
-    ? getGraphNodePortPoint(sourceNode, "output", edge.sourcePortId, portPoints, layoutOptions)
+    ? getGraphNodePortPoint(
+        sourceNode,
+        "output",
+        edge.sourcePortId,
+        portPoints,
+        layoutOptions,
+        getNodeSize,
+      )
     : { x: 0, y: 0 };
   const target = targetNode
-    ? getGraphNodePortPoint(targetNode, "input", edge.targetPortId, portPoints, layoutOptions)
+    ? getGraphNodePortPoint(
+        targetNode,
+        "input",
+        edge.targetPortId,
+        portPoints,
+        layoutOptions,
+        getNodeSize,
+      )
     : { x: 0, y: 0 };
   const handle = Math.max(48, Math.abs(target.x - source.x) / 2);
 
@@ -406,6 +434,7 @@ function getWorkflowConnectionDragLine(
   drag: GraphCanvasConnectionDrag,
   portPoints: GraphCanvasPortPointMap = {},
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
   if (drag.type === "rewire-source") {
     const targetNode = nodeById.get(drag.edge.targetNodeId);
@@ -416,6 +445,7 @@ function getWorkflowConnectionDragLine(
           drag.edge.targetPortId,
           portPoints,
           layoutOptions,
+          getNodeSize,
         )
       : drag.pointerPoint;
 
@@ -425,7 +455,14 @@ function getWorkflowConnectionDragLine(
   const sourceNode = nodeById.get(drag.type === "new" ? drag.sourceNodeId : drag.edge.sourceNodeId);
   const sourcePortId = drag.type === "new" ? drag.sourcePortId : drag.edge.sourcePortId;
   const source = sourceNode
-    ? getGraphNodePortPoint(sourceNode, "output", sourcePortId, portPoints, layoutOptions)
+    ? getGraphNodePortPoint(
+        sourceNode,
+        "output",
+        sourcePortId,
+        portPoints,
+        layoutOptions,
+        getNodeSize,
+      )
     : drag.pointerPoint;
 
   return getGraphCanvasConnectionPreviewLine(source, drag.pointerPoint);
@@ -437,6 +474,7 @@ function getWorkflowEdgeEndpointPoint(
   endpoint: "source" | "target",
   portPoints: GraphCanvasPortPointMap = {},
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
   const node = nodeById.get(endpoint === "source" ? edge.sourceNodeId : edge.targetNodeId);
 
@@ -450,6 +488,7 @@ function getWorkflowEdgeEndpointPoint(
     endpoint === "source" ? edge.sourcePortId : edge.targetPortId,
     portPoints,
     layoutOptions,
+    getNodeSize,
   );
 }
 
@@ -459,8 +498,9 @@ function getGraphNodePortPoint(
   portId: string,
   portPoints: GraphCanvasPortPointMap = {},
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ): GraphCanvasPoint {
-  const size = getGraphNodeSize(node, layoutOptions);
+  const size = resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize);
   const compact = node.variant === "compact";
   const measuredPoint = portPoints[getGraphCanvasPortPointKey(node.id, direction, portId)];
 
@@ -468,7 +508,8 @@ function getGraphNodePortPoint(
     return measuredPoint;
   }
 
-  const x = node.x + getGraphNodePortDotXOffset(node, direction, layoutOptions);
+  const x =
+    node.x + getGraphNodePortDotXOffset(node, direction, layoutOptions, getNodeSize);
 
   if (compact) {
     return {
@@ -496,12 +537,15 @@ function getGraphNodePortPoint(
 function getWorkflowBounds(
   nodes: GraphCanvasNodeData[],
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
   const xs = nodes.map((node) => node.x);
   const ys = nodes.map((node) => node.y);
   const minX = Math.min(...xs, 0);
   const minY = Math.min(...ys, 0);
-  const sizes = nodes.map((node) => getGraphNodeSize(node, layoutOptions));
+  const sizes = nodes.map((node) =>
+    resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize),
+  );
   const maxX = Math.max(
     ...xs.map((x, index) => x + sizes[index]!.width),
     graphNodeSizeFallback().width,
@@ -556,8 +600,9 @@ function getGraphCanvasKeyboardNudgeDelta(
 function getGraphCanvasNodeCenter(
   node: GraphCanvasNodeData,
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ): GraphCanvasPoint {
-  const size = getGraphNodeSize(node, layoutOptions);
+  const size = resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize);
   return {
     x: node.x + size.width / 2,
     y: node.y + size.height / 2,
@@ -570,6 +615,7 @@ function getNextGraphCanvasNodeSelection(
   direction: GraphCanvasKeyboardDirection,
   layoutOptions: GraphNodeLayoutOptions,
   hiddenNodeIdSet: ReadonlySet<string>,
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
   const visibleNodes = nodes
     .filter((node) => !hiddenNodeIdSet.has(node.id))
@@ -589,13 +635,13 @@ function getNextGraphCanvasNodeSelection(
     return visibleNodes[0]!;
   }
 
-  const currentCenter = getGraphCanvasNodeCenter(currentNode, layoutOptions);
+  const currentCenter = getGraphCanvasNodeCenter(currentNode, layoutOptions, getNodeSize);
   const candidates = visibleNodes.flatMap((node) => {
     if (node.id === currentNode.id) {
       return [];
     }
 
-    const center = getGraphCanvasNodeCenter(node, layoutOptions);
+    const center = getGraphCanvasNodeCenter(node, layoutOptions, getNodeSize);
     const primaryDistance =
       direction === "right"
         ? center.x - currentCenter.x
@@ -660,8 +706,9 @@ function getGraphNodePortDotXOffset(
   node: GraphCanvasNodeData,
   direction: GraphCanvasPortDirection,
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ) {
-  const size = getGraphNodeSize(node, layoutOptions);
+  const size = resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize);
 
   return direction === "input" ? 0 : size.width;
 }
@@ -671,16 +718,17 @@ function getGraphCanvasSnappedNodePosition(
   nodes: GraphCanvasNodeData[],
   position: GraphCanvasPoint,
   layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
 ): GraphCanvasPoint {
   let closestSnap: (GraphCanvasPoint & { distance: number }) | null = null;
-  const nodeSize = getGraphNodeSize(node, layoutOptions);
+  const nodeSize = resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize);
 
   for (const otherNode of nodes) {
     if (otherNode.id === node.id) {
       continue;
     }
 
-    const otherSize = getGraphNodeSize(otherNode, layoutOptions);
+    const otherSize = resolveGraphCanvasNodeSize(otherNode, layoutOptions, getNodeSize);
 
     for (const inputMatch of getGraphCanvasPortMatches(node.inputs, otherNode.outputs)) {
       const snap = {
@@ -720,6 +768,26 @@ function getGraphCanvasSnappedNodePosition(
   }
 
   return closestSnap ? { x: closestSnap.x, y: closestSnap.y } : position;
+}
+
+function resolveGraphCanvasNodeSize(
+  node: GraphCanvasNodeData,
+  layoutOptions: GraphNodeLayoutOptions = {},
+  getNodeSize?: GraphCanvasNodeSizeResolver,
+): GraphNodeSize {
+  const defaultSize = getGraphNodeSize(node, layoutOptions);
+  const resolvedSize = getNodeSize?.(node, { defaultSize, layoutOptions }) ?? defaultSize;
+
+  if (
+    !Number.isFinite(resolvedSize.width) ||
+    !Number.isFinite(resolvedSize.height) ||
+    resolvedSize.width <= 0 ||
+    resolvedSize.height <= 0
+  ) {
+    return defaultSize;
+  }
+
+  return resolvedSize;
 }
 
 function orderedGraphCanvasNodeIds(
@@ -970,6 +1038,7 @@ export {
   getGraphCanvasKeyboardNudgeDelta,
   nudgeGraphCanvasNodes,
   getGraphCanvasSnappedNodePosition,
+  resolveGraphCanvasNodeSize,
   orderedGraphCanvasNodeIds,
   getGraphCanvasPortTypeSource,
   measureGraphCanvasPortPoints,
@@ -997,6 +1066,8 @@ export type {
   GraphCanvasNodeData,
   GraphCanvasNodeRenderContext,
   GraphCanvasNodeRenderer,
+  GraphCanvasNodeSizeContext,
+  GraphCanvasNodeSizeResolver,
   GraphCanvasPoint,
   GraphCanvasPort,
   GraphCanvasPortDirection,
