@@ -244,4 +244,48 @@ describe("GraphCanvas connection validation authority", () => {
       );
     });
   }
+
+  test("does not add extra full-collection scans around core validation", () => {
+    const nodeCount = 1_000;
+    const nodes = Array.from({ length: nodeCount }, (_, index) =>
+      makeNode(`node-${index}`),
+    );
+    const edges = Array.from({ length: nodeCount - 1 }, (_, index) =>
+      edge(`edge-${index}`, `node-${index}`, `node-${index + 1}`),
+    );
+    const countedNodes = countIndexedReads(nodes);
+    const countedEdges = countIndexedReads(edges);
+
+    expect(
+      getGraphCanvasConnectionValidity({
+        nodes: countedNodes.values,
+        edges: countedEdges.values,
+        sourceNodeId: `node-${nodeCount - 1}`,
+        sourcePortId: "out",
+        targetNodeId: "node-0",
+        targetPortId: "in",
+      }),
+    ).toEqual({ valid: false, reason: "cycle" });
+
+    expect(countedNodes.reads()).toBeLessThanOrEqual(nodeCount + 1);
+    expect(countedEdges.reads()).toBeLessThanOrEqual(edges.length + 1);
+  });
 });
+
+function countIndexedReads<T>(values: T[]) {
+  let reads = 0;
+  const proxied = new Proxy(values, {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\\d+$/.test(property)) {
+        reads += 1;
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+
+  return {
+    values: proxied,
+    reads: () => reads,
+  };
+}
+
