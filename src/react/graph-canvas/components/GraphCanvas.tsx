@@ -1166,7 +1166,10 @@ export function GraphCanvas({
   );
 
   React.useEffect(() => {
-    if (measurePorts !== "dom") {
+    const shouldMeasurePortsFromDom =
+      measurePorts === "dom" || (measurePorts === "auto" && renderNode !== undefined);
+
+    if (!shouldMeasurePortsFromDom) {
       setPortPoints((currentPortPoints) =>
         Object.keys(currentPortPoints).length === 0 ? currentPortPoints : {},
       );
@@ -1193,7 +1196,7 @@ export function GraphCanvas({
         ? currentPortPoints
         : measuredPortPoints,
     );
-  }, [connectionDrag, currentZoom, edges, measurePorts, nodes, pendingConnection]);
+  }, [connectionDrag, currentZoom, edges, measurePorts, nodes, pendingConnection, renderNode]);
 
   React.useEffect(() => {
     return () => {
