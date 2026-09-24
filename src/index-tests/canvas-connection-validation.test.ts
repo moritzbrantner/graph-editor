@@ -48,11 +48,7 @@ function makeNode(
   };
 }
 
-function edge(
-  id: string,
-  sourceNodeId: string,
-  targetNodeId: string,
-): GraphCanvasEdge {
+function edge(id: string, sourceNodeId: string, targetNodeId: string): GraphCanvasEdge {
   return {
     id,
     sourceNodeId,
@@ -247,9 +243,7 @@ describe("GraphCanvas connection validation authority", () => {
 
   test("does not add extra full-collection scans around core validation", () => {
     const nodeCount = 1_000;
-    const nodes = Array.from({ length: nodeCount }, (_, index) =>
-      makeNode(`node-${index}`),
-    );
+    const nodes = Array.from({ length: nodeCount }, (_, index) => makeNode(`node-${index}`));
     const edges = Array.from({ length: nodeCount - 1 }, (_, index) =>
       edge(`edge-${index}`, `node-${index}`, `node-${index + 1}`),
     );
