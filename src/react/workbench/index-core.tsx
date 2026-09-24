@@ -64,6 +64,7 @@ import {
   type GraphEditorOperation,
 } from "../../operations";
 import { getGraphEditorNodeSize } from "../../node-metrics";
+import type { GraphCanvasNodeRenderer } from "../graph-canvas";
 import { type InspectorFieldValue, type InspectorPanelSectionData } from "../inspector-panel";
 import {
   graphWorkbenchCommandShortcuts,
@@ -290,6 +291,7 @@ export type GraphWorkbenchProps<
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
     context: { containerRef: React.RefObject<HTMLDivElement | null> },
   ) => React.ReactNode;
+  renderNode?: GraphCanvasNodeRenderer;
   onCanvasContextMenuCapture?: (
     event: React.MouseEvent<HTMLDivElement>,
     controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType>,
