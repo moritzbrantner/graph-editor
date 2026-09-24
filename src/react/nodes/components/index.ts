@@ -1,4 +1,11 @@
 export { GraphNode } from "./GraphNode";
+export { GraphNodeFrame, type GraphNodeFrameProps } from "./GraphNodeFrame";
+export { GraphNodeHeader, type GraphNodeHeaderProps } from "./GraphNodeHeader";
+export {
+  GraphNodeInteractiveBody,
+  type GraphNodeInteractiveBodyProps,
+} from "./GraphNodeInteractiveBody";
+export { GraphNodePorts, type GraphNodePortsProps } from "./GraphNodePorts";
 export { GraphInputOnlyNode } from "./GraphInputOnlyNode";
 export { GraphOutputOnlyNode } from "./GraphOutputOnlyNode";
 export { GraphNodeMinimizeButton } from "./GraphNodeMinimizeButton";
