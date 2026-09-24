@@ -217,7 +217,9 @@ const workflowInspectorSchema: GraphWorkbenchInspectorSchema<
 function App() {
   const [view, setView] = React.useState<ExampleView>("workflow");
   const fixture =
-    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("fixture");
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("fixture");
 
   if (fixture === "canvas-connection-validation") {
     return <CanvasConnectionValidationFixture />;
