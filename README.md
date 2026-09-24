@@ -298,6 +298,56 @@ export function Editor() {
 and modifier-drag on the canvas to marquee-select nodes, edges, and groups. Empty-canvas drag pans
 the viewport, and modifier wheel zooms around the pointer.
 
+### Composed Nodes
+
+`GraphCanvas` and `GraphWorkbench` can render domain-specific node contents without giving up
+graph interaction ownership. Use `renderNode` with the exported node primitives and forward the
+bound `graphNodeProps` callbacks instead of querying internal DOM or overlaying controls with
+portals.
+
+When a composed node needs different dimensions, declare them through `getNodeSize`. The canvas
+uses that same size for bounds, snapping, fit view, minimap scaling, and fallback edge geometry.
+With a custom renderer, `measurePorts="auto"` measures rendered port anchors from the DOM so
+connection geometry follows the composed layout.
+
+```tsx
+<GraphCanvas
+  nodes={nodes}
+  edges={edges}
+  getNodeSize={(node, { defaultSize }) =>
+    node.kind === "editable"
+      ? { width: defaultSize.width, height: defaultSize.height + 40 }
+      : defaultSize
+  }
+  renderNode={({ node, selected, size, graphNodeProps }) => (
+    <GraphNodeFrame node={node} selected={selected} size={size}>
+      <GraphNodeHeader
+        node={node}
+        minimized={node.minimized ?? false}
+        onNodeSelect={graphNodeProps.onNodeSelect}
+        onMinimizedChange={(minimized) =>
+          graphNodeProps.onMinimizedChange?.(node, minimized)
+        }
+      />
+      <GraphNodeInteractiveBody>{/* domain controls */}</GraphNodeInteractiveBody>
+      <GraphNodePorts
+        node={node}
+        readOnly={graphNodeProps.readOnly}
+        inputDisabled={graphNodeProps.inputDisabled}
+        outputDisabled={graphNodeProps.outputDisabled}
+        onInputClick={graphNodeProps.onInputClick}
+        onOutputClick={graphNodeProps.onOutputClick}
+      />
+    </GraphNodeFrame>
+  )}
+/>
+```
+
+`GraphNodeInteractiveBody` is an interaction island: pointer and keyboard events from ordinary
+form controls stay inside the node instead of accidentally starting canvas drag or graph shortcuts.
+Keep composed layout deterministic and declare size changes through `getNodeSize`; do not patch
+GraphNode internals with consumer CSS selectors.
+
 Connection lifecycle callbacks are split by intent:
 
 ```tsx
