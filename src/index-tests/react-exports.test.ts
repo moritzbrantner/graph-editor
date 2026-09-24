@@ -9,6 +9,10 @@ import {
   GraphWorkbench,
   GraphWorkbenchContextPad,
   GraphNode,
+  GraphNodeFrame,
+  GraphNodeHeader,
+  GraphNodeInteractiveBody,
+  GraphNodePorts,
   InspectorPanel,
   applyGraphEditorOperation,
   applyGraphEditorDocumentPatch,
@@ -81,9 +85,14 @@ import {
   type GraphEditorSelectionState,
   type GraphCanvasMiniMapProps,
   type GraphCanvasNodeData,
+  type GraphCanvasNodeRenderContext,
   type GraphCanvasNodeProps,
   type GraphCanvasToolbarProps,
   type GraphWorkbenchActionError,
+  type GraphNodeFrameProps,
+  type GraphNodeHeaderProps,
+  type GraphNodeInteractiveBodyProps,
+  type GraphNodePortsProps,
   type InspectorActionsProps,
   type InspectorFieldGroupProps,
   type InspectorFieldOption,
@@ -129,7 +138,12 @@ type PublicReactTypeSurface = {
   actionError: GraphWorkbenchActionError;
   canvasMiniMapProps: GraphCanvasMiniMapProps;
   canvasNodeProps: GraphCanvasNodeProps;
+  canvasNodeRenderContext: GraphCanvasNodeRenderContext;
   canvasToolbarProps: GraphCanvasToolbarProps;
+  graphNodeFrameProps: GraphNodeFrameProps;
+  graphNodeHeaderProps: GraphNodeHeaderProps;
+  graphNodeInteractiveBodyProps: GraphNodeInteractiveBodyProps;
+  graphNodePortsProps: GraphNodePortsProps;
   inspectorActionsProps: InspectorActionsProps;
   inspectorFieldGroupProps: InspectorFieldGroupProps;
   inspectorFieldOption: InspectorFieldOption;
@@ -146,8 +160,102 @@ describe("@moritzbrantner/graph-editor", () => {
     expect(typeof GraphCanvas).toBe("function");
     expect(typeof GraphCanvasToolbar).toBe("function");
     expect(typeof GraphNode).toBe("function");
+    expect(typeof GraphNodeFrame).toBe("function");
+    expect(typeof GraphNodeHeader).toBe("function");
+    expect(typeof GraphNodeInteractiveBody).toBe("function");
+    expect(typeof GraphNodePorts).toBe("function");
     expect(typeof GraphWorkbenchContextPad).toBe("function");
     expect(typeof InspectorPanel).toBe("function");
+  });
+
+  test("renders editable canvas nodes through the public composition seam", async () => {
+    const selections: Array<{ nodeIds: string[]; edgeIds: string[] }> = [];
+    const connectionStarts: Array<{ sourceNodeId: string; sourcePortId: string }> = [];
+
+    render(
+      React.createElement(GraphCanvas, {
+        nodes: [
+          {
+            id: "source",
+            label: "Source",
+            x: 0,
+            y: 0,
+            outputs: [{ id: "value", label: "Value", kind: "string" }],
+          },
+        ],
+        edges: [],
+        showToolbar: false,
+        showMiniMap: false,
+        renderNode(context) {
+          const { graphNodeProps, node, selected, size } = context;
+
+          return React.createElement(
+            GraphNodeFrame,
+            { node, selected, size },
+            React.createElement(GraphNodeHeader, {
+              node,
+              minimized: node.minimized ?? false,
+              onNodeSelect: graphNodeProps.onNodeSelect,
+              onMinimizedChange(nextMinimized) {
+                graphNodeProps.onMinimizedChange?.(node, nextMinimized);
+              },
+            }),
+            React.createElement(
+              GraphNodeInteractiveBody,
+              { className: "px-3 py-2" },
+              React.createElement(
+                "label",
+                null,
+                "Value",
+                React.createElement("input", {
+                  "aria-label": "Node value",
+                  defaultValue: "hello",
+                }),
+              ),
+            ),
+            React.createElement(GraphNodePorts, {
+              node,
+              readOnly: graphNodeProps.readOnly,
+              inputDisabled: graphNodeProps.inputDisabled,
+              outputDisabled: graphNodeProps.outputDisabled,
+              showPortColumnHeaders: false,
+              onInputClick: graphNodeProps.onInputClick,
+              onOutputClick: graphNodeProps.onOutputClick,
+              onInputPointerUp: graphNodeProps.onInputPointerUp,
+              onOutputPointerDown: graphNodeProps.onOutputPointerDown,
+              onOutputPointerUp: graphNodeProps.onOutputPointerUp,
+              getInputAriaLabel: graphNodeProps.getInputAriaLabel,
+              getOutputAriaLabel: graphNodeProps.getOutputAriaLabel,
+            }),
+          );
+        },
+        onSelectionStateChange(nextSelection) {
+          selections.push({
+            nodeIds: nextSelection.nodeIds,
+            edgeIds: nextSelection.edgeIds,
+          });
+        },
+        onConnectionStart(connection) {
+          connectionStarts.push(connection);
+        },
+      }),
+    );
+
+    const input = screen.getByRole("textbox", { name: "Node value" });
+    await act(async () => {
+      fireEvent.mouseDown(input, { button: 0 });
+    });
+    expect(selections).toHaveLength(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Source" }));
+    });
+    expect(selections.at(-1)?.nodeIds).toEqual(["source"]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Start Source Value" }));
+    });
+    expect(connectionStarts).toEqual([{ sourceNodeId: "source", sourcePortId: "value" }]);
   });
 
   test("selects multiple canvas nodes with modifier clicks", async () => {
