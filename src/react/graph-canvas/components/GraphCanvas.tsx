@@ -40,6 +40,7 @@ import {
   measureGraphCanvasPortPoints,
   nudgeGraphCanvasNodes,
   orderedGraphCanvasNodeIds,
+  resolveGraphCanvasNodeSize,
   type DragState,
   type GraphCanvasConnection,
   type GraphCanvasConnectionDrag,
@@ -57,7 +58,6 @@ import {
   type PanState,
   type PendingConnection,
 } from "../index-core";
-import { getGraphNodeSize } from "../../nodes";
 import { GraphCanvasEdgeHandle } from "./GraphCanvasEdgeHandle";
 import { GraphCanvasMiniMap } from "./GraphCanvasMiniMap";
 import { GraphCanvasNode } from "./GraphCanvasNode";
@@ -85,6 +85,7 @@ export function GraphCanvas({
   hiddenNodeIds,
   hiddenEdgeIds,
   getNodeDragGroupIds,
+  getNodeSize,
   renderNode,
   onNodePointerSelect,
   onSelectionChange,
@@ -237,11 +238,11 @@ export function GraphCanvas({
     () =>
       new Map(
         nodes.map((node) => {
-          const size = getGraphNodeSize(node, layoutOptions);
+          const size = resolveGraphCanvasNodeSize(node, layoutOptions, getNodeSize);
           return [node.id, { x: node.x, y: node.y, width: size.width, height: size.height }];
         }),
       ),
-    [layoutOptions, nodes],
+    [getNodeSize, layoutOptions, nodes],
   );
   const groupBounds = React.useMemo(
     () =>
@@ -261,13 +262,14 @@ export function GraphCanvas({
         visibleEdges.map((edge) => [
           edge.id,
           {
-            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions),
+            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions, getNodeSize),
             sourcePoint: getWorkflowEdgeEndpointPoint(
               nodeById,
               edge,
               "source",
               portPoints,
               layoutOptions,
+              getNodeSize,
             ),
             targetPoint: getWorkflowEdgeEndpointPoint(
               nodeById,
@@ -279,7 +281,7 @@ export function GraphCanvas({
           },
         ]),
       ),
-    [layoutOptions, nodeById, portPoints, visibleEdges],
+    [getNodeSize, layoutOptions, nodeById, portPoints, visibleEdges],
   );
 
   React.useEffect(() => {
@@ -689,6 +691,7 @@ export function GraphCanvas({
       nodes.filter((node) => !draggedNodeIds.has(node.id)),
       rawPosition,
       layoutOptions,
+      getNodeSize,
     );
     const delta = {
       x: nextPosition.x - dragState.originalX,
@@ -1011,7 +1014,7 @@ export function GraphCanvas({
       return;
     }
 
-    const bounds = getWorkflowBounds(nodes, layoutOptions);
+    const bounds = getWorkflowBounds(nodes, layoutOptions, getNodeSize);
     const padding = 48;
     const nextZoom = Math.min(
       maxZoom,
@@ -1085,6 +1088,7 @@ export function GraphCanvas({
           keyboardDirection,
           layoutOptions,
           hiddenNodeIdSet,
+          getNodeSize,
         );
 
         if (nextNode) {
@@ -1337,16 +1341,31 @@ export function GraphCanvas({
             {visibleEdges.map((edge) => {
               const geometry = edgeGeometry.get(edge.id);
               const line =
-                geometry?.line ?? getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions);
+                geometry?.line ??
+                getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions, getNodeSize);
               const selected = edge.id === currentSelectedEdgeId;
               const showEndpointHandles = !readOnly && (selected || edge.id === hoveredEdgeId);
               const edgeStroke = getGraphCanvasEdgeStatusColor(edge.status) ?? edge.color;
               const sourcePoint =
                 geometry?.sourcePoint ??
-                getWorkflowEdgeEndpointPoint(nodeById, edge, "source", portPoints, layoutOptions);
+                getWorkflowEdgeEndpointPoint(
+                  nodeById,
+                  edge,
+                  "source",
+                  portPoints,
+                  layoutOptions,
+                  getNodeSize,
+                );
               const targetPoint =
                 geometry?.targetPoint ??
-                getWorkflowEdgeEndpointPoint(nodeById, edge, "target", portPoints, layoutOptions);
+                getWorkflowEdgeEndpointPoint(
+                  nodeById,
+                  edge,
+                  "target",
+                  portPoints,
+                  layoutOptions,
+                  getNodeSize,
+                );
               return (
                 <g
                   key={edge.id}
@@ -1445,7 +1464,13 @@ export function GraphCanvas({
               <path
                 data-slot="workflow-builder-connection-preview"
                 d={
-                  getWorkflowConnectionDragLine(nodeById, connectionDrag, portPoints, layoutOptions)
+                  getWorkflowConnectionDragLine(
+                    nodeById,
+                    connectionDrag,
+                    portPoints,
+                    layoutOptions,
+                    getNodeSize,
+                  )
                     .path
                 }
                 className={cn(
@@ -1470,6 +1495,7 @@ export function GraphCanvas({
                 connectionDrag?.type === "new" || connectionDrag?.type === "rewire-target"
               }
               showPortColumnHeaders={showPortColumnHeaders}
+              size={nodeBounds.get(node.id)}
               renderNode={renderNode}
               onNodeSelect={selectNodeFromPointer}
               onNodeMinimizedChange={onNodesChange ? changeNodeMinimized : undefined}
@@ -1500,6 +1526,7 @@ export function GraphCanvas({
             edges={visibleEdges}
             selectedNodeId={currentSelectedNodeId}
             showPortColumnHeaders={showPortColumnHeaders}
+            getNodeSize={getNodeSize}
             className="absolute right-3 bottom-3"
           />
         ) : null}
