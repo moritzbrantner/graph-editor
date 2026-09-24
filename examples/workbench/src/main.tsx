@@ -371,7 +371,7 @@ function WorkflowExample() {
         inspectorSchema={workflowInspectorSchema}
         readOnly={readOnly}
         getNodeSize={(node, { defaultSize }) =>
-          node.id === "enrich-account"
+          node.id === "enrich-account" && node.minimized !== true
             ? { width: defaultSize.width, height: defaultSize.height + 44 }
             : defaultSize
         }
@@ -384,7 +384,7 @@ function WorkflowExample() {
 }
 
 function renderExampleWorkflowNode(context: GraphCanvasNodeRenderContext) {
-  if (context.node.id !== "enrich-account") {
+  if (context.node.id !== "enrich-account" || context.node.minimized === true) {
     return <GraphNode {...context.graphNodeProps} />;
   }
 
