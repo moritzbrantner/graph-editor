@@ -278,7 +278,7 @@ function getGraphCanvasConnectionValidity({
       targetPortId,
     },
     {
-      ignoreEdgeId,
+      ...(ignoreEdgeId === undefined ? {} : { ignoreEdgeId }),
       arePortsCompatible(sourcePort, targetPort) {
         const sourceType = getGraphCanvasPortTypeSource(sourcePort);
         const targetType = getGraphCanvasPortTypeSource(targetPort);
