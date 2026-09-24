@@ -86,6 +86,8 @@ import {
   type GraphCanvasMiniMapProps,
   type GraphCanvasNodeData,
   type GraphCanvasNodeRenderContext,
+  type GraphCanvasNodeSizeContext,
+  type GraphCanvasNodeSizeResolver,
   type GraphCanvasNodeProps,
   type GraphCanvasToolbarProps,
   type GraphWorkbenchActionError,
@@ -139,6 +141,8 @@ type PublicReactTypeSurface = {
   canvasMiniMapProps: GraphCanvasMiniMapProps;
   canvasNodeProps: GraphCanvasNodeProps;
   canvasNodeRenderContext: GraphCanvasNodeRenderContext;
+  canvasNodeSizeContext: GraphCanvasNodeSizeContext;
+  canvasNodeSizeResolver: GraphCanvasNodeSizeResolver;
   canvasToolbarProps: GraphCanvasToolbarProps;
   graphNodeFrameProps: GraphNodeFrameProps;
   graphNodeHeaderProps: GraphNodeHeaderProps;
@@ -186,6 +190,9 @@ describe("@moritzbrantner/graph-editor", () => {
         edges: [],
         showToolbar: false,
         showMiniMap: false,
+        getNodeSize(_node, { defaultSize }) {
+          return { width: defaultSize.width + 40, height: defaultSize.height + 48 };
+        },
         renderNode(context) {
           const { graphNodeProps, node, selected, size } = context;
 
@@ -240,6 +247,14 @@ describe("@moritzbrantner/graph-editor", () => {
         },
       }),
     );
+
+    const canvasNode = globalThis.document.querySelector<HTMLElement>(
+      "[data-slot='workflow-builder-node'][data-node-id='source']",
+    )!;
+    const nodeFrame = canvasNode.querySelector<HTMLElement>("[data-slot='workflow-node']")!;
+    expect(canvasNode.style.width).toBe("288px");
+    expect(nodeFrame.style.width).toBe("288px");
+    expect(nodeFrame.style.height).toBe("296px");
 
     const input = screen.getByRole("textbox", { name: "Node value" });
     await act(async () => {
