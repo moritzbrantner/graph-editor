@@ -19,6 +19,8 @@ import {
   type GraphNodeData as WorkflowCanvasNodeData,
   type GraphNodeLayoutOptions,
   type GraphNodePort as WorkflowCanvasNodePort,
+  type GraphNodeProps,
+  type GraphNodeSize,
 } from "../nodes";
 
 type GraphCanvasPort<TypeScriptType = unknown> = WorkflowCanvasNodePort<TypeScriptType>;
@@ -54,6 +56,16 @@ type GraphCanvasSelection =
   | { type: "edge"; id: string; edge: GraphCanvasEdge }
   | { type: "group"; id: string }
   | null;
+
+type GraphCanvasNodeRenderContext = {
+  node: GraphCanvasNodeData;
+  selected: boolean;
+  readOnly: boolean;
+  size: GraphNodeSize;
+  graphNodeProps: GraphNodeProps;
+};
+
+type GraphCanvasNodeRenderer = (context: GraphCanvasNodeRenderContext) => React.ReactNode;
 
 type GraphCanvasConnectionValidityInput = {
   nodes: GraphCanvasNodeData[];
@@ -114,6 +126,7 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   hiddenNodeIds?: readonly string[];
   hiddenEdgeIds?: readonly string[];
   getNodeDragGroupIds?: (nodeId: string) => readonly string[];
+  renderNode?: GraphCanvasNodeRenderer;
   onNodePointerSelect?: (nodeId: string) => GraphCanvasSelection | undefined;
   onSelectionChange?: (selection: GraphCanvasSelection) => void;
   onSelectionStateChange?: (selection: GraphEditorSelectionState) => void;
@@ -159,6 +172,7 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   pendingConnection?: PendingConnection | null;
   inputsConnectable?: boolean;
   showPortColumnHeaders?: boolean;
+  renderNode?: GraphCanvasNodeRenderer;
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
   onStartConnection?: (nodeId: string, portId: string) => void;
@@ -981,6 +995,8 @@ export type {
   GraphCanvasGroup,
   GraphCanvasKeyboardDirection,
   GraphCanvasNodeData,
+  GraphCanvasNodeRenderContext,
+  GraphCanvasNodeRenderer,
   GraphCanvasPoint,
   GraphCanvasPort,
   GraphCanvasPortDirection,
