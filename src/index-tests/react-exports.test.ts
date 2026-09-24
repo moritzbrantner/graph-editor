@@ -252,9 +252,9 @@ describe("@moritzbrantner/graph-editor", () => {
       "[data-slot='workflow-builder-node'][data-node-id='source']",
     )!;
     const nodeFrame = canvasNode.querySelector<HTMLElement>("[data-slot='workflow-node']")!;
-    expect(canvasNode.style.width).toBe("288px");
-    expect(nodeFrame.style.width).toBe("288px");
-    expect(nodeFrame.style.height).toBe("296px");
+    expect(canvasNode.style.width).toBe("350px");
+    expect(nodeFrame.style.width).toBe("350px");
+    expect(nodeFrame.style.height).toBe("229px");
 
     const input = screen.getByRole("textbox", { name: "Node value" });
     await act(async () => {
