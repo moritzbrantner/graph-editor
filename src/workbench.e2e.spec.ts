@@ -156,43 +156,46 @@ test("filters the palette and toggles the minimap", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Event trigger" })).toBeHidden();
 });
 
-test("direct canvas rejects cycle-forming connections through core validation", async ({ page }, testInfo) => {
-  test.skip(
-    isMobileProject(testInfo.project.name),
-    "Pointer connection dragging is covered on desktop",
-  );
-  await page.goto("/?fixture=canvas-connection-validation");
-
-  const edgeCount = page.getByLabel("Edge count");
-  await expect(edgeCount).toHaveText("1");
-
-  const dragConnection = async (sourceName: string, targetName: string) => {
-    const source = page.getByRole("button", { name: sourceName });
-    const target = page.getByRole("button", { name: targetName });
-    const sourceBox = await source.boundingBox();
-    const targetBox = await target.boundingBox();
-    expect(sourceBox).not.toBeNull();
-    expect(targetBox).not.toBeNull();
-
-    await page.mouse.move(
-      sourceBox!.x + sourceBox!.width / 2,
-      sourceBox!.y + sourceBox!.height / 2,
+test(
+  "direct canvas rejects cycle-forming connections through core validation",
+  async ({ page }, testInfo) => {
+    test.skip(
+      isMobileProject(testInfo.project.name),
+      "Pointer connection dragging is covered on desktop",
     );
-    await page.mouse.down();
-    await page.mouse.move(
-      targetBox!.x + targetBox!.width / 2,
-      targetBox!.y + targetBox!.height / 2,
-      { steps: 8 },
-    );
-    await page.mouse.up();
-  };
+    await page.goto("/?fixture=canvas-connection-validation");
 
-  await dragConnection("B Out", "C In");
-  await expect(edgeCount).toHaveText("2");
+    const edgeCount = page.getByLabel("Edge count");
+    await expect(edgeCount).toHaveText("1");
 
-  await dragConnection("C Out", "A In");
-  await expect(edgeCount).toHaveText("2");
-});
+    const dragConnection = async (sourceName: string, targetName: string) => {
+      const source = page.getByRole("button", { name: sourceName });
+      const target = page.getByRole("button", { name: targetName });
+      const sourceBox = await source.boundingBox();
+      const targetBox = await target.boundingBox();
+      expect(sourceBox).not.toBeNull();
+      expect(targetBox).not.toBeNull();
+
+      await page.mouse.move(
+        sourceBox!.x + sourceBox!.width / 2,
+        sourceBox!.y + sourceBox!.height / 2,
+      );
+      await page.mouse.down();
+      await page.mouse.move(
+        targetBox!.x + targetBox!.width / 2,
+        targetBox!.y + targetBox!.height / 2,
+        { steps: 8 },
+      );
+      await page.mouse.up();
+    };
+
+    await dragConnection("B Out", "C In");
+    await expect(edgeCount).toHaveText("2");
+
+    await dragConnection("C Out", "A In");
+    await expect(edgeCount).toHaveText("2");
+  },
+);
 
 test("supports keyboard duplicate and group commands", async ({ page }) => {
   await page.goto("/");
