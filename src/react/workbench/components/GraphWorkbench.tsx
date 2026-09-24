@@ -51,6 +51,7 @@ export function GraphWorkbench<
     renderInspector,
     renderContextPad,
     renderCanvasOverlay,
+    getNodeSize,
     renderNode,
     onCanvasContextMenuCapture,
     onCanvasDoubleClickCapture,
@@ -194,6 +195,7 @@ export function GraphWorkbench<
           connectDocument={connectDocument}
           renderContextPad={renderContextPad}
           renderCanvasOverlay={renderCanvasOverlay}
+          getNodeSize={getNodeSize}
           renderNode={renderNode}
           onCanvasContextMenuCapture={onCanvasContextMenuCapture}
           onCanvasDoubleClickCapture={onCanvasDoubleClickCapture}
