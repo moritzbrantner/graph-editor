@@ -50,11 +50,32 @@ export function readGraphEditorDocument(input: unknown, path = "$"): GraphEditor
   if (diagnostics.length > 0) {
     throw new EditorJsonParseError(
       diagnostics.map((diagnostic) => ({
-        path: diagnostic.path === "$" ? path : diagnostic.path,
+        path: rebaseGraphEditorDiagnosticPath(path, diagnostic.path),
         message: diagnostic.message,
       })),
     );
   }
 
   return input as GraphEditorDocument;
+}
+
+function rebaseGraphEditorDiagnosticPath(root: string, diagnosticPath: string) {
+  if (!root || root === "$") {
+    return diagnosticPath;
+  }
+  if (diagnosticPath === "$") {
+    return root;
+  }
+
+  let suffix = diagnosticPath;
+  if (suffix.startsWith("$.")) {
+    suffix = suffix.slice(2);
+  } else if (suffix.startsWith("$")) {
+    suffix = suffix.slice(1);
+  }
+  if (!suffix) {
+    return root;
+  }
+
+  return suffix.startsWith("[") ? `${root}${suffix}` : `${root}.${suffix}`;
 }
