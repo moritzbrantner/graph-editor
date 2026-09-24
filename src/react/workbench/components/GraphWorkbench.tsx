@@ -51,6 +51,7 @@ export function GraphWorkbench<
     renderInspector,
     renderContextPad,
     renderCanvasOverlay,
+    renderNode,
     onCanvasContextMenuCapture,
     onCanvasDoubleClickCapture,
     hotkeys: controlledHotkeys,
@@ -193,6 +194,7 @@ export function GraphWorkbench<
           connectDocument={connectDocument}
           renderContextPad={renderContextPad}
           renderCanvasOverlay={renderCanvasOverlay}
+          renderNode={renderNode}
           onCanvasContextMenuCapture={onCanvasContextMenuCapture}
           onCanvasDoubleClickCapture={onCanvasDoubleClickCapture}
         />
