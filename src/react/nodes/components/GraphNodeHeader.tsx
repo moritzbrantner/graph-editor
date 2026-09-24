@@ -36,6 +36,7 @@ export function GraphNodeHeader({
   onMinimizedChange,
   onMenuItemSelect,
   className,
+  style,
   ...props
 }: GraphNodeHeaderProps) {
   return (
@@ -49,7 +50,7 @@ export function GraphNodeHeader({
       )}
       style={{
         minHeight: minimized ? graphNodeMinimizedHeaderHeight : getGraphNodeHeaderHeight(node),
-        ...props.style,
+        ...style,
       }}
       {...props}
     >
