@@ -12,6 +12,8 @@ export {
   type GraphCanvasNodeData,
   type GraphCanvasNodeRenderContext,
   type GraphCanvasNodeRenderer,
+  type GraphCanvasNodeSizeContext,
+  type GraphCanvasNodeSizeResolver,
   type GraphCanvasNodeProps,
   type GraphCanvasPort,
   type GraphCanvasProps,
