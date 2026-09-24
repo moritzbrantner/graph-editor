@@ -19,21 +19,15 @@ export function GraphNodeInteractiveBody({
       className={cn("min-h-0", className)}
       onPointerDown={(event) => {
         onPointerDown?.(event);
-        if (!event.defaultPrevented) {
-          event.stopPropagation();
-        }
+        event.stopPropagation();
       }}
       onMouseDown={(event) => {
         onMouseDown?.(event);
-        if (!event.defaultPrevented) {
-          event.stopPropagation();
-        }
+        event.stopPropagation();
       }}
       onKeyDown={(event) => {
         onKeyDown?.(event);
-        if (!event.defaultPrevented) {
-          event.stopPropagation();
-        }
+        event.stopPropagation();
       }}
       {...props}
     />
