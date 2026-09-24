@@ -58,6 +58,54 @@ test("creates nodes from the palette and edits custom node fields", async ({ pag
   await expect(page.locator("#inspector-owner")).toHaveValue("Lifecycle Ops");
 });
 
+test("supports composed editable nodes without losing graph interactions", async ({ page }, testInfo) => {
+  test.skip(isMobileProject(testInfo.project.name), "Pointer geometry is covered on desktop");
+  await page.goto("/");
+
+  const node = page.locator(
+    "[data-slot='workflow-builder-node'][data-node-id='enrich-account']",
+  );
+  const getNodePosition = () =>
+    node.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return `${style.left},${style.top}`;
+    });
+  const originalPosition = await getNodePosition();
+  const inlineSetting = page.getByRole("textbox", { name: "Inline setting for Enrich account" });
+
+  await inlineSetting.fill("firmographic enrichment v2");
+  await expect(inlineSetting).toHaveValue("firmographic enrichment v2");
+  await expect.poll(() => getNodePosition()).toBe(originalPosition);
+
+  await page.getByRole("button", { name: "Enrich account", exact: true }).click();
+  await expect(node).toHaveAttribute("data-selected", "true");
+
+  const nodeBox = await node.boundingBox();
+  expect(nodeBox).not.toBeNull();
+  await page.mouse.move(nodeBox!.x + 72, nodeBox!.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(nodeBox!.x + 132, nodeBox!.y + 58, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => getNodePosition()).not.toBe(originalPosition);
+
+  await page.getByRole("button", { name: "Minimize Enrich account" }).click();
+  await expect(node.locator("[data-slot='workflow-node']")).toHaveAttribute("data-minimized", "true");
+  await expect(inlineSetting).toBeHidden();
+  await page.getByRole("button", { name: "Expand Enrich account" }).click();
+  await expect(page.getByRole("textbox", { name: "Inline setting for Enrich account" })).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Transform data" })
+    .dragTo(page.locator("[data-slot='workflow-builder-surface']"), {
+      targetPosition: { x: 560, y: 420 },
+    });
+  await expect(page.getByText("7 nodes").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Start Enrich account Account" }).click();
+  await page.getByRole("button", { name: "Connect to Transform data Payload" }).click();
+  await expect(page.getByText("6 edges").first()).toBeVisible();
+});
+
 test("supports duplicate, delete, undo, and redo commands", async ({ page }, testInfo) => {
   await page.goto("/");
 
