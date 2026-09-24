@@ -19,6 +19,13 @@ export {
 } from "./index-core";
 
 export { GraphNode } from "./components/GraphNode";
+export { GraphNodeFrame, type GraphNodeFrameProps } from "./components/GraphNodeFrame";
+export { GraphNodeHeader, type GraphNodeHeaderProps } from "./components/GraphNodeHeader";
+export {
+  GraphNodeInteractiveBody,
+  type GraphNodeInteractiveBodyProps,
+} from "./components/GraphNodeInteractiveBody";
+export { GraphNodePorts, type GraphNodePortsProps } from "./components/GraphNodePorts";
 export { GraphInputOnlyNode } from "./components/GraphInputOnlyNode";
 export { GraphOutputOnlyNode } from "./components/GraphOutputOnlyNode";
 export { GraphNodeMinimizeButton } from "./components/GraphNodeMinimizeButton";
