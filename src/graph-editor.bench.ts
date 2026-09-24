@@ -4,11 +4,14 @@ import {
   copyGraphEditorSelection,
   createGraphEditorDocumentContext,
   createGraphEditorGraphIndex,
+  getGraphCanvasConnectionValidity,
   layoutGraphEditorDocument,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
   validateGraphEditorConnection,
   validateGraphEditorDocument,
+  type GraphCanvasEdge,
+  type GraphCanvasNodeData,
   type GraphEditorDocument,
 } from "@moritzbrantner/graph-editor";
 
@@ -46,6 +49,17 @@ describe("graph editor document operations", () => {
 
   bench("validate connection in 10k-node graph", () => {
     validateGraphEditorConnection(large, {
+      sourceNodeId: "node-0",
+      sourcePortId: "out",
+      targetNodeId: "node-5000",
+      targetPortId: "in",
+    });
+  });
+
+  bench("validate canvas connection in 10k-node graph", () => {
+    getGraphCanvasConnectionValidity({
+      nodes: large.nodes as unknown as GraphCanvasNodeData[],
+      edges: large.edges as GraphCanvasEdge[],
       sourceNodeId: "node-0",
       sourcePortId: "out",
       targetNodeId: "node-5000",
