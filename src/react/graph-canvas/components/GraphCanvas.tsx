@@ -85,6 +85,7 @@ export function GraphCanvas({
   hiddenNodeIds,
   hiddenEdgeIds,
   getNodeDragGroupIds,
+  renderNode,
   onNodePointerSelect,
   onSelectionChange,
   onSelectionStateChange,
@@ -1469,6 +1470,7 @@ export function GraphCanvas({
                 connectionDrag?.type === "new" || connectionDrag?.type === "rewire-target"
               }
               showPortColumnHeaders={showPortColumnHeaders}
+              renderNode={renderNode}
               onNodeSelect={selectNodeFromPointer}
               onNodeMinimizedChange={onNodesChange ? changeNodeMinimized : undefined}
               onStartConnection={handleStartConnection}
