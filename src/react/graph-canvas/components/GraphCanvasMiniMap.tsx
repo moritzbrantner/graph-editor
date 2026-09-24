@@ -11,14 +11,15 @@ export function GraphCanvasMiniMap({
   edges: _edges,
   selectedNodeId,
   showPortColumnHeaders = true,
+  getNodeSize,
   className,
   ...props
 }: GraphCanvasMiniMapProps) {
   void _edges;
   const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
   const bounds = React.useMemo(
-    () => getWorkflowBounds(nodes, layoutOptions),
-    [layoutOptions, nodes],
+    () => getWorkflowBounds(nodes, layoutOptions, getNodeSize),
+    [getNodeSize, layoutOptions, nodes],
   );
   const minimapNodes = React.useMemo(
     () =>
