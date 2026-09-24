@@ -33,16 +33,16 @@ function makeNode(
       {
         id: "in",
         label: "In",
-        kind: options.inputKind,
-        type: options.inputType,
+        ...(options.inputKind === undefined ? {} : { kind: options.inputKind }),
+        ...(options.inputType === undefined ? {} : { type: options.inputType }),
       },
     ],
     outputs: [
       {
         id: "out",
         label: "Out",
-        kind: options.outputKind,
-        type: options.outputType,
+        ...(options.outputKind === undefined ? {} : { kind: options.outputKind }),
+        ...(options.outputType === undefined ? {} : { type: options.outputType }),
       },
     ],
   };
