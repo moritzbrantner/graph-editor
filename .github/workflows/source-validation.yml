@@ -27,8 +27,12 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Verify against editor-core source
-        run: bun run verify:source
+      - name: Capture formatter output
+        run: |
+          bun run source:prepare
+          bun run format
+          git diff -- examples/workbench/src/main.tsx src/index-tests/canvas-connection-validation.test.ts src/workbench.e2e.spec.ts
+          exit 1
 
       - name: Report active source
         if: always()

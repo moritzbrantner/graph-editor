@@ -13,10 +13,13 @@ import {
 } from "lucide-react";
 
 import {
+  GraphCanvas,
   GraphWorkbench,
   createGraphEditorRuntime,
   normalizeGraphEditorDocument,
   validateGraphEditorDocument,
+  type GraphCanvasEdge,
+  type GraphCanvasNodeData,
   type GraphEditorRuntimeState,
   type GraphWorkbenchInspectorSchema,
 } from "@moritzbrantner/graph-editor";
@@ -213,6 +216,14 @@ const workflowInspectorSchema: GraphWorkbenchInspectorSchema<
 
 function App() {
   const [view, setView] = React.useState<ExampleView>("workflow");
+  const fixture =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("fixture");
+
+  if (fixture === "canvas-connection-validation") {
+    return <CanvasConnectionValidationFixture />;
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -239,6 +250,63 @@ function App() {
         </div>
       </header>
       {view === "workflow" ? <WorkflowExample /> : <DiagramEditor />}
+    </main>
+  );
+}
+
+function CanvasConnectionValidationFixture() {
+  const nodes = React.useMemo<GraphCanvasNodeData[]>(
+    () => [
+      {
+        id: "a",
+        label: "A",
+        x: 48,
+        y: 120,
+        inputs: [{ id: "in", label: "In", type: "event" }],
+        outputs: [{ id: "out", label: "Out", type: "event" }],
+      },
+      {
+        id: "b",
+        label: "B",
+        x: 380,
+        y: 120,
+        inputs: [{ id: "in", label: "In", type: "event" }],
+        outputs: [{ id: "out", label: "Out", type: "event" }],
+      },
+      {
+        id: "c",
+        label: "C",
+        x: 712,
+        y: 120,
+        inputs: [{ id: "in", label: "In", type: "event" }],
+        outputs: [{ id: "out", label: "Out", type: "event" }],
+      },
+    ],
+    [],
+  );
+  const [edges, setEdges] = React.useState<GraphCanvasEdge[]>([
+    {
+      id: "a-b",
+      sourceNodeId: "a",
+      sourcePortId: "out",
+      targetNodeId: "b",
+      targetPortId: "in",
+    },
+  ]);
+
+  return (
+    <main className="min-h-screen bg-background p-4 text-foreground">
+      <output aria-label="Edge count" className="mb-3 block text-sm font-medium">
+        {edges.length}
+      </output>
+      <GraphCanvas
+        nodes={nodes}
+        edges={edges}
+        onEdgesChange={setEdges}
+        showMiniMap={false}
+        showToolbar={false}
+        surfaceHeight="32rem"
+      />
     </main>
   );
 }
