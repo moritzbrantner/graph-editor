@@ -33,6 +33,7 @@ const modules = [
       "createGraphEditorDocumentContext",
       "createGraphEditorGraphAdapter",
       "createGraphEditorGraphIndex",
+      "createGraphEditorSpatialIndex",
       "normalizeGraphEditorDocument",
       "validateGraphEditorConnection",
       "validateGraphEditorDocument",
