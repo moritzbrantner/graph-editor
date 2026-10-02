@@ -154,6 +154,15 @@ describe("graph spatial index", () => {
     expect(index.query(bounds)).toEqual(referenceQuery(document, bounds));
   });
 
+  test("falls back instead of iterating unsafe cell coordinates", () => {
+    const document = createGridDocument(3, 1);
+    const index = createGraphEditorSpatialIndex(document, { getNodeBounds, cellSize: 1e-20 });
+    const bounds = { x: 1, y: 1, width: 0, height: 0 };
+
+    expect(index.query(bounds)).toEqual(["node-0"]);
+    expect(index.query({ x: 1e300, y: 0, width: 1, height: 1 })).toEqual([]);
+  });
+
   test("updates moved nodes explicitly and only rebuilds on structural changes", () => {
     const document = createGridDocument(5, 5);
     const index = createGraphEditorSpatialIndex(document, { getNodeBounds, cellSize: 256 });

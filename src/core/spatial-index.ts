@@ -292,6 +292,15 @@ function cellRange(bounds: GraphEditorBounds, cellSize: number) {
 type CellRange = ReturnType<typeof cellRange>;
 
 function rangeCellCount(range: CellRange) {
+  // Unsafe integers cannot be stepped through; callers treat this as "too many cells".
+  if (
+    !Number.isSafeInteger(range.minX) ||
+    !Number.isSafeInteger(range.minY) ||
+    !Number.isSafeInteger(range.maxX) ||
+    !Number.isSafeInteger(range.maxY)
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
   return (range.maxX - range.minX + 1) * (range.maxY - range.minY + 1);
 }
 
