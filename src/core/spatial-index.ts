@@ -1,4 +1,4 @@
-import { graphEditorBoundsIntersect, normalizeGraphEditorBounds } from "./bounds";
+import { normalizeGraphEditorBounds } from "./bounds";
 import type { GraphEditorBounds, GraphEditorDocument, GraphEditorNode } from "./types";
 
 export type GraphEditorSpatialIndexOptions<
@@ -197,22 +197,23 @@ export function createGraphEditorSpatialIndex<
         ? Math.max(0, queryOptions.overscan)
         : 0;
     const normalized = normalizeGraphEditorBounds(bounds);
-    const area = {
-      x: normalized.x - overscan,
-      y: normalized.y - overscan,
-      width: normalized.width + overscan * 2,
-      height: normalized.height + overscan * 2,
+    // Endpoints rather than origin/size, so overflowing expansions stay ordered and comparable.
+    const area: Extent = {
+      minX: normalized.x - overscan,
+      minY: normalized.y - overscan,
+      maxX: normalized.x + normalized.width + overscan,
+      maxY: normalized.y + normalized.height + overscan,
     };
     if (
-      !Number.isFinite(area.x) ||
-      !Number.isFinite(area.y) ||
-      !Number.isFinite(area.width) ||
-      !Number.isFinite(area.height)
+      Number.isNaN(area.minX) ||
+      Number.isNaN(area.minY) ||
+      Number.isNaN(area.maxX) ||
+      Number.isNaN(area.maxY)
     ) {
-      return scanAll(area);
+      return [];
     }
 
-    const range = cellRange(area, cellSize);
+    const range = extentCellRange(area, cellSize);
     // Very large areas visit more empty cells than nodes; a linear scan is cheaper then.
     if (rangeCellCount(range) > entries.size) {
       return scanAll(area);
@@ -227,7 +228,7 @@ export function createGraphEditorSpatialIndex<
       visited.add(nodeId);
       stats.candidateVisits += 1;
       const entry = entries.get(nodeId)!;
-      if (graphEditorBoundsIntersect(area, entry.bounds)) {
+      if (extentIntersects(area, entry.bounds)) {
         matches.push({ nodeId, order: entry.order });
       }
     };
@@ -240,7 +241,7 @@ export function createGraphEditorSpatialIndex<
     return matches.sort((left, right) => left.order - right.order).map((match) => match.nodeId);
   }
 
-  function scanAll(area: GraphEditorBounds) {
+  function scanAll(area: Extent) {
     const matches: string[] = [];
     for (const nodeId of orderedIds) {
       const entry = entries.get(nodeId);
@@ -248,7 +249,7 @@ export function createGraphEditorSpatialIndex<
         continue;
       }
       stats.candidateVisits += 1;
-      if (graphEditorBoundsIntersect(area, entry.bounds)) {
+      if (extentIntersects(area, entry.bounds)) {
         matches.push(nodeId);
       }
     }
@@ -280,16 +281,40 @@ export function createGraphEditorSpatialIndex<
 
 type IndexedNodeMatch = { nodeId: string; order: number };
 
+type Extent = { minX: number; minY: number; maxX: number; maxY: number };
+
 function cellRange(bounds: GraphEditorBounds, cellSize: number) {
+  return extentCellRange(
+    {
+      minX: bounds.x,
+      minY: bounds.y,
+      maxX: bounds.x + bounds.width,
+      maxY: bounds.y + bounds.height,
+    },
+    cellSize,
+  );
+}
+
+function extentCellRange(extent: Extent, cellSize: number) {
   return {
-    minX: Math.floor(bounds.x / cellSize),
-    minY: Math.floor(bounds.y / cellSize),
-    maxX: Math.floor((bounds.x + bounds.width) / cellSize),
-    maxY: Math.floor((bounds.y + bounds.height) / cellSize),
+    minX: Math.floor(extent.minX / cellSize),
+    minY: Math.floor(extent.minY / cellSize),
+    maxX: Math.floor(extent.maxX / cellSize),
+    maxY: Math.floor(extent.maxY / cellSize),
   };
 }
 
-type CellRange = ReturnType<typeof cellRange>;
+// Same inclusive semantics as graphEditorBoundsIntersect.
+function extentIntersects(extent: Extent, bounds: GraphEditorBounds) {
+  return (
+    extent.minX <= bounds.x + bounds.width &&
+    extent.maxX >= bounds.x &&
+    extent.minY <= bounds.y + bounds.height &&
+    extent.maxY >= bounds.y
+  );
+}
+
+type CellRange = ReturnType<typeof extentCellRange>;
 
 function rangeCellCount(range: CellRange) {
   // Unsafe integers cannot be stepped through; callers treat this as "too many cells".

@@ -163,6 +163,19 @@ describe("graph spatial index", () => {
     expect(index.query({ x: 1e300, y: 0, width: 1, height: 1 })).toEqual([]);
   });
 
+  test("keeps query endpoints ordered when overscan overflows", () => {
+    const document = createGridDocument(3, 1);
+    const index = createGraphEditorSpatialIndex(document, { getNodeBounds });
+
+    expect(
+      index.query(
+        { x: -Number.MAX_VALUE, y: -Number.MAX_VALUE, width: 0, height: 0 },
+        { overscan: Number.MAX_VALUE },
+      ),
+    ).toEqual(["node-0"]);
+    expect(index.query({ x: Number.NaN, y: 0, width: 10, height: 10 })).toEqual([]);
+  });
+
   test("updates moved nodes explicitly and only rebuilds on structural changes", () => {
     const document = createGridDocument(5, 5);
     const index = createGraphEditorSpatialIndex(document, { getNodeBounds, cellSize: 256 });
