@@ -4,6 +4,8 @@ import {
   copyGraphEditorSelection,
   createGraphEditorDocumentContext,
   createGraphEditorGraphIndex,
+  createGraphEditorSpatialIndex,
+  getGraphEditorNodeSize,
   layoutGraphEditorDocument,
   normalizeGraphEditorDocument,
   pasteGraphEditorClipboardPayload,
@@ -12,10 +14,11 @@ import {
   type GraphEditorDocument,
 } from "@moritzbrantner/graph-editor";
 
+const small = createBenchmarkDocument(100);
+const medium = createBenchmarkDocument(1_000);
+const large = createBenchmarkDocument(10_000);
+
 describe("graph editor document operations", () => {
-  const small = createBenchmarkDocument(100);
-  const medium = createBenchmarkDocument(1_000);
-  const large = createBenchmarkDocument(10_000);
   const selection = {
     nodeIds: small.nodes.slice(0, 50).map((node) => node.id),
     edgeIds: [],
@@ -69,6 +72,37 @@ describe("graph editor document operations", () => {
 
   bench("layout 100 nodes", () => {
     layoutGraphEditorDocument(small);
+  });
+});
+
+describe("graph spatial index", () => {
+  const getNodeBounds = (node: GraphEditorDocument["nodes"][number]) => ({
+    x: node.x,
+    y: node.y,
+    ...getGraphEditorNodeSize(node),
+  });
+  const viewport = { x: 1_400, y: 2_000, width: 1_600, height: 900 };
+  const fixtures = [
+    ["100", small],
+    ["1k", medium],
+    ["10k", large],
+  ] as const;
+
+  for (const [name, document] of fixtures) {
+    const index = createGraphEditorSpatialIndex(document, { getNodeBounds });
+
+    bench(`rebuild spatial index for ${name} nodes`, () => {
+      index.rebuild(document);
+    });
+
+    bench(`query viewport in ${name}-node spatial index`, () => {
+      index.query(viewport, { overscan: 200 });
+    });
+  }
+
+  const moving = createGraphEditorSpatialIndex(large, { getNodeBounds });
+  bench("update one moved node in 10k-node spatial index", () => {
+    moving.updateNodes(large, ["node-5000"]);
   });
 });
 

@@ -9,5 +9,6 @@ export * from "./core/document-io";
 export * from "./core/graph";
 export * from "./core/mutations";
 export * from "./core/selection";
+export * from "./core/spatial-index";
 export * from "./core/types";
 export * from "./core/validation";
