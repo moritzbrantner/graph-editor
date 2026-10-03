@@ -96,7 +96,12 @@ export function validateGraphEditorConnection<
   connection: GraphEditorConnectionInput,
   options: GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType> = {},
 ): GraphEditorConnectionValidity {
-  const context = createGraphEditorDocumentContext(document);
+  // A rewire replaces the ignored edge, so evaluate the graph without it (including cycle reachability).
+  const effectiveDocument =
+    options.ignoreEdgeId === undefined
+      ? document
+      : { ...document, edges: document.edges.filter((edge) => edge.id !== options.ignoreEdgeId) };
+  const context = createGraphEditorDocumentContext(effectiveDocument);
   const sourceNode = context.nodeById.get(connection.sourceNodeId);
   const targetNode = context.nodeById.get(connection.targetNodeId);
   if (!sourceNode || !targetNode) {
@@ -142,7 +147,7 @@ export function validateGraphEditorConnection<
       return { valid: false, reason: "type-mismatch" };
     }
   }
-  if (!options.allowCycles && wouldCreateGraphEditorCycle(document, connection, context)) {
+  if (!options.allowCycles && wouldCreateGraphEditorCycle(effectiveDocument, connection, context)) {
     return { valid: false, reason: "cycle" };
   }
   return { valid: true };
@@ -157,7 +162,9 @@ export function connectGraphEditorNodes<
   connection: GraphEditorConnectionInput,
   options: GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType> = {},
 ): GraphEditorDocument<TNodeData, TEdgeData, TPortType> {
-  const validity = validateGraphEditorConnection(document, connection, options);
+  // Appending keeps every existing edge, so ignoreEdgeId (replacement semantics) must not apply.
+  const { ignoreEdgeId: _ignoreEdgeId, ...appendOptions } = options;
+  const validity = validateGraphEditorConnection(document, connection, appendOptions);
   if (!validity.valid) {
     return document;
   }

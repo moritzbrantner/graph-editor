@@ -93,7 +93,9 @@ function createGraphEditorEdgeFromConnection<
     { connection: GraphEditorConnectionInput }
   >,
 ) {
-  const validity = validateGraphEditorConnection(document, connection, options.validationOptions);
+  // Appending keeps every existing edge, so ignoreEdgeId (replacement semantics) must not apply.
+  const { ignoreEdgeId: _ignoreEdgeId, ...appendOptions } = options.validationOptions ?? {};
+  const validity = validateGraphEditorConnection(document, connection, appendOptions);
   if (!validity.valid) {
     return null;
   }

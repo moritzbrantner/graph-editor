@@ -9,6 +9,10 @@ import {
   normalizeGraphEditorSelection,
   replaceGraphEditorSelection,
   updateGraphEditorSelection,
+  validateGraphEditorConnection,
+  type GraphEditorConnectionInput,
+  type GraphEditorConnectionValidity,
+  type GraphEditorDocument,
   type GraphEditorSelectionItem,
   type GraphEditorSelectionMode,
   type GraphEditorSelectionState,
@@ -55,28 +59,13 @@ type GraphCanvasSelection =
   | { type: "group"; id: string }
   | null;
 
-type GraphCanvasConnectionValidityInput = {
+type GraphCanvasConnectionValidityInput = GraphEditorConnectionInput & {
   nodes: GraphCanvasNodeData[];
   edges: GraphCanvasEdge[];
-  sourceNodeId: string;
-  sourcePortId: string;
-  targetNodeId: string;
-  targetPortId: string;
   ignoreEdgeId?: string;
 };
 
-type GraphCanvasConnectionValidity = {
-  valid: boolean;
-  reason?:
-    | "cycle"
-    | "duplicate"
-    | "input-occupied"
-    | "kind-mismatch"
-    | "missing-node"
-    | "missing-port"
-    | "self-connection"
-    | "type-mismatch";
-};
+type GraphCanvasConnectionValidity = GraphEditorConnectionValidity;
 
 type GraphCanvasViewport = {
   x: number;
@@ -84,12 +73,7 @@ type GraphCanvasViewport = {
   zoom: number;
 };
 
-type GraphCanvasConnection = {
-  sourceNodeId: string;
-  sourcePortId: string;
-  targetNodeId: string;
-  targetPortId: string;
-};
+type GraphCanvasConnection = GraphEditorConnectionInput;
 
 type GraphCanvasDisconnectReason =
   | "edge-delete"
@@ -285,63 +269,22 @@ function getGraphCanvasConnectionValidity({
   targetPortId,
   ignoreEdgeId,
 }: GraphCanvasConnectionValidityInput): GraphCanvasConnectionValidity {
-  const sourceNode = nodes.find((node) => node.id === sourceNodeId);
-  const targetNode = nodes.find((node) => node.id === targetNodeId);
-  const sourcePort = sourceNode?.outputs?.find((port) => port.id === sourcePortId);
-  const targetPort = targetNode?.inputs?.find((port) => port.id === targetPortId);
-
-  if (!sourceNode || !targetNode || !sourcePort || !targetPort) {
-    return { valid: false, reason: "missing-port" };
-  }
-
-  if (sourceNodeId === targetNodeId) {
-    return { valid: false, reason: "self-connection" };
-  }
-
-  const sourceType = getGraphCanvasPortTypeSource(sourcePort);
-  const targetType = getGraphCanvasPortTypeSource(targetPort);
-
-  if (sourceType && targetType && sourceType !== targetType) {
-    return { valid: false, reason: "type-mismatch" };
-  }
-
-  if (sourcePort.kind && targetPort.kind && sourcePort.kind !== targetPort.kind) {
-    return { valid: false, reason: "kind-mismatch" };
-  }
-
-  const duplicate = edges.some(
-    (edge) =>
-      edge.id !== ignoreEdgeId &&
-      edge.sourceNodeId === sourceNodeId &&
-      edge.sourcePortId === sourcePortId &&
-      edge.targetNodeId === targetNodeId &&
-      edge.targetPortId === targetPortId,
-  );
-
-  if (duplicate) {
-    return { valid: false, reason: "duplicate" };
-  }
-
-  const incomingEdge = getGraphCanvasIncomingEdge(edges, targetNodeId, targetPortId, ignoreEdgeId);
-
-  if (incomingEdge) {
-    return { valid: false, reason: "input-occupied" };
-  }
-
-  return { valid: true };
-}
-
-function getGraphCanvasIncomingEdge(
-  edges: GraphCanvasEdge[],
-  targetNodeId: string,
-  targetPortId: string,
-  ignoreEdgeId?: string,
-) {
-  return edges.find(
-    (edge) =>
-      edge.id !== ignoreEdgeId &&
-      edge.targetNodeId === targetNodeId &&
-      edge.targetPortId === targetPortId,
+  return validateGraphEditorConnection(
+    { nodes, edges } as unknown as GraphEditorDocument,
+    {
+      sourceNodeId,
+      sourcePortId,
+      targetNodeId,
+      targetPortId,
+    },
+    {
+      ...(ignoreEdgeId === undefined ? {} : { ignoreEdgeId }),
+      arePortsCompatible(sourcePort, targetPort) {
+        const sourceType = getGraphCanvasPortTypeSource(sourcePort);
+        const targetType = getGraphCanvasPortTypeSource(targetPort);
+        return !sourceType || !targetType || sourceType === targetType;
+      },
+    },
   );
 }
 
@@ -747,12 +690,19 @@ function getGraphCanvasPortMatchKey(port: GraphCanvasPort) {
   return (port.kind ?? port.id ?? port.label).trim().toLowerCase();
 }
 
-function getGraphCanvasPortTypeSource(port: GraphCanvasPort) {
+function getGraphCanvasPortTypeSource(port: { type?: unknown }) {
   if (!port.type) {
     return undefined;
   }
+  if (typeof port.type === "string") {
+    return port.type.trim();
+  }
+  if (typeof port.type !== "object") {
+    return undefined;
+  }
 
-  const source = typeof port.type === "string" ? port.type : (port.type.source ?? port.type.kind);
+  const candidate = port.type as { source?: unknown; kind?: unknown };
+  const source = candidate.source ?? candidate.kind;
   return typeof source === "string" ? source.trim() : undefined;
 }
 
