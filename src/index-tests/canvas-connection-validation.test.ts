@@ -220,6 +220,19 @@ describe("GraphCanvas connection validation authority", () => {
       },
       expected: { valid: true },
     },
+    {
+      name: "excludes the rewired edge from cycle detection",
+      input: {
+        nodes: basicNodes,
+        edges: [edge("a-b", "a", "b"), edge("b-c", "b", "c")],
+        sourceNodeId: "c",
+        sourcePortId: "out",
+        targetNodeId: "a",
+        targetPortId: "in",
+        ignoreEdgeId: "a-b",
+      },
+      expected: { valid: true },
+    },
   ];
 
   for (const scenario of scenarios) {
