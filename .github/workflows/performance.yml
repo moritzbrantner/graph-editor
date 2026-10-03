@@ -34,5 +34,3 @@ jobs:
       build_command: bun run build
       benchmark_command: bun run bench
       timeout_minutes: 60
-    secrets:
-      GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
