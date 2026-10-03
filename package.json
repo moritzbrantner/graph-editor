@@ -93,6 +93,8 @@
     "format:check": "oxfmt --check",
     "lint": "oxlint --format=github",
     "prepack": "bun run build",
+    "prepare": "bun ./scripts/prepare-git-install.ts",
+    "verify:git-install": "bun ./scripts/verify-git-install.ts",
     "check-types": "tsc --noEmit",
     "check-types:tests": "tsc --noEmit -p tsconfig.test.json",
     "pack:check": "bun pm pack --dry-run",
