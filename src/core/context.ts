@@ -162,7 +162,9 @@ export function connectGraphEditorNodes<
   connection: GraphEditorConnectionInput,
   options: GraphEditorConnectionValidationOptions<TNodeData, TEdgeData, TPortType> = {},
 ): GraphEditorDocument<TNodeData, TEdgeData, TPortType> {
-  const validity = validateGraphEditorConnection(document, connection, options);
+  // Appending keeps every existing edge, so ignoreEdgeId (replacement semantics) must not apply.
+  const { ignoreEdgeId: _ignoreEdgeId, ...appendOptions } = options;
+  const validity = validateGraphEditorConnection(document, connection, appendOptions);
   if (!validity.valid) {
     return document;
   }

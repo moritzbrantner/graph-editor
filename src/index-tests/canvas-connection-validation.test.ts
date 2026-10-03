@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  connectGraphEditorNodes,
+  createGraphEditorAddEdgeOperation,
   getGraphCanvasConnectionValidity,
   validateGraphEditorConnection,
   type GraphCanvasConnectionValidityInput,
@@ -267,6 +269,32 @@ describe("GraphCanvas connection validation authority", () => {
     expect(countedNodes.reads()).toBeGreaterThan(0);
     expect(countedNodes.reads()).toBeLessThanOrEqual(nodeCount + 1);
     expect(countedEdges.reads()).toBeLessThanOrEqual(edges.length + 1);
+  });
+});
+
+describe("append helpers ignore rewire-only ignoreEdgeId", () => {
+  const document = {
+    nodes: [makeNode("a"), makeNode("b"), makeNode("c")],
+    edges: [edge("a-b", "a", "b"), edge("b-c", "b", "c")],
+  } as unknown as GraphEditorDocument;
+  const connection = {
+    sourceNodeId: "c",
+    sourcePortId: "out",
+    targetNodeId: "a",
+    targetPortId: "in",
+  };
+
+  test("connectGraphEditorNodes does not append a cycle-forming edge", () => {
+    expect(connectGraphEditorNodes(document, connection, { ignoreEdgeId: "a-b" })).toBe(document);
+  });
+
+  test("createGraphEditorAddEdgeOperation does not append a cycle-forming edge", () => {
+    const operation = createGraphEditorAddEdgeOperation({
+      connection,
+      validationOptions: { ignoreEdgeId: "a-b" },
+    });
+
+    expect(operation.apply(document)).toBe(document);
   });
 });
 
