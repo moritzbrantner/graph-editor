@@ -93,7 +93,7 @@
     "format:check": "oxfmt --check",
     "lint": "oxlint --format=github",
     "prepack": "bun run build",
-    "prepare": "bun install --frozen-lockfile --ignore-scripts && bun ./scripts/prepare-git-install.ts",
+    "prepare": "bun ./scripts/prepare-git-install.ts",
     "verify:git-install": "bun ./scripts/verify-git-install.ts",
     "check-types": "tsc --noEmit",
     "check-types:tests": "tsc --noEmit -p tsconfig.test.json",
