@@ -59,15 +59,8 @@ function edge(id: string, sourceNodeId: string, targetNodeId: string): GraphCanv
 }
 
 function validateThroughCore(input: GraphCanvasConnectionValidityInput) {
-  const {
-    nodes,
-    edges,
-    ignoreEdgeId,
-    sourceNodeId,
-    sourcePortId,
-    targetNodeId,
-    targetPortId,
-  } = input;
+  const { nodes, edges, ignoreEdgeId, sourceNodeId, sourcePortId, targetNodeId, targetPortId } =
+    input;
 
   return validateGraphEditorConnection(
     { nodes, edges } as unknown as GraphEditorDocument,
@@ -193,10 +186,7 @@ describe("GraphCanvas connection validation authority", () => {
     {
       name: "rejects type mismatches",
       input: {
-        nodes: [
-          makeNode("a", { outputType: "event" }),
-          makeNode("b", { inputType: "payload" }),
-        ],
+        nodes: [makeNode("a", { outputType: "event" }), makeNode("b", { inputType: "payload" })],
         edges: [],
         sourceNodeId: "a",
         sourcePortId: "out",
@@ -261,6 +251,7 @@ describe("GraphCanvas connection validation authority", () => {
       }),
     ).toEqual({ valid: false, reason: "cycle" });
 
+    expect(countedNodes.reads()).toBeGreaterThan(0);
     expect(countedNodes.reads()).toBeLessThanOrEqual(nodeCount + 1);
     expect(countedEdges.reads()).toBeLessThanOrEqual(edges.length + 1);
   });
@@ -270,7 +261,7 @@ function countIndexedReads<T>(values: T[]) {
   let reads = 0;
   const proxied = new Proxy(values, {
     get(target, property, receiver) {
-      if (typeof property === "string" && /^\\d+$/.test(property)) {
+      if (typeof property === "string" && /^\d+$/.test(property)) {
         reads += 1;
       }
       return Reflect.get(target, property, receiver);
@@ -282,4 +273,3 @@ function countIndexedReads<T>(values: T[]) {
     reads: () => reads,
   };
 }
-
