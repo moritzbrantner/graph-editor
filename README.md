@@ -43,7 +43,6 @@ _Avoid_: Active item, focused item
 Optional persisted view state for the visible graph coordinate space, including pan position and zoom.
 _Avoid_: Camera, runtime state, screen state
 
-
 ## Install
 
 ```sh
