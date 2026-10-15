@@ -9,6 +9,6 @@ This repository contains reusable graph document utilities and React primitives 
 - Keep the graph workspace dominant. Property panels and command surfaces are contextual complements to direct canvas work, not replacements for selecting and manipulating graph objects.
 - Fix generic interaction defects in the owning graph primitive and protect browser-dependent hit geometry, selection bounds, pointer capture, and viewport behavior with focused browser evidence.
 
-## Domain context
+## Domain vocabulary
 
-See `docs/agents/domain.md`.
+Use `README.md`'s graph vocabulary for persistent entities versus transient connections, selections and viewport state. Read only the relevant architecture/tests for the affected behavior. This repository has no installed convention snapshot; follow the current shared conventions.
