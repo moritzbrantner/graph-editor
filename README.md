@@ -381,6 +381,9 @@ and geometry:
   (via their `layoutOptions` argument) stay consistent.
 - Pointer interaction inside the body never starts a node drag. Graph shortcuts ignore editable
   targets.
+- `renderMinimizedNodeContent` shows compact content, such as one value field, inline in a
+  minimized node's header. It fits the fixed minimized geometry and also never starts a drag.
+  `GraphNode` takes it as `minimizedContent`.
 - `GraphNode` accepts the same content as `body` + `nodeBodyHeight`. `GraphNodeBody` is the
   exported slot component, alongside `GraphNodeMenu`, `GraphNodeMinimizeButton`,
   `GraphNodePortColumn` and `GraphNodeMinimizedPorts`.

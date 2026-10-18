@@ -17,6 +17,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   showPortColumnHeaders = true,
   renderNodeBody,
   getNodeBodyHeight,
+  renderMinimizedNodeContent,
   onNodeSelect,
   onNodeMinimizedChange,
   onStartConnection,
@@ -74,6 +75,16 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
                 selected: !!selected,
                 readOnly: !!readOnly,
                 height: bodyHeight,
+              })
+            : undefined
+        }
+        minimizedContent={
+          renderMinimizedNodeContent && node.minimized
+            ? renderMinimizedNodeContent({
+                node,
+                selected: !!selected,
+                readOnly: !!readOnly,
+                height: 0,
               })
             : undefined
         }

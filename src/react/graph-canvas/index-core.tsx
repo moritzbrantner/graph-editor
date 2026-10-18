@@ -140,6 +140,11 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   renderNodeBody?: (context: GraphCanvasNodeBodyContext) => React.ReactNode;
   /** Height of `renderNodeBody` content per node; required for deterministic geometry. */
   getNodeBodyHeight?: (node: GraphCanvasNodeData) => number;
+  /**
+   * Compact domain content shown inline in a minimized node's header, next to its label. It fits
+   * the fixed minimized geometry and, like the body, never starts a node drag.
+   */
+  renderMinimizedNodeContent?: (context: GraphCanvasNodeBodyContext) => React.ReactNode;
 };
 
 export type GraphCanvasNodeBodyContext = {
@@ -160,6 +165,7 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   showPortColumnHeaders?: boolean;
   renderNodeBody?: GraphCanvasProps["renderNodeBody"];
   getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
+  renderMinimizedNodeContent?: GraphCanvasProps["renderMinimizedNodeContent"];
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
   onStartConnection?: (nodeId: string, portId: string) => void;
@@ -816,6 +822,7 @@ function isGraphNodeControlEvent(target: EventTarget) {
           "[data-slot='workflow-node-minimize']",
           "[data-slot='workflow-node-menu-trigger']",
           "[data-slot='graph-node-body']",
+          "[data-slot='graph-node-minimized-content']",
         ].join(", "),
       ),
     )

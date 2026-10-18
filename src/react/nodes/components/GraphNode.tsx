@@ -32,6 +32,7 @@ export function GraphNode({
   outputDisabled = false,
   showPortColumnHeaders = true,
   body,
+  minimizedContent,
   nodeBodyHeight,
   menuItems = [],
   menuLabel = "Actions",
@@ -158,6 +159,11 @@ export function GraphNode({
               </div>
             ) : null}
           </button>
+          {minimized && minimizedContent ? (
+            <div data-slot="graph-node-minimized-content" className="min-w-0 shrink-0">
+              {minimizedContent}
+            </div>
+          ) : null}
           <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
             {(resolvedNode.eyebrow ?? resolvedNode.category ?? resolvedNode.kind) && !minimized ? (
               <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-600">

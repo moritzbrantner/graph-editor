@@ -94,6 +94,8 @@ export type GraphNodeProps<
   showPortColumnHeaders?: boolean;
   /** Composed content between the header and the ports of an expanded node. */
   body?: React.ReactNode;
+  /** Compact content inline in a minimized node's header, after its label. */
+  minimizedContent?: React.ReactNode;
   /** Body height for the geometry model (see `GraphNodeLayoutOptions.nodeBodyHeight`). */
   nodeBodyHeight?: GraphNodeLayoutOptions["nodeBodyHeight"];
   menuItems?: GraphNodeMenuItem[];
