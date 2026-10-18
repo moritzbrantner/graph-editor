@@ -44,7 +44,7 @@ jobs:
 
           required = False
           if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
-              paths = subprocess.check_output(["git", "diff", "--name-only", "-z", os.environ["BASE_SHA"] + "..." + os.environ["HEAD_SHA"]]).decode().split("\0")
+              paths = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", os.environ["BASE_SHA"] + "..." + os.environ["HEAD_SHA"]]).decode().split("\0")
               patterns = ['src/**', 'tests/**', 'bench/**', 'benchmark/**', 'package.json', 'bun.lock', 'vite.config.*', '.github/workflows/performance.yml']
               required = any(matches(path, pattern) for path in paths for pattern in patterns)
           skipped = [] if required else ["performance-validation"]
