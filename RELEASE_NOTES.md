@@ -2,6 +2,7 @@
 
 ## Added
 
+- Port content slot (#47): `GraphCanvas` `renderPortContent` and `GraphNode` `renderPortContent` render compact content on a port card (`data-slot="graph-node-port-content"`) without changing port geometry or nesting controls inside the port button.
 - Minimized node content (#48): `GraphCanvas` `renderMinimizedNodeContent` and `GraphNode` `minimizedContent` render compact domain controls inline in a minimized node's header (`data-slot="graph-node-minimized-content"`). They never start a node drag, and the minimized geometry is unchanged.
 - Node composition seam (#45): `GraphCanvas` `renderNodeBody` / `getNodeBodyHeight`, `GraphNode`
   `body` / `nodeBodyHeight`, and the exported `GraphNodeBody` slot. They let consumers put

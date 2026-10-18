@@ -161,4 +161,43 @@ describe("node composition seam", () => {
     });
     expect(latestNodes[0]).toMatchObject({ x: 0, y: 0, minimized: true });
   });
+
+  test("port cards host inline content that never drags the node", async () => {
+    let latestNodes: GraphCanvasNodeData[] = [];
+    function Harness() {
+      const [nodes, setNodes] = React.useState<GraphCanvasNodeData[]>([
+        { id: "a", label: "A", x: 0, y: 0, ...ports },
+      ]);
+      latestNodes = nodes;
+      return React.createElement(GraphCanvas, {
+        nodes,
+        edges: [],
+        showToolbar: false,
+        showMiniMap: false,
+        renderPortContent: ({ port, direction }) =>
+          direction === "input"
+            ? React.createElement("input", {
+                "aria-label": `${port.label} name`,
+                defaultValue: port.label,
+              })
+            : null,
+        onNodesChange(nextNodes) {
+          latestNodes = nextNodes;
+          setNodes(nextNodes);
+        },
+      });
+    }
+    const fixture = render(React.createElement(Harness));
+    const input = screen.getByLabelText("In name");
+    expect(input.closest('[data-slot="graph-node-port-row"]')).not.toBeNull();
+    expect(screen.queryByLabelText("Out name")).toBeNull();
+    // The port button keeps its accessible name and stays a sibling of the content.
+    expect(input.closest("button")).toBeNull();
+    await act(async () => {
+      fireEvent.pointerDown(input, { clientX: 10, clientY: 10, button: 0, pointerId: 1 });
+      fireEvent.pointerMove(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+      fireEvent.pointerUp(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+    });
+    expect(latestNodes[0]).toMatchObject({ x: 0, y: 0 });
+  });
 });

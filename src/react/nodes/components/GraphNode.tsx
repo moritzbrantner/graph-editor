@@ -33,6 +33,7 @@ export function GraphNode({
   showPortColumnHeaders = true,
   body,
   minimizedContent,
+  renderPortContent,
   nodeBodyHeight,
   menuItems = [],
   menuLabel = "Actions",
@@ -231,6 +232,7 @@ export function GraphNode({
               ports={resolvedNode.inputs ?? []}
               disabled={inputDisabled}
               showHeader={showPortColumnHeaders}
+              renderPortContent={renderPortContent}
               onClick={onInputClick}
               onPointerUp={onInputPointerUp}
               getAriaLabel={getInputAriaLabel}
@@ -244,6 +246,7 @@ export function GraphNode({
               ports={resolvedNode.outputs ?? []}
               disabled={outputDisabled || readOnly}
               showHeader={showPortColumnHeaders}
+              renderPortContent={renderPortContent}
               onClick={onOutputClick}
               onPointerDown={onOutputPointerDown}
               onPointerUp={onOutputPointerUp}
