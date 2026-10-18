@@ -355,4 +355,13 @@ test("composes an interactive node body without breaking drag, select, connect o
   await page.locator('[data-node-id="threshold"] [data-slot="workflow-node-minimize"]').click();
   await expect.poll(async () => (await threshold()).minimized).toBe(true);
   await expect(page.getByLabel("Threshold value")).toHaveCount(0);
+
+  // Minimized nodes keep compact inline content in the header, still editable without dragging.
+  const inline = page.getByLabel("Threshold inline value");
+  await expect(inline).toBeVisible();
+  const before = await threshold();
+  await inline.fill("0.9");
+  await inline.press("Delete");
+  expect((await state()).values.threshold).toBe("0.9");
+  expect(await threshold()).toMatchObject({ x: before.x, y: before.y });
 });

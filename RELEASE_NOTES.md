@@ -2,6 +2,7 @@
 
 ## Added
 
+- Minimized node content (#48): `GraphCanvas` `renderMinimizedNodeContent` and `GraphNode` `minimizedContent` render compact domain controls inline in a minimized node's header (`data-slot="graph-node-minimized-content"`). They never start a node drag, and the minimized geometry is unchanged.
 - Node composition seam (#45): `GraphCanvas` `renderNodeBody` / `getNodeBodyHeight`, `GraphNode`
   `body` / `nodeBodyHeight`, and the exported `GraphNodeBody` slot. They let consumers put
   interactive domain content inside nodes without portals or DOM patching.

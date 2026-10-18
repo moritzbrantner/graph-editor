@@ -355,6 +355,20 @@ function ComposedNodeBodyFixture() {
         showToolbar={false}
         surfaceHeight="32rem"
         getNodeBodyHeight={(node) => (node.id === "threshold" ? 48 : 0)}
+        renderMinimizedNodeContent={({ node, readOnly }) =>
+          node.id === "threshold" ? (
+            <input
+              aria-label={`${node.label} inline value`}
+              className="h-6 w-16 rounded border px-1 text-xs"
+              disabled={readOnly}
+              value={values[node.id] ?? ""}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setValues((current) => ({ ...current, [node.id]: value }));
+              }}
+            />
+          ) : null
+        }
         renderNodeBody={({ node, readOnly }) => (
           <label className="flex items-center gap-2">
             <span>Value</span>

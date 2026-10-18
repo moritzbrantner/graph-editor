@@ -119,6 +119,7 @@ export function GraphCanvas({
   measurePorts = "auto",
   renderNodeBody,
   getNodeBodyHeight,
+  renderMinimizedNodeContent,
   className,
   ...props
 }: GraphCanvasProps & GraphCanvasKeyboardCancelProps) {
@@ -1481,6 +1482,7 @@ export function GraphCanvas({
               showPortColumnHeaders={showPortColumnHeaders}
               renderNodeBody={renderNodeBody}
               getNodeBodyHeight={getNodeBodyHeight}
+              renderMinimizedNodeContent={renderMinimizedNodeContent}
               onNodeSelect={selectNodeFromPointer}
               onNodeMinimizedChange={onNodesChange ? changeNodeMinimized : undefined}
               onStartConnection={handleStartConnection}

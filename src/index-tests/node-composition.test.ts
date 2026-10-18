@@ -128,4 +128,37 @@ describe("node composition seam", () => {
     expect(latestNodes[0]).toMatchObject({ x: 0, y: 0 });
     expect(latestSelection.nodeIds).toEqual(["a"]);
   });
+
+  test("minimized nodes show inline header content that never drags the node", async () => {
+    let latestNodes: GraphCanvasNodeData[] = [];
+    function Harness() {
+      const [nodes, setNodes] = React.useState<GraphCanvasNodeData[]>([
+        { id: "a", label: "A", x: 0, y: 0, minimized: true, ...ports },
+        { id: "b", label: "B", x: 400, y: 0, ...ports },
+      ]);
+      latestNodes = nodes;
+      return React.createElement(GraphCanvas, {
+        nodes,
+        edges: [],
+        showToolbar: false,
+        showMiniMap: false,
+        renderMinimizedNodeContent: ({ node }) =>
+          React.createElement("input", { "aria-label": `${node.label} inline`, defaultValue: "1" }),
+        onNodesChange(nextNodes) {
+          latestNodes = nextNodes;
+          setNodes(nextNodes);
+        },
+      });
+    }
+    const fixture = render(React.createElement(Harness));
+    expect(screen.queryByLabelText("B inline")).toBeNull();
+    const input = screen.getByLabelText("A inline");
+    expect(input.closest('[data-slot="workflow-node-header"]')).not.toBeNull();
+    await act(async () => {
+      fireEvent.pointerDown(input, { clientX: 10, clientY: 10, button: 0, pointerId: 1 });
+      fireEvent.pointerMove(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+      fireEvent.pointerUp(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+    });
+    expect(latestNodes[0]).toMatchObject({ x: 0, y: 0, minimized: true });
+  });
 });
