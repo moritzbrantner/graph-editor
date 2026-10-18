@@ -34,6 +34,7 @@ export function GraphNode({
   body,
   minimizedContent,
   renderPortContent,
+  titleContent,
   nodeBodyHeight,
   menuItems = [],
   menuLabel = "Actions",
@@ -143,23 +144,31 @@ export function GraphNode({
         <div
           className={cn("flex justify-between gap-3", minimized ? "items-center" : "items-start")}
         >
-          <button
-            type="button"
-            data-slot="workflow-node-select"
-            aria-label={resolvedNode.label}
-            className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            onClick={(event) => {
-              event.stopPropagation();
-              onNodeSelect?.(resolvedNode);
-            }}
-          >
-            <div className="truncate text-sm font-semibold text-zinc-950">{resolvedNode.label}</div>
-            {getGraphNodePackageLabel(resolvedNode) ? (
-              <div className="mt-0.5 truncate text-[11px] font-medium text-zinc-600">
-                {getGraphNodePackageLabel(resolvedNode)}
+          {titleContent !== undefined ? (
+            <div data-slot="graph-node-title" className="min-w-0 flex-1">
+              {titleContent}
+            </div>
+          ) : (
+            <button
+              type="button"
+              data-slot="workflow-node-select"
+              aria-label={resolvedNode.label}
+              className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              onClick={(event) => {
+                event.stopPropagation();
+                onNodeSelect?.(resolvedNode);
+              }}
+            >
+              <div className="truncate text-sm font-semibold text-zinc-950">
+                {resolvedNode.label}
               </div>
-            ) : null}
-          </button>
+              {getGraphNodePackageLabel(resolvedNode) ? (
+                <div className="mt-0.5 truncate text-[11px] font-medium text-zinc-600">
+                  {getGraphNodePackageLabel(resolvedNode)}
+                </div>
+              ) : null}
+            </button>
+          )}
           {minimized && minimizedContent ? (
             <div data-slot="graph-node-minimized-content" className="min-w-0 shrink-0">
               {minimizedContent}

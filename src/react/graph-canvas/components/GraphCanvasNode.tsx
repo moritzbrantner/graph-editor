@@ -19,6 +19,9 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   getNodeBodyHeight,
   renderMinimizedNodeContent,
   renderPortContent,
+  getNodeMenuItems,
+  nodeMenuLabel,
+  renderNodeTitle,
   onNodeSelect,
   onNodeMinimizedChange,
   onStartConnection,
@@ -89,6 +92,14 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
               })
             : undefined
         }
+        menuItems={getNodeMenuItems?.(node)}
+        {...(nodeMenuLabel === undefined ? {} : { menuLabel: nodeMenuLabel })}
+        titleContent={renderNodeTitle?.({
+          node,
+          selected: !!selected,
+          readOnly: !!readOnly,
+          height: 0,
+        })}
         renderPortContent={
           renderPortContent
             ? (port, direction) =>

@@ -200,4 +200,60 @@ describe("node composition seam", () => {
     });
     expect(latestNodes[0]).toMatchObject({ x: 0, y: 0 });
   });
+
+  test("a composed title and node menu items replace host overlays", async () => {
+    let latestNodes: GraphCanvasNodeData[] = [];
+    const selected: string[] = [];
+    function Harness() {
+      const [nodes, setNodes] = React.useState<GraphCanvasNodeData[]>([
+        { id: "a", label: "A", x: 0, y: 0, ...ports },
+        { id: "b", label: "B", x: 400, y: 0, ...ports },
+      ]);
+      latestNodes = nodes;
+      return React.createElement(GraphCanvas, {
+        nodes,
+        edges: [],
+        showToolbar: false,
+        showMiniMap: false,
+        renderNodeTitle: ({ node }) =>
+          node.id === "a"
+            ? React.createElement("input", { "aria-label": "Rename A", defaultValue: "A" })
+            : undefined,
+        getNodeMenuItems: (node) => [
+          {
+            id: "rename",
+            label: `Rename ${node.label}`,
+            onSelect: (target) => selected.push(target.id),
+          },
+        ],
+        onNodesChange(nextNodes) {
+          latestNodes = nextNodes;
+          setNodes(nextNodes);
+        },
+      });
+    }
+    const fixture = render(React.createElement(Harness));
+    const input = screen.getByLabelText("Rename A");
+    expect(input.closest('[data-slot="graph-node-title"]')).not.toBeNull();
+    // Node B keeps the default select button.
+    expect(fixture.container.querySelectorAll('[data-slot="workflow-node-select"]')).toHaveLength(
+      1,
+    );
+    await act(async () => {
+      fireEvent.pointerDown(input, { clientX: 10, clientY: 10, button: 0, pointerId: 1 });
+      fireEvent.pointerMove(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+      fireEvent.pointerUp(fixture.container, { clientX: 140, clientY: 90, pointerId: 1 });
+    });
+    expect(latestNodes[0]).toMatchObject({ x: 0, y: 0 });
+
+    const trigger = screen.getByLabelText("Open B menu");
+    expect(trigger).not.toHaveProperty("disabled", true);
+    await act(async () => {
+      fireEvent.keyDown(trigger, { key: "Enter" });
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Rename B"));
+    });
+    expect(selected).toEqual(["b"]);
+  });
 });
