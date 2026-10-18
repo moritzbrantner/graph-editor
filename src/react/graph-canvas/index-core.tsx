@@ -145,6 +145,16 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
    * the fixed minimized geometry and, like the body, never starts a node drag.
    */
   renderMinimizedNodeContent?: (context: GraphCanvasNodeBodyContext) => React.ReactNode;
+  /**
+   * Compact content on an expanded node's port card (its lower line), such as an inline name
+   * editor. The port row keeps its fixed height and the content never starts drags.
+   */
+  renderPortContent?: (
+    context: GraphCanvasNodeBodyContext & {
+      port: GraphCanvasPort;
+      direction: "input" | "output";
+    },
+  ) => React.ReactNode;
 };
 
 export type GraphCanvasNodeBodyContext = {
@@ -166,6 +176,7 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   renderNodeBody?: GraphCanvasProps["renderNodeBody"];
   getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
   renderMinimizedNodeContent?: GraphCanvasProps["renderMinimizedNodeContent"];
+  renderPortContent?: GraphCanvasProps["renderPortContent"];
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
   onStartConnection?: (nodeId: string, portId: string) => void;
@@ -823,6 +834,7 @@ function isGraphNodeControlEvent(target: EventTarget) {
           "[data-slot='workflow-node-menu-trigger']",
           "[data-slot='graph-node-body']",
           "[data-slot='graph-node-minimized-content']",
+          "[data-slot='graph-node-port-content']",
         ].join(", "),
       ),
     )

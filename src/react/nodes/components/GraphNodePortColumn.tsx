@@ -12,6 +12,7 @@ export function GraphNodePortColumn({
   ports,
   disabled,
   showHeader,
+  renderPortContent,
   onClick,
   onPointerUp,
   onPointerDown,
@@ -23,6 +24,7 @@ export function GraphNodePortColumn({
   ports: readonly GraphNodePort[];
   disabled: boolean;
   showHeader: boolean;
+  renderPortContent?: (port: GraphNodePort, direction: "input" | "output") => React.ReactNode;
   onClick?: (port: GraphNodePort, node: GraphNodeData) => void;
   onPointerUp?: (
     port: GraphNodePort,
@@ -51,19 +53,43 @@ export function GraphNodePortColumn({
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 gap-2">
-          {ports.map((port) => (
-            <GraphNodePortAnchor
-              key={`${direction}-${port.id}`}
-              direction={direction}
-              node={node}
-              port={port}
-              disabled={disabled}
-              onClick={onClick}
-              onPointerUp={onPointerUp}
-              onPointerDown={onPointerDown}
-              getAriaLabel={getAriaLabel}
-            />
-          ))}
+          {ports.map((port) => {
+            const content = renderPortContent?.(port, direction);
+            const anchor = (
+              <GraphNodePortAnchor
+                key={`${direction}-${port.id}`}
+                direction={direction}
+                node={node}
+                port={port}
+                disabled={disabled}
+                onClick={onClick}
+                onPointerUp={onPointerUp}
+                onPointerDown={onPointerDown}
+                getAriaLabel={getAriaLabel}
+              />
+            );
+            return content ? (
+              <div
+                key={`${direction}-${port.id}`}
+                data-slot="graph-node-port-row"
+                className="relative"
+              >
+                {anchor}
+                <div
+                  data-slot="graph-node-port-content"
+                  className={
+                    direction === "input"
+                      ? "absolute bottom-1.5 left-3 right-2 z-10"
+                      : "absolute bottom-1.5 left-2 right-3 z-10"
+                  }
+                >
+                  {content}
+                </div>
+              </div>
+            ) : (
+              anchor
+            );
+          })}
         </div>
       )}
     </div>

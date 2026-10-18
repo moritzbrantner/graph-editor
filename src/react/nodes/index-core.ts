@@ -96,6 +96,11 @@ export type GraphNodeProps<
   body?: React.ReactNode;
   /** Compact content inline in a minimized node's header, after its label. */
   minimizedContent?: React.ReactNode;
+  /**
+   * Compact content shown on an expanded node's port card, on its lower line (where the type
+   * badge sits), for example an inline editor for the port's name. Return null for none.
+   */
+  renderPortContent?: (port: GraphNodePort, direction: "input" | "output") => React.ReactNode;
   /** Body height for the geometry model (see `GraphNodeLayoutOptions.nodeBodyHeight`). */
   nodeBodyHeight?: GraphNodeLayoutOptions["nodeBodyHeight"];
   menuItems?: GraphNodeMenuItem[];

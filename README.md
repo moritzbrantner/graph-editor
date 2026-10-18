@@ -384,6 +384,10 @@ and geometry:
 - `renderMinimizedNodeContent` shows compact content, such as one value field, inline in a
   minimized node's header. It fits the fixed minimized geometry and also never starts a drag.
   `GraphNode` takes it as `minimizedContent`.
+- `renderPortContent({ node, port, direction })` puts compact content, such as an inline port
+  name editor, on an expanded node's port card, on the line where the type badge sits. The port
+  row keeps its fixed height, the port button keeps its role and label, and the content never
+  starts a drag.
 - `GraphNode` accepts the same content as `body` + `nodeBodyHeight`. `GraphNodeBody` is the
   exported slot component, alongside `GraphNodeMenu`, `GraphNodeMinimizeButton`,
   `GraphNodePortColumn` and `GraphNodeMinimizedPorts`.

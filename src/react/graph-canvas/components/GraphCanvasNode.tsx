@@ -5,7 +5,7 @@ import * as React from "react";
 import { cn } from "@moritzbrantner/ui";
 
 import { GraphNode, getGraphNodeBodyHeight, getGraphNodeSize } from "../../nodes";
-import { type GraphCanvasNodeProps } from "../index-core";
+import { type GraphCanvasNodeProps, type GraphCanvasPort } from "../index-core";
 
 export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   node,
@@ -18,6 +18,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   renderNodeBody,
   getNodeBodyHeight,
   renderMinimizedNodeContent,
+  renderPortContent,
   onNodeSelect,
   onNodeMinimizedChange,
   onStartConnection,
@@ -86,6 +87,19 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
                 readOnly: !!readOnly,
                 height: 0,
               })
+            : undefined
+        }
+        renderPortContent={
+          renderPortContent
+            ? (port, direction) =>
+                renderPortContent({
+                  node,
+                  selected: !!selected,
+                  readOnly: !!readOnly,
+                  height: 0,
+                  port: port as GraphCanvasPort,
+                  direction,
+                })
             : undefined
         }
         onNodeSelect={() => onNodeSelect?.(node)}
