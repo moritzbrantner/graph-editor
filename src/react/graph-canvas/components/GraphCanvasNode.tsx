@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { cn } from "@moritzbrantner/ui";
 
-import { GraphNode, getGraphNodeSize } from "../../nodes";
+import { GraphNode, getGraphNodeBodyHeight, getGraphNodeSize } from "../../nodes";
 import { type GraphCanvasNodeProps } from "../index-core";
 
 export const GraphCanvasNode = React.memo(function GraphCanvasNode({
@@ -15,6 +15,8 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   pendingConnection,
   inputsConnectable,
   showPortColumnHeaders = true,
+  renderNodeBody,
+  getNodeBodyHeight,
   onNodeSelect,
   onNodeMinimizedChange,
   onStartConnection,
@@ -26,8 +28,16 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   className,
   ...props
 }: GraphCanvasNodeProps) {
-  const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
+  const nodeBodyHeight =
+    renderNodeBody && getNodeBodyHeight
+      ? (getNodeBodyHeight as (node: unknown) => number)
+      : undefined;
+  const layoutOptions = React.useMemo(
+    () => ({ showPortColumnHeaders, ...(nodeBodyHeight ? { nodeBodyHeight } : {}) }),
+    [nodeBodyHeight, showPortColumnHeaders],
+  );
   const nodeSize = getGraphNodeSize(node, layoutOptions);
+  const bodyHeight = getGraphNodeBodyHeight(node, layoutOptions);
 
   return (
     <div
@@ -56,6 +66,17 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
         inputDisabled={readOnly || !(pendingConnection || inputsConnectable)}
         outputDisabled={readOnly}
         showPortColumnHeaders={showPortColumnHeaders}
+        nodeBodyHeight={nodeBodyHeight}
+        body={
+          renderNodeBody && bodyHeight > 0
+            ? renderNodeBody({
+                node,
+                selected: !!selected,
+                readOnly: !!readOnly,
+                height: bodyHeight,
+              })
+            : undefined
+        }
         onNodeSelect={() => onNodeSelect?.(node)}
         onMinimizedChange={(_, minimized) => onNodeMinimizedChange?.(node.id, minimized)}
         onInputClick={(port) => onCompleteConnection?.(node.id, port.id)}

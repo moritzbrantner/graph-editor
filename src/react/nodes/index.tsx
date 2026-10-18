@@ -3,6 +3,7 @@
 export {
   getGraphNodePortTypeLabel,
   getGraphNodePortTypeSource,
+  getGraphNodeBodyHeight,
   getGraphNodePortCenterOffset,
   getGraphNodeSize,
   type GraphInputOnlyNodeData,
@@ -19,6 +20,7 @@ export {
 } from "./index-core";
 
 export { GraphNode } from "./components/GraphNode";
+export { GraphNodeBody, type GraphNodeBodyProps } from "./components/GraphNodeBody";
 export { GraphInputOnlyNode } from "./components/GraphInputOnlyNode";
 export { GraphOutputOnlyNode } from "./components/GraphOutputOnlyNode";
 export { GraphNodeMinimizeButton } from "./components/GraphNodeMinimizeButton";

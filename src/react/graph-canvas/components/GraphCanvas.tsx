@@ -117,6 +117,8 @@ export function GraphCanvas({
   enableWheelZoom = true,
   toolbarLabel = "Workflow",
   measurePorts = "auto",
+  renderNodeBody,
+  getNodeBodyHeight,
   className,
   ...props
 }: GraphCanvasProps & GraphCanvasKeyboardCancelProps) {
@@ -226,7 +228,15 @@ export function GraphCanvas({
     () => new Map(nodes.map((node) => [node.id, node] as const)),
     [nodes],
   );
-  const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
+  const layoutOptions = React.useMemo(
+    () => ({
+      showPortColumnHeaders,
+      ...(renderNodeBody && getNodeBodyHeight
+        ? { nodeBodyHeight: getNodeBodyHeight as (node: unknown) => number }
+        : {}),
+    }),
+    [getNodeBodyHeight, renderNodeBody, showPortColumnHeaders],
+  );
   const selectedNode = currentSelectedNodeId ? nodeById.get(currentSelectedNodeId) : undefined;
   const selectedEdge = React.useMemo(
     () => edges.find((edge) => edge.id === currentSelectedEdgeId),
@@ -1469,6 +1479,8 @@ export function GraphCanvas({
                 connectionDrag?.type === "new" || connectionDrag?.type === "rewire-target"
               }
               showPortColumnHeaders={showPortColumnHeaders}
+              renderNodeBody={renderNodeBody}
+              getNodeBodyHeight={getNodeBodyHeight}
               onNodeSelect={selectNodeFromPointer}
               onNodeMinimizedChange={onNodesChange ? changeNodeMinimized : undefined}
               onStartConnection={handleStartConnection}

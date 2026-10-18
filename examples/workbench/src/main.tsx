@@ -225,6 +225,10 @@ function App() {
     return <CanvasConnectionValidationFixture />;
   }
 
+  if (fixture === "composed-node-body") {
+    return <ComposedNodeBodyFixture />;
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
@@ -306,6 +310,66 @@ function CanvasConnectionValidationFixture() {
         showMiniMap={false}
         showToolbar={false}
         surfaceHeight="32rem"
+      />
+    </main>
+  );
+}
+
+/** A node whose body hosts a domain control through the supported `renderNodeBody` seam. */
+function ComposedNodeBodyFixture() {
+  const [nodes, setNodes] = React.useState<GraphCanvasNodeData[]>([
+    {
+      id: "source",
+      label: "Source",
+      x: 48,
+      y: 120,
+      outputs: [{ id: "out", label: "Out", type: "event" }],
+    },
+    {
+      id: "threshold",
+      label: "Threshold",
+      x: 400,
+      y: 96,
+      inputs: [{ id: "in", label: "In", type: "event" }],
+      outputs: [{ id: "out", label: "Out", type: "event" }],
+    },
+  ]);
+  const [edges, setEdges] = React.useState<GraphCanvasEdge[]>([]);
+  const [values, setValues] = React.useState<Record<string, string>>({ threshold: "0.5" });
+
+  return (
+    <main className="min-h-screen bg-background p-4 text-foreground">
+      <output aria-label="Composed state" className="mb-3 block text-sm font-medium">
+        {JSON.stringify({
+          edges: edges.length,
+          values,
+          nodes: nodes.map(({ id, x, y, minimized }) => ({ id, x, y, minimized })),
+        })}
+      </output>
+      <GraphCanvas
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={setNodes}
+        onEdgesChange={setEdges}
+        showMiniMap={false}
+        showToolbar={false}
+        surfaceHeight="32rem"
+        getNodeBodyHeight={(node) => (node.id === "threshold" ? 48 : 0)}
+        renderNodeBody={({ node, readOnly }) => (
+          <label className="flex items-center gap-2">
+            <span>Value</span>
+            <input
+              aria-label={`${node.label} value`}
+              className="h-7 w-24 rounded border px-1"
+              disabled={readOnly}
+              value={values[node.id] ?? ""}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setValues((current) => ({ ...current, [node.id]: value }));
+              }}
+            />
+          </label>
+        )}
       />
     </main>
   );

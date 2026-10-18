@@ -1,6 +1,6 @@
 import { normalizeGraphEditorDocument } from "./core/document";
 import type { GraphEditorDocument, GraphEditorNode } from "./core/types";
-import { getGraphEditorNodeSize } from "./node-metrics";
+import { getGraphEditorNodeSize, type GraphEditorNodeLayoutOptions } from "./node-metrics";
 
 export type GraphEditorAlignment = "left" | "center-x" | "right" | "top" | "center-y" | "bottom";
 
@@ -71,13 +71,18 @@ export function alignGraphEditorNodes<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   nodeIds: readonly string[],
   alignment: GraphEditorAlignment,
+  /** Node geometry options (port headers, composed body heights) used for node sizes. */
+  layoutOptions: GraphEditorNodeLayoutOptions = {},
 ): GraphEditorSpatialResult<TNodeData, TEdgeData, TPortType> {
   const nodes = selectedNodes(document, nodeIds);
   if (nodes.length < 2) {
     return { document, changedNodeIds: [] };
   }
 
-  const measured = nodes.map((node) => ({ node, size: getGraphEditorNodeSize(node) }));
+  const measured = nodes.map((node) => ({
+    node,
+    size: getGraphEditorNodeSize(node, layoutOptions),
+  }));
   const left = Math.min(...measured.map(({ node }) => node.x));
   const top = Math.min(...measured.map(({ node }) => node.y));
   const right = Math.max(...measured.map(({ node, size }) => node.x + size.width));
@@ -87,7 +92,7 @@ export function alignGraphEditorNodes<
   const targetIds = new Set(nodes.map((node) => node.id));
 
   return updateSelectedNodes(document, [...targetIds], (node) => {
-    const size = getGraphEditorNodeSize(node);
+    const size = getGraphEditorNodeSize(node, layoutOptions);
     switch (alignment) {
       case "left":
         return { x: left, y: node.y };
@@ -113,13 +118,18 @@ export function distributeGraphEditorNodes<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   nodeIds: readonly string[],
   axis: GraphEditorDistributionAxis,
+  /** Node geometry options (port headers, composed body heights) used for node sizes. */
+  layoutOptions: GraphEditorNodeLayoutOptions = {},
 ): GraphEditorSpatialResult<TNodeData, TEdgeData, TPortType> {
   const nodes = selectedNodes(document, nodeIds);
   if (nodes.length < 3) {
     return { document, changedNodeIds: [] };
   }
 
-  const measured = nodes.map((node) => ({ node, size: getGraphEditorNodeSize(node) }));
+  const measured = nodes.map((node) => ({
+    node,
+    size: getGraphEditorNodeSize(node, layoutOptions),
+  }));
   const ordered = [...measured].sort((a, b) =>
     axis === "horizontal"
       ? a.node.x - b.node.x || a.node.id.localeCompare(b.node.id)

@@ -2,6 +2,14 @@
 
 ## Added
 
+- Node composition seam (#45): `GraphCanvas` `renderNodeBody` / `getNodeBodyHeight`, `GraphNode`
+  `body` / `nodeBodyHeight`, and the exported `GraphNodeBody` slot. They let consumers put
+  interactive domain content inside nodes without portals or DOM patching.
+  - Body heights enter the deterministic geometry model through
+    `GraphNodeLayoutOptions.nodeBodyHeight`, also exposed as `getGraphEditorNodeBodyHeight` on
+    `/layout`.
+  - `alignGraphEditorNodes` and `distributeGraphEditorNodes` take an optional `layoutOptions`
+    argument.
 - Headless graph document modules for `/serialization`, `/persistence`, `/patches`, `/plugins`,
   `/interaction`, and `/operation-log`.
 - Adapter-level graph persistence helpers, including local storage and in-memory storage adapters.

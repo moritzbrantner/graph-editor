@@ -296,3 +296,63 @@ test("has no serious accessibility violations in the workbench", async ({ page }
 
   expect(seriousViolations).toEqual([]);
 });
+
+test("composes an interactive node body without breaking drag, select, connect or minimize", async ({
+  page,
+}, testInfo) => {
+  test.skip(isMobileProject(testInfo.project.name), "Pointer geometry is covered on desktop");
+  await page.goto("/?fixture=composed-node-body");
+  const state = async () =>
+    JSON.parse((await page.getByLabel("Composed state").textContent()) ?? "{}") as {
+      edges: number;
+      values: Record<string, string>;
+      nodes: Array<{ id: string; x: number; y: number; minimized?: boolean }>;
+    };
+  const threshold = async () => (await state()).nodes.find((node) => node.id === "threshold")!;
+
+  // Editing inside the body neither drags the node nor runs graph shortcuts.
+  const input = page.getByLabel("Threshold value");
+  const inputBox = (await input.boundingBox())!;
+  await page.mouse.move(inputBox.x + 10, inputBox.y + inputBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(inputBox.x + 120, inputBox.y + 80, { steps: 6 });
+  await page.mouse.up();
+  expect(await threshold()).toMatchObject({ x: 400, y: 96 });
+  await input.fill("0.75");
+  await input.press("Delete");
+  await input.press("Shift+ArrowRight");
+  expect((await state()).values.threshold).toBe("0.75");
+  expect(await threshold()).toMatchObject({ x: 400, y: 96 });
+
+  // The ports sit below the body and still connect.
+  const source = page.getByRole("button", { name: "Start Source Out" });
+  const target = page.getByRole("button", { name: "Connect to Threshold In" });
+  const inputPortBox = (await target.boundingBox())!;
+  expect(inputPortBox.y).toBeGreaterThan(inputBox.y + inputBox.height);
+  const sourceBox = (await source.boundingBox())!;
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    inputPortBox.x + inputPortBox.width / 2,
+    inputPortBox.y + inputPortBox.height / 2,
+    {
+      steps: 8,
+    },
+  );
+  await page.mouse.up();
+  await expect.poll(async () => (await state()).edges).toBe(1);
+
+  // Dragging by the header still moves the node.
+  const header = page.locator('[data-node-id="threshold"] [data-slot="workflow-node-select"]');
+  const headerBox = (await header.boundingBox())!;
+  await page.mouse.move(headerBox.x + 20, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 100, headerBox.y + headerBox.height / 2 + 40, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await threshold()).x).toBeGreaterThan(400);
+
+  // Minimizing hides the body.
+  await page.locator('[data-node-id="threshold"] [data-slot="workflow-node-minimize"]').click();
+  await expect.poll(async () => (await threshold()).minimized).toBe(true);
+  await expect(page.getByLabel("Threshold value")).toHaveCount(0);
+});

@@ -133,6 +133,21 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   enableWheelZoom?: boolean;
   toolbarLabel?: React.ReactNode;
   measurePorts?: "auto" | "dom" | "deterministic";
+  /**
+   * Domain content rendered inside expanded nodes between the header and the ports. GraphCanvas
+   * keeps owning selection, dragging, connections and geometry; the body never starts a drag.
+   */
+  renderNodeBody?: (context: GraphCanvasNodeBodyContext) => React.ReactNode;
+  /** Height of `renderNodeBody` content per node; required for deterministic geometry. */
+  getNodeBodyHeight?: (node: GraphCanvasNodeData) => number;
+};
+
+export type GraphCanvasNodeBodyContext = {
+  node: GraphCanvasNodeData;
+  selected: boolean;
+  readOnly: boolean;
+  /** Body height reserved by the geometry model. */
+  height: number;
 };
 
 export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect"> & {
@@ -143,6 +158,8 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   pendingConnection?: PendingConnection | null;
   inputsConnectable?: boolean;
   showPortColumnHeaders?: boolean;
+  renderNodeBody?: GraphCanvasProps["renderNodeBody"];
+  getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
   onStartConnection?: (nodeId: string, portId: string) => void;
@@ -798,6 +815,7 @@ function isGraphNodeControlEvent(target: EventTarget) {
           "[data-slot='workflow-node-port']",
           "[data-slot='workflow-node-minimize']",
           "[data-slot='workflow-node-menu-trigger']",
+          "[data-slot='graph-node-body']",
         ].join(", "),
       ),
     )
