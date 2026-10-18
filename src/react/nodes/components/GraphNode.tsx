@@ -5,6 +5,7 @@ import * as React from "react";
 import { cn } from "@moritzbrantner/ui";
 
 import {
+  getGraphNodeBodyHeight,
   getGraphNodeHeaderHeight,
   getGraphNodePackageLabel,
   getGraphNodePortLayout,
@@ -16,6 +17,7 @@ import {
   graphNodeUsesCompactVariant,
   type GraphNodeProps,
 } from "../index-core";
+import { GraphNodeBody } from "./GraphNodeBody";
 import { GraphNodeInline } from "./GraphNodeInline";
 import { GraphNodeMenu } from "./GraphNodeMenu";
 import { GraphNodeMinimizeButton } from "./GraphNodeMinimizeButton";
@@ -29,6 +31,8 @@ export function GraphNode({
   inputDisabled = false,
   outputDisabled = false,
   showPortColumnHeaders = true,
+  body,
+  nodeBodyHeight,
   menuItems = [],
   menuLabel = "Actions",
   onNodeSelect,
@@ -56,7 +60,11 @@ export function GraphNode({
     () => (node.minimized === minimized ? node : { ...node, minimized }),
     [minimized, node],
   );
-  const layoutOptions = React.useMemo(() => ({ showPortColumnHeaders }), [showPortColumnHeaders]);
+  const layoutOptions = React.useMemo(
+    () => ({ showPortColumnHeaders, ...(nodeBodyHeight ? { nodeBodyHeight } : {}) }),
+    [nodeBodyHeight, showPortColumnHeaders],
+  );
+  const bodyHeight = body ? getGraphNodeBodyHeight(resolvedNode, layoutOptions) : 0;
   const compact = graphNodeUsesCompactVariant(resolvedNode);
   const size = getGraphNodeSize(resolvedNode, layoutOptions);
   const portLayout = getGraphNodePortLayout(resolvedNode);
@@ -184,6 +192,9 @@ export function GraphNode({
           </p>
         ) : null}
       </div>
+      {body && bodyHeight > 0 && !minimized ? (
+        <GraphNodeBody height={bodyHeight}>{body}</GraphNodeBody>
+      ) : null}
       {minimized ? (
         <GraphNodeMinimizedPorts
           node={resolvedNode}

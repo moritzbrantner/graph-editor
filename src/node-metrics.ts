@@ -7,6 +7,18 @@ export type GraphEditorNodeSize = {
 
 export type GraphEditorNodeLayoutOptions = {
   showPortColumnHeaders?: boolean;
+  /**
+   * Height in pixels of consumer-composed body content between a node's header and its ports
+   * (see `GraphCanvas` `renderNodeBody`). Called with the full node; minimized and compact nodes
+   * have no body. Keeps every geometry consumer (ports, edges, snapping, bounds) on one model.
+   */
+  nodeBodyHeight?: (node: GraphEditorNodeBodyMetricsInput) => number;
+};
+
+export type GraphEditorNodeBodyMetricsInput = GraphEditorNodeMetricsInput & {
+  id?: string;
+  kind?: string;
+  data?: unknown;
 };
 
 export type GraphEditorNodeMetricsInput<TNodeData = Record<string, unknown>> = Pick<
@@ -49,7 +61,8 @@ export function getGraphEditorNodeSize<TNodeData = Record<string, unknown>>(
   }
 
   const rows = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
-  const headerHeight = getGraphEditorNodeHeaderHeight(node);
+  const headerHeight =
+    getGraphEditorNodeHeaderHeight(node) + getGraphEditorNodeBodyHeight(node, options);
   const portColumnLabelHeight =
     options.showPortColumnHeaders === false ? 0 : graphEditorNodePortColumnLabelHeight;
   const portsHeight =
@@ -80,7 +93,8 @@ export function getGraphEditorNodePortCenterOffset<TNodeData = Record<string, un
     return top + ((portIndex + 1) / (ports + 1)) * getGraphEditorNodeMinimizedPortsHeight(node);
   }
 
-  const headerHeight = getGraphEditorNodeHeaderHeight(node);
+  const headerHeight =
+    getGraphEditorNodeHeaderHeight(node) + getGraphEditorNodeBodyHeight(node, options);
   const portColumnLabelHeight =
     options.showPortColumnHeaders === false ? 0 : graphEditorNodePortColumnLabelHeight;
 
@@ -91,6 +105,22 @@ export function getGraphEditorNodePortCenterOffset<TNodeData = Record<string, un
     portIndex * (graphEditorNodePortRowHeight + graphEditorNodePortGap) +
     graphEditorNodePortRowHeight / 2
   );
+}
+
+/** Height of composed body content for an expanded, non-compact node (0 without a body). */
+export function getGraphEditorNodeBodyHeight<TNodeData = Record<string, unknown>>(
+  node: GraphEditorNodeMetricsInput<TNodeData>,
+  options: GraphEditorNodeLayoutOptions = {},
+) {
+  if (
+    !options.nodeBodyHeight ||
+    graphEditorNodeUsesCompactVariant(node) ||
+    graphEditorNodeUsesMinimizedVariant(node)
+  ) {
+    return 0;
+  }
+  const height = options.nodeBodyHeight(node as GraphEditorNodeBodyMetricsInput);
+  return Number.isFinite(height) && height > 0 ? Math.ceil(height) : 0;
 }
 
 function graphEditorNodeUsesCompactVariant(node: GraphEditorNodeMetricsInput) {

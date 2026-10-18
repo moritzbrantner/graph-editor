@@ -7,7 +7,10 @@ import {
   type GraphEditorNode,
 } from "./core";
 import {
+  getGraphEditorNodeBodyHeight,
+  getGraphEditorNodePortCenterOffset,
   getGraphEditorNodeSize,
+  type GraphEditorNodeBodyMetricsInput,
   type GraphEditorNodeLayoutOptions,
   type GraphEditorNodeSize,
 } from "./node-metrics";
@@ -26,7 +29,14 @@ export type GraphEditorLayoutOptions<TNodeData = Record<string, unknown>> = {
   marginY?: number;
 };
 
-export { getGraphEditorNodeSize, type GraphEditorNodeLayoutOptions, type GraphEditorNodeSize };
+export {
+  getGraphEditorNodeBodyHeight,
+  getGraphEditorNodePortCenterOffset,
+  getGraphEditorNodeSize,
+  type GraphEditorNodeBodyMetricsInput,
+  type GraphEditorNodeLayoutOptions,
+  type GraphEditorNodeSize,
+};
 
 export type GraphEditorLayoutResult<
   TNodeData = Record<string, unknown>,

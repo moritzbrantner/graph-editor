@@ -3,6 +3,7 @@
 import type * as React from "react";
 
 import {
+  getGraphEditorNodeBodyHeight,
   getGraphEditorNodeHeaderHeight,
   getGraphEditorNodeMinimizedPortsHeight,
   getGraphEditorNodePortCenterOffset,
@@ -91,6 +92,10 @@ export type GraphNodeProps<
   inputDisabled?: boolean;
   outputDisabled?: boolean;
   showPortColumnHeaders?: boolean;
+  /** Composed content between the header and the ports of an expanded node. */
+  body?: React.ReactNode;
+  /** Body height for the geometry model (see `GraphNodeLayoutOptions.nodeBodyHeight`). */
+  nodeBodyHeight?: GraphNodeLayoutOptions["nodeBodyHeight"];
   menuItems?: GraphNodeMenuItem[];
   menuLabel?: React.ReactNode;
   onNodeSelect?: (node: GraphNodeData) => void;
@@ -208,6 +213,10 @@ export function getGraphNodeSize(
   options: GraphNodeLayoutOptions = {},
 ): GraphNodeSize {
   return getGraphEditorNodeSize(node, options);
+}
+
+export function getGraphNodeBodyHeight(node: GraphNodeData, options: GraphNodeLayoutOptions = {}) {
+  return getGraphEditorNodeBodyHeight(node, options);
 }
 
 export function getGraphNodePortCenterOffset(

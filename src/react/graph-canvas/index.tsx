@@ -9,6 +9,7 @@ export {
   type GraphCanvasEdge,
   type GraphCanvasGroup,
   type GraphCanvasMiniMapProps,
+  type GraphCanvasNodeBodyContext,
   type GraphCanvasNodeData,
   type GraphCanvasNodeProps,
   type GraphCanvasPort,

@@ -357,6 +357,34 @@ Connection lifecycle callbacks are split by intent:
 />
 ```
 
+#### Composing node content
+
+Domain editors put their own controls inside nodes through `renderNodeBody`. They don't need
+portals, DOM queries or CSS overrides. GraphCanvas keeps owning selection, dragging, connections
+and geometry:
+
+```tsx
+<GraphCanvas
+  nodes={nodes}
+  edges={edges}
+  getNodeBodyHeight={(node) => (node.kind === "threshold" ? 48 : 0)}
+  renderNodeBody={({ node, readOnly, height }) => (
+    <ThresholdField nodeId={node.id} disabled={readOnly} />
+  )}
+/>
+```
+
+- The body sits between the header and the ports of expanded nodes. Minimized and compact nodes
+  have none.
+- `getNodeBodyHeight` feeds the one geometry model (`GraphNodeLayoutOptions.nodeBodyHeight`), so
+  port anchors, edges, snapping, bounds and `alignGraphEditorNodes` / `distributeGraphEditorNodes`
+  (via their `layoutOptions` argument) stay consistent.
+- Pointer interaction inside the body never starts a node drag. Graph shortcuts ignore editable
+  targets.
+- `GraphNode` accepts the same content as `body` + `nodeBodyHeight`. `GraphNodeBody` is the
+  exported slot component, alongside `GraphNodeMenu`, `GraphNodeMinimizeButton`,
+  `GraphNodePortColumn` and `GraphNodeMinimizedPorts`.
+
 `GraphWorkbench` exposes the same selection state through its controller and default UI. Consumers
 can add host-specific commands with the `commands` prop and can customize group inspection with
 `inspectorSchema.getGroupSections` and `inspectorSchema.applyGroupValues`.
