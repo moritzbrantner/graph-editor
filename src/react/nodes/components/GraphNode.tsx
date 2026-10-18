@@ -59,6 +59,7 @@ export function GraphNode({
   }, [node.id, node.minimized]);
 
   const minimized = node.minimized ?? uncontrolledMinimized;
+
   const resolvedNode = React.useMemo(
     () => (node.minimized === minimized ? node : { ...node, minimized }),
     [minimized, node],
@@ -69,6 +70,8 @@ export function GraphNode({
   );
   const bodyHeight = body ? getGraphNodeBodyHeight(resolvedNode, layoutOptions) : 0;
   const compact = graphNodeUsesCompactVariant(resolvedNode);
+  // An idle status carries no information, so it draws no indicator (#49).
+  const statusTone = resolvedNode.tone ?? getGraphNodeToneFromStatus(resolvedNode.status);
   const size = getGraphNodeSize(resolvedNode, layoutOptions);
   const portLayout = getGraphNodePortLayout(resolvedNode);
 
@@ -131,9 +134,7 @@ export function GraphNode({
         className={cn(
           "shrink-0 overflow-hidden rounded-t-lg px-3 py-2",
           !minimized && "border-b",
-          getGraphNodeToneClasses(
-            resolvedNode.tone ?? getGraphNodeToneFromStatus(resolvedNode.status),
-          ),
+          getGraphNodeToneClasses(statusTone),
         )}
         style={{
           minHeight: minimized
@@ -180,15 +181,17 @@ export function GraphNode({
                 {resolvedNode.eyebrow ?? resolvedNode.category ?? resolvedNode.kind}
               </span>
             ) : null}
-            <span
-              aria-hidden="true"
-              className={cn(
-                "block h-2.5 w-2.5 rounded-full",
-                getGraphNodeToneDotClass(
-                  resolvedNode.tone ?? getGraphNodeToneFromStatus(resolvedNode.status),
-                ),
-              )}
-            />
+            {statusTone !== "neutral" ? (
+              <span
+                aria-hidden="true"
+                data-slot="graph-node-status-dot"
+                data-tone={statusTone}
+                className={cn(
+                  "block h-2.5 w-2.5 rounded-full",
+                  getGraphNodeToneDotClass(statusTone),
+                )}
+              />
+            ) : null}
             <GraphNodeMinimizeButton
               node={resolvedNode}
               minimized={minimized}

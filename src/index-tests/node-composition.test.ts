@@ -256,4 +256,17 @@ describe("node composition seam", () => {
     });
     expect(selected).toEqual(["b"]);
   });
+
+  test("idle nodes draw no status indicator; a meaningful status does", () => {
+    const { container, rerender } = render(
+      React.createElement(GraphNode, { node: { id: "a", label: "A", status: "idle", ...ports } }),
+    );
+    expect(container.querySelector('[data-slot="graph-node-status-dot"]')).toBeNull();
+    rerender(
+      React.createElement(GraphNode, { node: { id: "a", label: "A", status: "error", ...ports } }),
+    );
+    expect(
+      container.querySelector('[data-slot="graph-node-status-dot"]')?.getAttribute("data-tone"),
+    ).toBe("error");
+  });
 });
