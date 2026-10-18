@@ -101,6 +101,11 @@ export type GraphNodeProps<
    * badge sits), for example an inline editor for the port's name. Return null for none.
    */
   renderPortContent?: (port: GraphNodePort, direction: "input" | "output") => React.ReactNode;
+  /**
+   * Replaces the header's select button and label, for example with an inline rename field.
+   * Leave undefined for the default title.
+   */
+  titleContent?: React.ReactNode;
   /** Body height for the geometry model (see `GraphNodeLayoutOptions.nodeBodyHeight`). */
   nodeBodyHeight?: GraphNodeLayoutOptions["nodeBodyHeight"];
   menuItems?: GraphNodeMenuItem[];

@@ -388,6 +388,11 @@ and geometry:
   name editor, on an expanded node's port card, on the line where the type badge sits. The port
   row keeps its fixed height, the port button keeps its role and label, and the content never
   starts a drag.
+- `getNodeMenuItems(node)` fills the node's action menu (the "⋯" trigger), so a consumer does
+  not need its own action overlay. `nodeMenuLabel` names the menu.
+- `renderNodeTitle({ node, selected, readOnly })` replaces the header's select button and label,
+  for example with an inline rename field. Return `undefined` to keep the default title. The
+  title area never starts a drag. `GraphNode` takes it as `titleContent`.
 - `GraphNode` accepts the same content as `body` + `nodeBodyHeight`. `GraphNodeBody` is the
   exported slot component, alongside `GraphNodeMenu`, `GraphNodeMinimizeButton`,
   `GraphNodePortColumn` and `GraphNodeMinimizedPorts`.

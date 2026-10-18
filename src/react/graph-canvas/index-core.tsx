@@ -23,6 +23,7 @@ import {
   type GraphNodeData as WorkflowCanvasNodeData,
   type GraphNodeLayoutOptions,
   type GraphNodePort as WorkflowCanvasNodePort,
+  type GraphNodeMenuItem,
 } from "../nodes";
 
 type GraphCanvasPort<TypeScriptType = unknown> = WorkflowCanvasNodePort<TypeScriptType>;
@@ -149,6 +150,15 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
    * Compact content on an expanded node's port card (its lower line), such as an inline name
    * editor. The port row keeps its fixed height and the content never starts drags.
    */
+  /** Per-node action menu items (the node's single action surface). */
+  getNodeMenuItems?: (node: GraphCanvasNodeData) => GraphNodeMenuItem[];
+  /** Label of the node action menu (default "Actions"). */
+  nodeMenuLabel?: React.ReactNode;
+  /**
+   * Replaces a node's header title, for example with an inline rename field while renaming.
+   * Return undefined for the default title. The title area never starts drags.
+   */
+  renderNodeTitle?: (context: GraphCanvasNodeBodyContext) => React.ReactNode | undefined;
   renderPortContent?: (
     context: GraphCanvasNodeBodyContext & {
       port: GraphCanvasPort;
@@ -177,6 +187,9 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
   renderMinimizedNodeContent?: GraphCanvasProps["renderMinimizedNodeContent"];
   renderPortContent?: GraphCanvasProps["renderPortContent"];
+  getNodeMenuItems?: GraphCanvasProps["getNodeMenuItems"];
+  nodeMenuLabel?: GraphCanvasProps["nodeMenuLabel"];
+  renderNodeTitle?: GraphCanvasProps["renderNodeTitle"];
   onNodeSelect?: (node: GraphCanvasNodeData) => void;
   onNodeMinimizedChange?: (nodeId: string, minimized: boolean) => void;
   onStartConnection?: (nodeId: string, portId: string) => void;
@@ -835,6 +848,7 @@ function isGraphNodeControlEvent(target: EventTarget) {
           "[data-slot='graph-node-body']",
           "[data-slot='graph-node-minimized-content']",
           "[data-slot='graph-node-port-content']",
+          "[data-slot='graph-node-title']",
         ].join(", "),
       ),
     )
