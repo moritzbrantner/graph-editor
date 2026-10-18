@@ -13,7 +13,22 @@ export type GraphEditorNodeLayoutOptions = {
    * have no body. Keeps every geometry consumer (ports, edges, snapping, bounds) on one model.
    */
   nodeBodyHeight?: (node: GraphEditorNodeBodyMetricsInput) => number;
+  /**
+   * Width in pixels for a node, for example to fit a long label or an inline editor. Return
+   * `undefined` (or a non-positive value) for the default width of the node's variant.
+   */
+  nodeWidth?: (node: GraphEditorNodeBodyMetricsInput) => number | undefined;
+  /**
+   * `stacked` (default): a minimized node shows its header above a row of port dots.
+   * `inline`: a minimized node is one header line with its port dots on the left and right edges.
+   */
+  minimizedLayout?: GraphEditorNodeMinimizedLayout;
 };
+
+export type GraphEditorNodeMinimizedLayout = "stacked" | "inline";
+
+/** Height of a minimized node in the `inline` minimized layout. */
+export const graphEditorNodeMinimizedInlineHeight = 36;
 
 export type GraphEditorNodeBodyMetricsInput = GraphEditorNodeMetricsInput & {
   id?: string;
@@ -46,6 +61,24 @@ export function getGraphEditorNodeSize<TNodeData = Record<string, unknown>>(
   node: GraphEditorNodeMetricsInput<TNodeData>,
   options: GraphEditorNodeLayoutOptions = {},
 ): GraphEditorNodeSize {
+  const size = getGraphEditorNodeVariantSize(node, options);
+  const width = options.nodeWidth?.(node as GraphEditorNodeBodyMetricsInput);
+  return typeof width === "number" && Number.isFinite(width) && width > 0
+    ? { width: Math.ceil(width), height: size.height }
+    : size;
+}
+
+function getGraphEditorNodeVariantSize<TNodeData = Record<string, unknown>>(
+  node: GraphEditorNodeMetricsInput<TNodeData>,
+  options: GraphEditorNodeLayoutOptions,
+): GraphEditorNodeSize {
+  if (graphEditorNodeUsesMinimizedVariant(node) && options.minimizedLayout === "inline") {
+    return {
+      width: graphEditorNodeMinimizedWidth,
+      height: graphEditorNodeMinimizedInlineHeight,
+    };
+  }
+
   if (graphEditorNodeUsesMinimizedVariant(node)) {
     return {
       width: graphEditorNodeMinimizedWidth,
@@ -81,9 +114,15 @@ export function getGraphEditorNodePortCenterOffset<TNodeData = Record<string, un
   node: GraphEditorNodeMetricsInput<TNodeData>,
   portIndex: number,
   options: GraphEditorNodeLayoutOptions = {},
+  /** The port's side; inline minimized nodes spread each side's dots on their own. */
+  direction?: "input" | "output",
 ) {
   if (graphEditorNodeUsesCompactVariant(node)) {
     return getGraphEditorNodeSize(node, options).height / 2;
+  }
+
+  if (graphEditorNodeUsesMinimizedVariant(node) && options.minimizedLayout === "inline") {
+    return graphEditorNodeMinimizedInlinePortOffset(node, portIndex, direction);
   }
 
   if (graphEditorNodeUsesMinimizedVariant(node)) {
@@ -156,4 +195,21 @@ export function getGraphEditorNodeMinimizedPortsHeight(node: {
   const rows = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
 
   return Math.max(40, rows * 16 + 16);
+}
+
+/** Inline minimized ports sit on the node edges, spread over the single header line. */
+function graphEditorNodeMinimizedInlinePortOffset(
+  node: GraphEditorNodeMetricsInput,
+  portIndex: number,
+  direction?: "input" | "output",
+) {
+  const ports = Math.max(
+    direction === "input"
+      ? (node.inputs?.length ?? 0)
+      : direction === "output"
+        ? (node.outputs?.length ?? 0)
+        : Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0),
+    1,
+  );
+  return ((portIndex + 1) / (ports + 1)) * graphEditorNodeMinimizedInlineHeight;
 }

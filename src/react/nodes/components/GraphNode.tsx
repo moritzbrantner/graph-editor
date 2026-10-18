@@ -37,6 +37,8 @@ export function GraphNode({
   renderPortContent,
   titleContent,
   nodeBodyHeight,
+  nodeWidth,
+  minimizedLayout = "stacked",
   menuItems = [],
   menuLabel = "Actions",
   onNodeSelect,
@@ -66,9 +68,15 @@ export function GraphNode({
     [minimized, node],
   );
   const layoutOptions = React.useMemo(
-    () => ({ showPortColumnHeaders, ...(nodeBodyHeight ? { nodeBodyHeight } : {}) }),
-    [nodeBodyHeight, showPortColumnHeaders],
+    () => ({
+      showPortColumnHeaders,
+      minimizedLayout,
+      ...(nodeBodyHeight ? { nodeBodyHeight } : {}),
+      ...(nodeWidth ? { nodeWidth } : {}),
+    }),
+    [minimizedLayout, nodeBodyHeight, nodeWidth, showPortColumnHeaders],
   );
+  const inlineMinimized = minimized && minimizedLayout === "inline";
   const bodyHeight = body ? getGraphNodeBodyHeight(resolvedNode, layoutOptions) : 0;
   const compact = graphNodeUsesCompactVariant(resolvedNode);
   // An idle status carries no information, so it draws no indicator (#49).
@@ -125,8 +133,10 @@ export function GraphNode({
       data-minimized={minimized ? "true" : undefined}
       data-selected={selected ? "true" : undefined}
       data-status={resolvedNode.status}
+      data-minimized-layout={minimized ? minimizedLayout : undefined}
       className={cn(
-        "relative flex flex-col overflow-visible rounded-lg border bg-white text-left shadow-sm transition-colors",
+        "relative flex overflow-visible rounded-lg border bg-white text-left shadow-sm transition-colors",
+        inlineMinimized ? "flex-row items-stretch" : "flex-col",
         selected ? "border-zinc-950 ring-2 ring-zinc-950/10" : "border-zinc-200",
         className,
       )}
@@ -136,18 +146,29 @@ export function GraphNode({
       <div
         data-slot="workflow-node-header"
         className={cn(
-          "shrink-0 overflow-hidden rounded-t-lg px-3 py-2",
+          "shrink-0 overflow-hidden",
+          inlineMinimized
+            ? "relative z-10 flex min-w-0 flex-1 items-center rounded-lg px-2 py-1.5"
+            : "rounded-t-lg px-3 py-2",
           !minimized && "border-b",
           getGraphNodeToneClasses(statusTone),
         )}
-        style={{
-          minHeight: minimized
-            ? graphNodeMinimizedHeaderHeight
-            : getGraphNodeHeaderHeight(resolvedNode),
-        }}
+        style={
+          inlineMinimized
+            ? { height: size.height }
+            : {
+                minHeight: minimized
+                  ? graphNodeMinimizedHeaderHeight
+                  : getGraphNodeHeaderHeight(resolvedNode),
+              }
+        }
       >
         <div
-          className={cn("flex justify-between gap-3", minimized ? "items-center" : "items-start")}
+          className={cn(
+            "flex justify-between gap-3",
+            minimized ? "items-center" : "items-start",
+            inlineMinimized && "w-full min-w-0",
+          )}
         >
           {titleContent !== undefined ? (
             <div data-slot="graph-node-title" className="min-w-0 flex-1">
@@ -167,7 +188,7 @@ export function GraphNode({
               <div className="truncate text-sm font-semibold text-zinc-950">
                 {resolvedNode.label}
               </div>
-              {getGraphNodePackageLabel(resolvedNode) ? (
+              {getGraphNodePackageLabel(resolvedNode) && !inlineMinimized ? (
                 <div className="mt-0.5 truncate text-[11px] font-medium text-zinc-600">
                   {getGraphNodePackageLabel(resolvedNode)}
                 </div>
@@ -224,6 +245,7 @@ export function GraphNode({
       {minimized ? (
         <GraphNodeMinimizedPorts
           node={resolvedNode}
+          layout={minimizedLayout}
           inputDisabled={inputDisabled}
           outputDisabled={outputDisabled || readOnly}
           onInputClick={onInputClick}

@@ -15,6 +15,7 @@ export function GraphNodeMinimizedPortStack({
   direction,
   node,
   ports,
+  inline = false,
   disabled,
   onClick,
   onPointerUp,
@@ -24,6 +25,8 @@ export function GraphNodeMinimizedPortStack({
   direction: "input" | "output";
   node: GraphNodeData;
   ports: readonly GraphNodePort[];
+  /** Inline minimized layout: the dot is centred on its slot over the single header line. */
+  inline?: boolean;
   disabled: boolean;
   onClick?: (port: GraphNodePort, node: GraphNodeData) => void;
   onPointerUp?: (
@@ -54,6 +57,7 @@ export function GraphNodeMinimizedPortStack({
           className={cn(
             "absolute z-10 h-3 w-3 rounded-full border-2 border-white outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-60",
             isInput ? "-left-1.5" : "-right-1.5",
+            inline && "pointer-events-auto -translate-y-1/2",
           )}
           style={{
             backgroundColor: getGraphNodePortColor(port),

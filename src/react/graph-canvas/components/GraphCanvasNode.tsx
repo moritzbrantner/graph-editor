@@ -16,6 +16,8 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   inputsConnectable,
   showPortColumnHeaders = true,
   showNodeCategory = true,
+  getNodeWidth,
+  minimizedNodeLayout = "stacked",
   renderNodeBody,
   getNodeBodyHeight,
   renderMinimizedNodeContent,
@@ -38,9 +40,15 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
     renderNodeBody && getNodeBodyHeight
       ? (getNodeBodyHeight as (node: unknown) => number)
       : undefined;
+  const nodeWidth = getNodeWidth as ((node: unknown) => number | undefined) | undefined;
   const layoutOptions = React.useMemo(
-    () => ({ showPortColumnHeaders, ...(nodeBodyHeight ? { nodeBodyHeight } : {}) }),
-    [nodeBodyHeight, showPortColumnHeaders],
+    () => ({
+      showPortColumnHeaders,
+      minimizedLayout: minimizedNodeLayout,
+      ...(nodeBodyHeight ? { nodeBodyHeight } : {}),
+      ...(nodeWidth ? { nodeWidth } : {}),
+    }),
+    [minimizedNodeLayout, nodeBodyHeight, nodeWidth, showPortColumnHeaders],
   );
   const nodeSize = getGraphNodeSize(node, layoutOptions);
   const bodyHeight = getGraphNodeBodyHeight(node, layoutOptions);
@@ -74,6 +82,8 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
         showPortColumnHeaders={showPortColumnHeaders}
         showCategory={showNodeCategory}
         nodeBodyHeight={nodeBodyHeight}
+        nodeWidth={nodeWidth}
+        minimizedLayout={minimizedNodeLayout}
         body={
           renderNodeBody && bodyHeight > 0
             ? renderNodeBody({
