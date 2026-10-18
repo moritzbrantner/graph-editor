@@ -269,4 +269,21 @@ describe("node composition seam", () => {
       container.querySelector('[data-slot="graph-node-status-dot"]')?.getAttribute("data-tone"),
     ).toBe("error");
   });
+
+  test("showCategory=false keeps the category chip off the node face unless an eyebrow is set", () => {
+    const node = { id: "a", label: "A", kind: "math.double", category: "Math", ...ports };
+    const { container, rerender } = render(React.createElement(GraphNode, { node }));
+    expect(container.querySelector('[data-slot="graph-node-category"]')?.textContent).toBe("Math");
+    rerender(React.createElement(GraphNode, { node, showCategory: false }));
+    expect(container.querySelector('[data-slot="graph-node-category"]')).toBeNull();
+    rerender(
+      React.createElement(GraphNode, {
+        node: { ...node, eyebrow: "Running" },
+        showCategory: false,
+      }),
+    );
+    expect(container.querySelector('[data-slot="graph-node-category"]')?.textContent).toBe(
+      "Running",
+    );
+  });
 });

@@ -129,6 +129,11 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   showMiniMap?: boolean;
   showToolbar?: boolean;
   showPortColumnHeaders?: boolean;
+  /**
+   * Shows the category/kind chip in node headers (default true). When false, a node shows a chip
+   * only for an explicit `eyebrow`, keeping descriptive metadata off the node face.
+   */
+  showNodeCategory?: boolean;
   enableMarqueeSelection?: boolean;
   enablePan?: boolean;
   enableWheelZoom?: boolean;
@@ -183,6 +188,7 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   pendingConnection?: PendingConnection | null;
   inputsConnectable?: boolean;
   showPortColumnHeaders?: boolean;
+  showNodeCategory?: boolean;
   renderNodeBody?: GraphCanvasProps["renderNodeBody"];
   getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
   renderMinimizedNodeContent?: GraphCanvasProps["renderMinimizedNodeContent"];

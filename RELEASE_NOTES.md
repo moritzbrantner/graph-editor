@@ -2,6 +2,7 @@
 
 ## Added
 
+- Category chip control (part of #49): `GraphCanvas` `showNodeCategory={false}` (`GraphNode` `showCategory`) keeps the category/kind chip off node headers. An explicit `eyebrow` still shows. The chip now has `data-slot="graph-node-category"`.
 - Quieter idle nodes (part of #49): `GraphNode` draws its status dot (`data-slot="graph-node-status-dot"`, `data-tone`) only for a non-neutral tone or a running/success/warning/error status. Idle or missing status shows no indicator.
 - Node action menu and title slot (part of #49): `GraphCanvas` `getNodeMenuItems` / `nodeMenuLabel` fill each node's built-in action menu, and `renderNodeTitle` (`GraphNode` `titleContent`) replaces the header title with consumer content such as an inline rename field (`data-slot="graph-node-title"`), which never starts a drag.
 - Port content slot (#47): `GraphCanvas` `renderPortContent` and `GraphNode` `renderPortContent` render compact content on a port card (`data-slot="graph-node-port-content"`) without changing port geometry or nesting controls inside the port button.

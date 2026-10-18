@@ -92,6 +92,8 @@ export type GraphNodeProps<
   inputDisabled?: boolean;
   outputDisabled?: boolean;
   showPortColumnHeaders?: boolean;
+  /** Shows the category/kind chip (default true); when false only an explicit eyebrow shows. */
+  showCategory?: boolean;
   /** Composed content between the header and the ports of an expanded node. */
   body?: React.ReactNode;
   /** Compact content inline in a minimized node's header, after its label. */
