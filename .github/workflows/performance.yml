@@ -1,16 +1,7 @@
 name: Performance
 
 on:
-  pull_request:
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "bench/**"
-      - "benchmark/**"
-      - "package.json"
-      - "bun.lock"
-      - "vite.config.*"
-      - ".github/workflows/performance.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -18,7 +9,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: graph-editor-performance-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
