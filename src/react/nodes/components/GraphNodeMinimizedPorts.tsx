@@ -11,6 +11,7 @@ import { GraphNodeMinimizedPortStack } from "./GraphNodeMinimizedPortStack";
 
 export function GraphNodeMinimizedPorts({
   node,
+  layout = "stacked",
   inputDisabled,
   outputDisabled,
   onInputClick,
@@ -22,6 +23,8 @@ export function GraphNodeMinimizedPorts({
   getOutputAriaLabel,
 }: {
   node: GraphNodeData;
+  /** `inline`: the dots overlay the single header line, on the node's left and right edges. */
+  layout?: "stacked" | "inline";
   inputDisabled: boolean;
   outputDisabled: boolean;
   onInputClick?: (port: GraphNodePort, node: GraphNodeData) => void;
@@ -47,20 +50,32 @@ export function GraphNodeMinimizedPorts({
   const inputs = node.inputs ?? [];
   const outputs = node.outputs ?? [];
 
+  const inline = layout === "inline";
+  // Inline dots share one vertical spread so they match the geometry model's port offsets.
+  const spread = inline ? Math.max(inputs.length, outputs.length, 1) : undefined;
+
   return (
     <div
       data-slot="workflow-node-minimized-ports"
-      className="relative border-t border-zinc-100 bg-white"
-      style={{ height: getGraphNodeMinimizedPortsHeight(node) }}
+      data-layout={layout}
+      className={
+        inline
+          ? "pointer-events-none absolute inset-0 z-30"
+          : "relative border-t border-zinc-100 bg-white"
+      }
+      style={inline ? undefined : { height: getGraphNodeMinimizedPortsHeight(node) }}
     >
-      <div className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 items-center justify-between text-[10px] font-semibold uppercase text-zinc-500">
-        <span>{inputs.length} in</span>
-        <span>{outputs.length} out</span>
-      </div>
+      {inline ? null : (
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 items-center justify-between text-[10px] font-semibold uppercase text-zinc-500">
+          <span>{inputs.length} in</span>
+          <span>{outputs.length} out</span>
+        </div>
+      )}
       <GraphNodeMinimizedPortStack
         direction="input"
         node={node}
         ports={inputs}
+        spread={spread}
         disabled={inputDisabled}
         onClick={onInputClick}
         onPointerUp={onInputPointerUp}
@@ -70,6 +85,7 @@ export function GraphNodeMinimizedPorts({
         direction="output"
         node={node}
         ports={outputs}
+        spread={spread}
         disabled={outputDisabled}
         onClick={onOutputClick}
         onPointerDown={onOutputPointerDown}

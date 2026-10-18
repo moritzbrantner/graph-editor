@@ -113,6 +113,8 @@ export function GraphCanvas({
   showToolbar = true,
   showPortColumnHeaders = true,
   showNodeCategory = true,
+  getNodeWidth,
+  minimizedNodeLayout = "stacked",
   enableMarqueeSelection = true,
   enablePan = true,
   enableWheelZoom = true,
@@ -237,11 +239,13 @@ export function GraphCanvas({
   const layoutOptions = React.useMemo(
     () => ({
       showPortColumnHeaders,
+      minimizedLayout: minimizedNodeLayout,
       ...(renderNodeBody && getNodeBodyHeight
         ? { nodeBodyHeight: getNodeBodyHeight as (node: unknown) => number }
         : {}),
+      ...(getNodeWidth ? { nodeWidth: getNodeWidth as (node: unknown) => number | undefined } : {}),
     }),
-    [getNodeBodyHeight, renderNodeBody, showPortColumnHeaders],
+    [getNodeBodyHeight, getNodeWidth, minimizedNodeLayout, renderNodeBody, showPortColumnHeaders],
   );
   const selectedNode = currentSelectedNodeId ? nodeById.get(currentSelectedNodeId) : undefined;
   const selectedEdge = React.useMemo(
@@ -1486,6 +1490,8 @@ export function GraphCanvas({
               }
               showPortColumnHeaders={showPortColumnHeaders}
               showNodeCategory={showNodeCategory}
+              getNodeWidth={getNodeWidth}
+              minimizedNodeLayout={minimizedNodeLayout}
               renderNodeBody={renderNodeBody}
               getNodeBodyHeight={getNodeBodyHeight}
               renderMinimizedNodeContent={renderMinimizedNodeContent}
@@ -1522,6 +1528,8 @@ export function GraphCanvas({
             edges={visibleEdges}
             selectedNodeId={currentSelectedNodeId}
             showPortColumnHeaders={showPortColumnHeaders}
+            getNodeWidth={getNodeWidth}
+            minimizedNodeLayout={minimizedNodeLayout}
             className="absolute right-3 bottom-3"
           />
         ) : null}

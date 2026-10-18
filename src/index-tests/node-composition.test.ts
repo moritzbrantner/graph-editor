@@ -286,4 +286,45 @@ describe("node composition seam", () => {
       "Running",
     );
   });
+
+  test("node width and the inline minimized layout enter the single geometry model", () => {
+    const node = { id: "a", label: "A", ...ports };
+    const nodeWidth = () => 420;
+    expect(getGraphEditorNodeSize(node, { nodeWidth }).width).toBe(420);
+    expect(getGraphEditorNodeSize({ ...node, minimized: true }, { nodeWidth }).width).toBe(420);
+    expect(getGraphEditorNodeSize(node, { nodeWidth: () => undefined })).toEqual(
+      getGraphEditorNodeSize(node),
+    );
+
+    const minimized = { ...node, minimized: true };
+    expect(getGraphEditorNodeSize(minimized, { minimizedLayout: "inline" }).height).toBe(36);
+    expect(getGraphEditorNodePortCenterOffset(minimized, 0, { minimizedLayout: "inline" })).toBe(
+      18,
+    );
+    // The stacked layout keeps its taller two-row geometry.
+    expect(getGraphEditorNodeSize(minimized).height).toBeGreaterThan(36);
+  });
+
+  test("GraphNode renders the inline minimized layout with edge port dots", () => {
+    const { container } = render(
+      React.createElement(GraphNode, {
+        node: { id: "a", label: "A", minimized: true, ...ports },
+        minimizedLayout: "inline",
+        nodeWidth: () => 300,
+      }),
+    );
+    const root = container.querySelector<HTMLElement>('[data-slot="workflow-node"]')!;
+    expect(root.dataset.minimizedLayout).toBe("inline");
+    expect(root.style.width).toBe("300px");
+    expect(root.style.height).toBe("36px");
+    const portsLayer = container.querySelector<HTMLElement>(
+      '[data-slot="workflow-node-minimized-ports"]',
+    )!;
+    expect(portsLayer.dataset.layout).toBe("inline");
+    expect(portsLayer.textContent).not.toContain("in");
+    const dot = container.querySelector<HTMLElement>(
+      '[data-slot="workflow-node-port"][data-port-direction="input"]',
+    )!;
+    expect(dot.style.top).toBe("50%");
+  });
 });

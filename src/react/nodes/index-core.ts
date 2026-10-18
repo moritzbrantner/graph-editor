@@ -94,6 +94,10 @@ export type GraphNodeProps<
   showPortColumnHeaders?: boolean;
   /** Shows the category/kind chip (default true); when false only an explicit eyebrow shows. */
   showCategory?: boolean;
+  /** Node width override (see `GraphEditorNodeLayoutOptions.nodeWidth`). */
+  nodeWidth?: GraphNodeLayoutOptions["nodeWidth"];
+  /** Minimized layout (see `GraphEditorNodeLayoutOptions.minimizedLayout`); default `stacked`. */
+  minimizedLayout?: GraphNodeLayoutOptions["minimizedLayout"];
   /** Composed content between the header and the ports of an expanded node. */
   body?: React.ReactNode;
   /** Compact content inline in a minimized node's header, after its label. */

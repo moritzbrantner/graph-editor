@@ -134,6 +134,10 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
    * only for an explicit `eyebrow`, keeping descriptive metadata off the node face.
    */
   showNodeCategory?: boolean;
+  /** Per-node width override for every geometry consumer; `undefined` keeps the default. */
+  getNodeWidth?: (node: GraphCanvasNodeData) => number | undefined;
+  /** `stacked` (default) or `inline`: one-line minimized nodes with edge port dots. */
+  minimizedNodeLayout?: "stacked" | "inline";
   enableMarqueeSelection?: boolean;
   enablePan?: boolean;
   enableWheelZoom?: boolean;
@@ -189,6 +193,8 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   inputsConnectable?: boolean;
   showPortColumnHeaders?: boolean;
   showNodeCategory?: boolean;
+  getNodeWidth?: GraphCanvasProps["getNodeWidth"];
+  minimizedNodeLayout?: GraphCanvasProps["minimizedNodeLayout"];
   renderNodeBody?: GraphCanvasProps["renderNodeBody"];
   getNodeBodyHeight?: GraphCanvasProps["getNodeBodyHeight"];
   renderMinimizedNodeContent?: GraphCanvasProps["renderMinimizedNodeContent"];
@@ -238,6 +244,8 @@ export type GraphCanvasMiniMapProps = React.ComponentProps<"div"> & {
   edges?: GraphCanvasEdge[];
   selectedNodeId?: string | null;
   showPortColumnHeaders?: boolean;
+  getNodeWidth?: GraphCanvasProps["getNodeWidth"];
+  minimizedNodeLayout?: GraphCanvasProps["minimizedNodeLayout"];
 };
 
 type PendingConnection = {
