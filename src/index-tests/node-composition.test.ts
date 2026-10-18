@@ -301,6 +301,15 @@ describe("node composition seam", () => {
     expect(getGraphEditorNodePortCenterOffset(minimized, 0, { minimizedLayout: "inline" })).toBe(
       18,
     );
+    // Each side spreads its own dots: two inputs at 12/24, one output centred at 18.
+    const uneven = {
+      ...minimized,
+      inputs: [...ports.inputs, { id: "in2", label: "In 2" }],
+    };
+    const inline = { minimizedLayout: "inline" as const };
+    expect(getGraphEditorNodePortCenterOffset(uneven, 0, inline, "input")).toBe(12);
+    expect(getGraphEditorNodePortCenterOffset(uneven, 1, inline, "input")).toBe(24);
+    expect(getGraphEditorNodePortCenterOffset(uneven, 0, inline, "output")).toBe(18);
     // The stacked layout keeps its taller two-row geometry.
     expect(getGraphEditorNodeSize(minimized).height).toBeGreaterThan(36);
   });

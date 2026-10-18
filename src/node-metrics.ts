@@ -114,13 +114,15 @@ export function getGraphEditorNodePortCenterOffset<TNodeData = Record<string, un
   node: GraphEditorNodeMetricsInput<TNodeData>,
   portIndex: number,
   options: GraphEditorNodeLayoutOptions = {},
+  /** The port's side; inline minimized nodes spread each side's dots on their own. */
+  direction?: "input" | "output",
 ) {
   if (graphEditorNodeUsesCompactVariant(node)) {
     return getGraphEditorNodeSize(node, options).height / 2;
   }
 
   if (graphEditorNodeUsesMinimizedVariant(node) && options.minimizedLayout === "inline") {
-    return graphEditorNodeMinimizedInlinePortOffset(node, portIndex);
+    return graphEditorNodeMinimizedInlinePortOffset(node, portIndex, direction);
   }
 
   if (graphEditorNodeUsesMinimizedVariant(node)) {
@@ -199,7 +201,15 @@ export function getGraphEditorNodeMinimizedPortsHeight(node: {
 function graphEditorNodeMinimizedInlinePortOffset(
   node: GraphEditorNodeMetricsInput,
   portIndex: number,
+  direction?: "input" | "output",
 ) {
-  const ports = Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0, 1);
+  const ports = Math.max(
+    direction === "input"
+      ? (node.inputs?.length ?? 0)
+      : direction === "output"
+        ? (node.outputs?.length ?? 0)
+        : Math.max(node.inputs?.length ?? 0, node.outputs?.length ?? 0),
+    1,
+  );
   return ((portIndex + 1) / (ports + 1)) * graphEditorNodeMinimizedInlineHeight;
 }

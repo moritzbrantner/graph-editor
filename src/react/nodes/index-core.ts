@@ -241,8 +241,9 @@ export function getGraphNodePortCenterOffset(
   node: GraphNodeData,
   portIndex: number,
   options: GraphNodeLayoutOptions = {},
+  direction?: "input" | "output",
 ) {
-  return getGraphEditorNodePortCenterOffset(node, portIndex, options);
+  return getGraphEditorNodePortCenterOffset(node, portIndex, options, direction);
 }
 
 export function getGraphNodeToneFromStatus(status?: string): GraphNodeData["tone"] {

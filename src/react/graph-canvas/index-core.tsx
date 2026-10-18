@@ -479,7 +479,7 @@ function getGraphNodePortPoint(
 
   return {
     x,
-    y: node.y + getGraphNodePortCenterOffset(node, portIndex, layoutOptions),
+    y: node.y + getGraphNodePortCenterOffset(node, portIndex, layoutOptions, direction),
   };
 }
 
@@ -677,8 +677,8 @@ function getGraphCanvasSnappedNodePosition(
         x: otherNode.x + otherSize.width,
         y:
           otherNode.y +
-          getGraphNodePortCenterOffset(otherNode, inputMatch.otherIndex, layoutOptions) -
-          getGraphNodePortCenterOffset(node, inputMatch.nodeIndex, layoutOptions),
+          getGraphNodePortCenterOffset(otherNode, inputMatch.otherIndex, layoutOptions, "output") -
+          getGraphNodePortCenterOffset(node, inputMatch.nodeIndex, layoutOptions, "input"),
       };
       const distance = getWorkflowPointDistance(position, snap);
 
@@ -695,8 +695,8 @@ function getGraphCanvasSnappedNodePosition(
         x: otherNode.x - nodeSize.width,
         y:
           otherNode.y +
-          getGraphNodePortCenterOffset(otherNode, outputMatch.otherIndex, layoutOptions) -
-          getGraphNodePortCenterOffset(node, outputMatch.nodeIndex, layoutOptions),
+          getGraphNodePortCenterOffset(otherNode, outputMatch.otherIndex, layoutOptions, "input") -
+          getGraphNodePortCenterOffset(node, outputMatch.nodeIndex, layoutOptions, "output"),
       };
       const distance = getWorkflowPointDistance(position, snap);
 

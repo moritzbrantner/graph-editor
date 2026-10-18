@@ -51,8 +51,6 @@ export function GraphNodeMinimizedPorts({
   const outputs = node.outputs ?? [];
 
   const inline = layout === "inline";
-  // Inline dots share one vertical spread so they match the geometry model's port offsets.
-  const spread = inline ? Math.max(inputs.length, outputs.length, 1) : undefined;
 
   return (
     <div
@@ -75,7 +73,7 @@ export function GraphNodeMinimizedPorts({
         direction="input"
         node={node}
         ports={inputs}
-        spread={spread}
+        inline={inline}
         disabled={inputDisabled}
         onClick={onInputClick}
         onPointerUp={onInputPointerUp}
@@ -85,7 +83,7 @@ export function GraphNodeMinimizedPorts({
         direction="output"
         node={node}
         ports={outputs}
-        spread={spread}
+        inline={inline}
         disabled={outputDisabled}
         onClick={onOutputClick}
         onPointerDown={onOutputPointerDown}
