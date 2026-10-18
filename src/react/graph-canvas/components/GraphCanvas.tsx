@@ -112,6 +112,7 @@ export function GraphCanvas({
   showMiniMap = true,
   showToolbar = true,
   showPortColumnHeaders = true,
+  showNodeCategory = true,
   enableMarqueeSelection = true,
   enablePan = true,
   enableWheelZoom = true,
@@ -1484,6 +1485,7 @@ export function GraphCanvas({
                 connectionDrag?.type === "new" || connectionDrag?.type === "rewire-target"
               }
               showPortColumnHeaders={showPortColumnHeaders}
+              showNodeCategory={showNodeCategory}
               renderNodeBody={renderNodeBody}
               getNodeBodyHeight={getNodeBodyHeight}
               renderMinimizedNodeContent={renderMinimizedNodeContent}

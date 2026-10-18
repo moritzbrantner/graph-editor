@@ -31,6 +31,7 @@ export function GraphNode({
   inputDisabled = false,
   outputDisabled = false,
   showPortColumnHeaders = true,
+  showCategory = true,
   body,
   minimizedContent,
   renderPortContent,
@@ -72,6 +73,9 @@ export function GraphNode({
   const compact = graphNodeUsesCompactVariant(resolvedNode);
   // An idle status carries no information, so it draws no indicator (#49).
   const statusTone = resolvedNode.tone ?? getGraphNodeToneFromStatus(resolvedNode.status);
+  const chip = showCategory
+    ? (resolvedNode.eyebrow ?? resolvedNode.category ?? resolvedNode.kind)
+    : resolvedNode.eyebrow;
   const size = getGraphNodeSize(resolvedNode, layoutOptions);
   const portLayout = getGraphNodePortLayout(resolvedNode);
 
@@ -176,9 +180,12 @@ export function GraphNode({
             </div>
           ) : null}
           <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
-            {(resolvedNode.eyebrow ?? resolvedNode.category ?? resolvedNode.kind) && !minimized ? (
-              <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-600">
-                {resolvedNode.eyebrow ?? resolvedNode.category ?? resolvedNode.kind}
+            {chip && !minimized ? (
+              <span
+                data-slot="graph-node-category"
+                className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-600"
+              >
+                {chip}
               </span>
             ) : null}
             {statusTone !== "neutral" ? (

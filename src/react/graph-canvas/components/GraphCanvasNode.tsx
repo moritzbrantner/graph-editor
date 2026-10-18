@@ -15,6 +15,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   pendingConnection,
   inputsConnectable,
   showPortColumnHeaders = true,
+  showNodeCategory = true,
   renderNodeBody,
   getNodeBodyHeight,
   renderMinimizedNodeContent,
@@ -71,6 +72,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
         inputDisabled={readOnly || !(pendingConnection || inputsConnectable)}
         outputDisabled={readOnly}
         showPortColumnHeaders={showPortColumnHeaders}
+        showCategory={showNodeCategory}
         nodeBodyHeight={nodeBodyHeight}
         body={
           renderNodeBody && bodyHeight > 0
