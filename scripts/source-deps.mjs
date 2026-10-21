@@ -88,13 +88,13 @@ async function restore() {
   await rm(targetDir, { force: true, recursive: true });
   await rm(stateFile, { force: true });
   run("bun", ["install", "--frozen-lockfile", "--force"], rootDir);
-  process.stdout.write(`registry dependency restored: ${dependency.packageName}\n`);
+  process.stdout.write(`pinned dependency restored: ${dependency.packageName}\n`);
 }
 
 async function status() {
   const state = await readState();
   if (!state) {
-    process.stdout.write(`registry dependency active: ${dependency.packageName}\n`);
+    process.stdout.write(`pinned dependency active: ${dependency.packageName}\n`);
     return;
   }
 

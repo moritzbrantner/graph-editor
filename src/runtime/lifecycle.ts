@@ -2,6 +2,7 @@ import {
   applyEditorOperation,
   createEditorOperationRuntime,
   redoEditorOperationRuntime,
+  replaceEditorOperationRuntimeCoreState,
   undoEditorOperationRuntime,
   type ApplyEditorOperationOptions,
 } from "@moenarch/editor-core/operations";
@@ -32,12 +33,6 @@ import {
   toRuntimeStateOptions,
   withGraphEditorRuntimeState,
 } from "./state";
-import {
-  inheritEditorOperationRuntimeCompat,
-  preserveEditorOperationRuntimeHistoryCompat,
-  registerEditorOperationRuntimeCompat,
-  replaceEditorOperationRuntimeCoreStateCompat,
-} from "./core-compat";
 import type { GraphEditorRuntimeOptions, GraphEditorRuntimeState } from "./types";
 
 export function createGraphEditorRuntime<
@@ -97,15 +92,10 @@ export function createGraphEditorRuntime<
     operationHistoryLimit: options.disableHistory ? 0 : options.operationHistoryLimit,
     preflight,
   };
-  const createOperationRuntime = () =>
-    createEditorOperationRuntime<
-      GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
-      GraphEditorSelectionState
-    >(operationRuntimeOptions);
-  const state = registerEditorOperationRuntimeCompat(
-    createOperationRuntime(),
-    createOperationRuntime,
-  );
+  const state = createEditorOperationRuntime<
+    GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+    GraphEditorSelectionState
+  >(operationRuntimeOptions);
 
   return withGraphEditorRuntimeState(state, runtimeOptions);
 }
@@ -123,17 +113,10 @@ export function applyGraphEditorOperation<
   const resolvedOperation = resolveGraphEditorOperation(state, operation);
   const historyEnabled =
     !runtimeOptions.disableHistory && operation.metadata?.graphEditor?.history !== false;
-  const applyOptions: ApplyEditorOperationOptions & { recordHistory?: boolean } = {
+  const nextState = applyEditorOperation(state, resolvedOperation, {
     ...options,
     recordHistory: historyEnabled,
-  };
-  const appliedState = inheritEditorOperationRuntimeCompat(
-    state,
-    applyEditorOperation(state, resolvedOperation, applyOptions),
-  );
-  const nextState = historyEnabled
-    ? appliedState
-    : preserveEditorOperationRuntimeHistoryCompat(state, appliedState);
+  });
 
   return withGraphEditorRuntimeState(nextState, runtimeOptions);
 }
@@ -146,10 +129,7 @@ export function undoGraphEditorRuntime<
   state: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
   const runtimeOptions = getGraphEditorRuntimeStateOptions(state);
-  return withGraphEditorRuntimeState(
-    inheritEditorOperationRuntimeCompat(state, undoEditorOperationRuntime(state)),
-    runtimeOptions,
-  );
+  return withGraphEditorRuntimeState(undoEditorOperationRuntime(state), runtimeOptions);
 }
 
 export function redoGraphEditorRuntime<
@@ -160,10 +140,7 @@ export function redoGraphEditorRuntime<
   state: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
   const runtimeOptions = getGraphEditorRuntimeStateOptions(state);
-  return withGraphEditorRuntimeState(
-    inheritEditorOperationRuntimeCompat(state, redoEditorOperationRuntime(state)),
-    runtimeOptions,
-  );
+  return withGraphEditorRuntimeState(redoEditorOperationRuntime(state), runtimeOptions);
 }
 
 export function resetGraphEditorRuntime<
@@ -192,7 +169,7 @@ export function resetGraphEditorRuntime<
   });
 
   return withGraphEditorRuntimeState(
-    replaceEditorOperationRuntimeCoreStateCompat(state, runtime, {
+    replaceEditorOperationRuntimeCoreState(state, runtime, {
       clearIssues: true,
       clearOperationHistory: true,
     }),
@@ -213,7 +190,7 @@ export function setGraphEditorRuntimeSelection<
     : { nodeIds: [], edgeIds: [] };
   const runtime = setEditorRuntimeSelection(state.runtime, normalized);
   return withGraphEditorRuntimeState(
-    replaceEditorOperationRuntimeCoreStateCompat(state, runtime),
+    replaceEditorOperationRuntimeCoreState(state, runtime),
     getGraphEditorRuntimeStateOptions(state),
   );
 }
@@ -226,7 +203,7 @@ export function markGraphEditorRuntimeSaved<
   state: GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType>,
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
   return withGraphEditorRuntimeState(
-    replaceEditorOperationRuntimeCoreStateCompat(state, markEditorRuntimeSaved(state.runtime)),
+    replaceEditorOperationRuntimeCoreState(state, markEditorRuntimeSaved(state.runtime)),
     getGraphEditorRuntimeStateOptions(state),
   );
 }
@@ -247,7 +224,7 @@ export function replaceGraphEditorRuntimeCoreState<
   } = {},
 ): GraphEditorRuntimeState<TNodeData, TEdgeData, TPortType> {
   return withGraphEditorRuntimeState(
-    replaceEditorOperationRuntimeCoreStateCompat(state, runtime, options),
+    replaceEditorOperationRuntimeCoreState(state, runtime, options),
     getGraphEditorRuntimeStateOptions(state),
   );
 }

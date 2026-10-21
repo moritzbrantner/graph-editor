@@ -1,5 +1,9 @@
 # @moritzbrantner/graph-editor 0.2.0
 
+## Unreleased
+
+- `@moenarch/editor-core` is now a commit-pinned git dependency on editor-core `main` (`51463ab`, listed in `trustedDependencies`) instead of the npm `^0.4.1` release. The `src/runtime/core-compat.ts` fallback is gone; the runtime uses editor-core's `replaceEditorOperationRuntimeCoreState` and `recordHistory: false` directly. `verify:registry` is renamed `verify:pinned`.
+
 ## Added
 
 - Category chip control (part of #49): `GraphCanvas` `showNodeCategory={false}` (`GraphNode` `showCategory`) keeps the category/kind chip off node headers. An explicit `eyebrow` still shows. The chip now has `data-slot="graph-node-category"`.

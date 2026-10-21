@@ -32,4 +32,4 @@ bun run source:restore
 bun run verify
 ```
 
-`verify` is intentionally release-oriented and restores the frozen registry install first. Source mode must fail when the expected checkout is absent or is not an editor-core package; it must not silently claim source verification while testing the registry package.
+`verify` is intentionally release-oriented and restores the frozen commit-pinned install first. Source mode must fail when the expected checkout is absent or is not an editor-core package; it must not silently claim source verification while testing the commit-pinned package.
