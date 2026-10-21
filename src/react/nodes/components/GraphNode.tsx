@@ -175,25 +175,28 @@ export function GraphNode({
               {titleContent}
             </div>
           ) : (
-            <button
-              type="button"
-              data-slot="workflow-node-select"
-              aria-label={resolvedNode.label}
-              className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              onClick={(event) => {
-                event.stopPropagation();
-                onNodeSelect?.(resolvedNode);
-              }}
-            >
-              <div className="truncate text-sm font-semibold text-zinc-950">
-                {resolvedNode.label}
-              </div>
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                data-slot="workflow-node-select"
+                aria-label={resolvedNode.label}
+                className="block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onNodeSelect?.(resolvedNode);
+                }}
+              >
+                <div className="truncate text-sm font-semibold text-zinc-950">
+                  {resolvedNode.label}
+                </div>
+              </button>
+              {/* Outside the button, so its accessible name stays the node label. */}
               {getGraphNodePackageLabel(resolvedNode) && !inlineMinimized ? (
                 <div className="mt-0.5 truncate text-[11px] font-medium text-zinc-600">
                   {getGraphNodePackageLabel(resolvedNode)}
                 </div>
               ) : null}
-            </button>
+            </div>
           )}
           {minimized && minimizedContent ? (
             <div data-slot="graph-node-minimized-content" className="min-w-0 shrink-0">
