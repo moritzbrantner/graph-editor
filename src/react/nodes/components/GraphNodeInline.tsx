@@ -74,21 +74,23 @@ export function GraphNodeInline({
         onPointerUp={onInputPointerUp}
         getAriaLabel={getInputAriaLabel}
       />
-      <button
-        type="button"
-        data-slot="workflow-node-select"
-        aria-label={node.label}
-        className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-1"
-        onClick={(event) => {
-          event.stopPropagation();
-          onNodeSelect?.(node);
-        }}
-      >
-        <div className="truncate text-xs font-semibold text-zinc-950">{node.label}</div>
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          data-slot="workflow-node-select"
+          aria-label={node.label}
+          className="block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-1"
+          onClick={(event) => {
+            event.stopPropagation();
+            onNodeSelect?.(node);
+          }}
+        >
+          <div className="truncate text-xs font-semibold text-zinc-950">{node.label}</div>
+        </button>
         <div className="truncate text-[10px] font-medium text-zinc-600">
           {graphNodeCompactPortSummary(node)}
         </div>
-      </button>
+      </div>
       <GraphNodeInlinePort
         direction="output"
         node={node}
