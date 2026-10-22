@@ -19,6 +19,7 @@
     }
   },
   "include": [
+    "scripts/**/*.ts",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/*.spec.ts",

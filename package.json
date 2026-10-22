@@ -98,7 +98,7 @@
     "check-types": "tsc --noEmit",
     "check-types:tests": "tsc --noEmit -p tsconfig.test.json",
     "pack:check": "bun pm pack --dry-run",
-    "smoke:package": "node scripts/smoke-package-exports.mjs",
+    "smoke:package": "bun scripts/smoke-package-exports.ts",
     "test": "vitest run",
     "test:coverage": "node node_modules/vitest/vitest.mjs run --coverage",
     "test:e2e": "playwright test",

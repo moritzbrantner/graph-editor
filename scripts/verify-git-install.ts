@@ -60,12 +60,14 @@ try {
         ...peers,
         [packageName]: `git+https://github.com/moritzbrantner/graph-editor.git#${head}`,
       },
-      trustedDependencies: [packageName],
+      trustedDependencies: [packageName, ...(manifest.trustedDependencies ?? [])],
     }),
   );
   run(["install"]);
+  run(["pm", "trust", "@moenarch/editor-core"]);
   rmSync(path.join(consumerDir, "node_modules"), { recursive: true, force: true });
   run(["install", "--frozen-lockfile"]);
+  run(["pm", "trust", "@moenarch/editor-core"]);
 
   const installedDir = path.join(consumerDir, "node_modules", packageName);
   const targets: string[] = [];

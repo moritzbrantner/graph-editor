@@ -14,7 +14,7 @@ const forbiddenEditorCoreGraphVocabulary = [
 
 const packageJson = await readJson("package.json");
 const editorCorePackageJson = await readJson("node_modules/@moenarch/editor-core/package.json");
-const smokeScript = await readText("scripts/smoke-package-exports.mjs");
+const smokeScript = await readText("scripts/smoke-package-exports.ts");
 const siblingEditorCorePattern = ["..", "editor-core"].join("/");
 const sourceDevelopmentScript = path.join("scripts", "source-deps.mjs");
 const consumptionCheckScript = path.join("scripts", "check-editor-core-consumption.mjs");
@@ -99,7 +99,7 @@ function checkSmokeCoverage(manifest, smokeScriptText) {
     const packageSpecifier =
       specifier === "." ? manifest.name : `${manifest.name}/${specifier.slice(2)}`;
     if (!smokeScriptText.includes(`specifier: "${packageSpecifier}"`)) {
-      failures.push(`scripts/smoke-package-exports.mjs does not cover ${packageSpecifier}`);
+      failures.push(`scripts/smoke-package-exports.ts does not cover ${packageSpecifier}`);
     }
   }
 }
