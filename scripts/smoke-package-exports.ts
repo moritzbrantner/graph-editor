@@ -216,7 +216,15 @@ async function smokePackedTarball(failures: string[]) {
     await writeFile(
       path.join(tempDir, "package.json"),
       JSON.stringify(
-        { private: true, type: "module", trustedDependencies: ["@moenarch/editor-core"] },
+        {
+          private: true,
+          type: "module",
+          // Bun 1.4.4 requires non-registry lifecycle dependencies in the consumer manifest.
+          dependencies: {
+            "@moenarch/editor-core": packedPackageJson.dependencies["@moenarch/editor-core"],
+          },
+          trustedDependencies: ["@moenarch/editor-core"],
+        },
         null,
         2,
       ),

@@ -51,9 +51,10 @@ bun add @moritzbrantner/graph-editor
 ```
 
 The editor-core dependency is pinned to Git source and builds through its trusted `prepare`
-script. If Bun reports that its lifecycle script was blocked, run
-`bun pm trust @moenarch/editor-core`. When installing graph-editor itself from Git, also
-trust `@moritzbrantner/graph-editor`.
+script. Bun 1.4.4 also requires the consuming application's `dependencies` to declare
+`@moenarch/editor-core` at the same Git revision recorded in this package's `package.json`;
+include it in the application's `trustedDependencies`. When installing graph-editor itself
+from Git, also trust `@moritzbrantner/graph-editor`.
 
 ## Local Development
 

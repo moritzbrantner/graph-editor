@@ -68,6 +68,7 @@ try {
       private: true,
       dependencies: {
         ...peers,
+        "@moenarch/editor-core": manifest.dependencies["@moenarch/editor-core"],
         [packageName]: `git+https://github.com/moritzbrantner/graph-editor.git#${head}`,
       },
       trustedDependencies: [packageName, ...(manifest.trustedDependencies ?? [])],
