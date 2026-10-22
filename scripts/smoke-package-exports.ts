@@ -230,7 +230,10 @@ async function smokePackedTarball(failures: string[]) {
       },
     );
     // Bun can initially block a transitive git prepare even when the consumer lists it.
-    await execFileAsync("bun", ["pm", "trust", "@moenarch/editor-core"], { cwd: tempDir });
+    const untrusted = await execFileAsync("bun", ["pm", "untrusted"], { cwd: tempDir });
+    if (untrusted.stdout.includes("@moenarch/editor-core @")) {
+      await execFileAsync("bun", ["pm", "trust", "@moenarch/editor-core"], { cwd: tempDir });
+    }
     await writeFile(
       path.join(tempDir, "smoke.mjs"),
       modules

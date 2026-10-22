@@ -48,11 +48,12 @@ _Avoid_: Camera, runtime state, screen state
 
 ```sh
 bun add @moritzbrantner/graph-editor
-bun pm trust @moenarch/editor-core
 ```
 
 The editor-core dependency is pinned to Git source and builds through its trusted `prepare`
-script. When installing graph-editor itself from Git, also trust `@moritzbrantner/graph-editor`.
+script. If Bun reports that its lifecycle script was blocked, run
+`bun pm trust @moenarch/editor-core`. When installing graph-editor itself from Git, also
+trust `@moritzbrantner/graph-editor`.
 
 ## Local Development
 

@@ -38,6 +38,16 @@ function run(args: string[]) {
   execFileSync("bun", args, { cwd: consumerDir, stdio: "inherit" });
 }
 
+function trustEditorCoreIfBlocked() {
+  const untrusted = execFileSync("bun", ["pm", "untrusted"], {
+    cwd: consumerDir,
+    encoding: "utf8",
+  });
+  if (untrusted.includes("@moenarch/editor-core @")) {
+    run(["pm", "trust", "@moenarch/editor-core"]);
+  }
+}
+
 function collectTargets(value: unknown, targets: string[]) {
   if (typeof value === "string") {
     targets.push(value);
@@ -64,10 +74,10 @@ try {
     }),
   );
   run(["install"]);
-  run(["pm", "trust", "@moenarch/editor-core"]);
+  trustEditorCoreIfBlocked();
   rmSync(path.join(consumerDir, "node_modules"), { recursive: true, force: true });
   run(["install", "--frozen-lockfile"]);
-  run(["pm", "trust", "@moenarch/editor-core"]);
+  trustEditorCoreIfBlocked();
 
   const installedDir = path.join(consumerDir, "node_modules", packageName);
   const targets: string[] = [];
