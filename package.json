@@ -112,7 +112,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
-    "@moenarch/editor-core": "git+https://github.com/moritzbrantner/editor-core.git#51463abfcafc9f6173f19320316b5161e86b5fbd",
+    "@moenarch/editor-core": "git+https://github.com/moritzbrantner/editor-core.git#e208e2057fef2cf2b89be917188d4c51d9622acc",
     "@moritzbrantner/ui": "^1.1.0",
     "lucide-react": "^1.21.0"
   },
