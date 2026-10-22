@@ -3,7 +3,8 @@
 Generic graph document utilities and React primitives for node graph editors.
 
 Built on `@moenarch/editor-core` for shared document serialization, history, hotkeys,
-viewport math, graph adapters, indexing, and entity selection primitives.
+viewport math, indexing, and entity selection primitives. Graph adapters and graph semantics
+remain owned by this package.
 
 ## Graph vocabulary
 
@@ -48,6 +49,12 @@ _Avoid_: Camera, runtime state, screen state
 ```sh
 bun add @moritzbrantner/graph-editor
 ```
+
+The editor-core dependency is pinned to Git source and builds through its trusted `prepare`
+script. Bun 1.4.4 also requires the consuming application's `dependencies` to declare
+`@moenarch/editor-core` at the same Git revision recorded in this package's `package.json`;
+include it in the application's `trustedDependencies`. When installing graph-editor itself
+from Git, also trust `@moritzbrantner/graph-editor`.
 
 ## Local Development
 

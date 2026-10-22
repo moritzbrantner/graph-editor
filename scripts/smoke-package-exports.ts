@@ -150,14 +150,14 @@ const modules = [
   },
 ];
 
-const failures = [];
+const failures: string[] = [];
 
 await Promise.all(
   modules.map(async (moduleDefinition) => {
     let loadedModule;
 
     try {
-      loadedModule = await import(new URL(moduleDefinition.path, import.meta.url));
+      loadedModule = await import(new URL(moduleDefinition.path, import.meta.url).href);
     } catch (error) {
       failures.push(`${moduleDefinition.path}: failed to import (${formatError(error)})`);
       return;
@@ -183,24 +183,17 @@ if (failures.length > 0) {
 
 process.stdout.write("Package export smoke test passed.\n");
 
-function formatError(error) {
+function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function smokePackedTarball(failures) {
+async function smokePackedTarball(failures: string[]) {
   const tempDir = await mkdtemp(path.join(tmpdir(), "graph-editor-package-smoke-"));
   try {
-    const packResult = await execFileAsync(
-      "npm",
-      ["pack", rootDir, "--pack-destination", tempDir, "--ignore-scripts"],
-      { cwd: rootDir },
-    );
-    const tarballName = packResult.stdout.trim().split(/\r?\n/).at(-1);
-    if (!tarballName) {
-      failures.push("packed tarball: npm pack did not report a tarball name");
-      return;
-    }
-    const tarballPath = path.join(tempDir, tarballName);
+    const tarballPath = path.join(tempDir, "graph-editor.tgz");
+    await execFileAsync("bun", ["pm", "pack", "--filename", tarballPath, "--ignore-scripts"], {
+      cwd: rootDir,
+    });
     const extractDir = path.join(tempDir, "extract");
     await execFileAsync("tar", ["-xzf", tarballPath, "-C", tempDir]);
     const packedPackageJson = JSON.parse(
@@ -220,26 +213,35 @@ async function smokePackedTarball(failures) {
       }
     }
 
-    const installDir = path.join(tempDir, "consumer");
     await writeFile(
       path.join(tempDir, "package.json"),
-      JSON.stringify({ private: true, type: "module" }, null, 2),
+      JSON.stringify(
+        {
+          private: true,
+          type: "module",
+          // Bun 1.4.4 requires non-registry lifecycle dependencies in the consumer manifest.
+          dependencies: {
+            "@moenarch/editor-core": packedPackageJson.dependencies["@moenarch/editor-core"],
+          },
+          trustedDependencies: ["@moenarch/editor-core"],
+        },
+        null,
+        2,
+      ),
     );
     const localDependencyTarballs = await packLocalSmokeDependencies(tempDir);
     await execFileAsync(
-      "npm",
-      [
-        "install",
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-        ...localDependencyTarballs,
-        tarballPath,
-      ],
+      "bun",
+      ["add", "--linker", "hoisted", ...localDependencyTarballs, tarballPath],
       {
         cwd: tempDir,
       },
     );
+    // Bun can initially block a transitive git prepare even when the consumer lists it.
+    const untrusted = await execFileAsync("bun", ["pm", "untrusted"], { cwd: tempDir });
+    if (untrusted.stdout.includes("@moenarch/editor-core @")) {
+      await execFileAsync("bun", ["pm", "trust", "@moenarch/editor-core"], { cwd: tempDir });
+    }
     await writeFile(
       path.join(tempDir, "smoke.mjs"),
       modules
@@ -257,8 +259,7 @@ async function smokePackedTarball(failures) {
         )
         .join("\n"),
     );
-    await execFileAsync(process.execPath, [path.join(tempDir, "smoke.mjs")], { cwd: tempDir });
-    void installDir;
+    await execFileAsync("node", [path.join(tempDir, "smoke.mjs")], { cwd: tempDir });
   } catch (error) {
     failures.push(`packed tarball: ${formatError(error)}`);
   } finally {
@@ -266,7 +267,7 @@ async function smokePackedTarball(failures) {
   }
 }
 
-async function packLocalSmokeDependencies(tempDir) {
+async function packLocalSmokeDependencies(tempDir: string) {
   if (process.env.GRAPH_EDITOR_SMOKE_LOCAL_EDITOR_CORE !== "1") {
     return [];
   }
@@ -278,11 +279,9 @@ async function packLocalSmokeDependencies(tempDir) {
     return [];
   }
 
-  const packResult = await execFileAsync(
-    "npm",
-    ["pack", editorCoreDir, "--pack-destination", tempDir, "--ignore-scripts"],
-    { cwd: rootDir },
-  );
-  const tarballName = packResult.stdout.trim().split(/\r?\n/).at(-1);
-  return tarballName ? [path.join(tempDir, tarballName)] : [];
+  const tarballPath = path.join(tempDir, "editor-core.tgz");
+  await execFileAsync("bun", ["pm", "pack", "--filename", tarballPath, "--ignore-scripts"], {
+    cwd: editorCoreDir,
+  });
+  return [tarballPath];
 }

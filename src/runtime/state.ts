@@ -3,6 +3,7 @@ import {
   type EditorOperation,
   type EditorOperationPreflightIssue,
   type EditorOperationRuntimeState,
+  replaceEditorOperationRuntimeCoreState,
 } from "@moenarch/editor-core/operations";
 import { setEditorRuntimeSelection } from "@moenarch/editor-core/runtime";
 
@@ -15,7 +16,6 @@ import {
   type GraphEditorSelectionState,
 } from "../core";
 import type { GraphEditorOperation } from "../operations";
-import { replaceEditorOperationRuntimeCoreStateCompat } from "./core-compat";
 import type {
   GraphEditorRuntimeOptions,
   GraphEditorRuntimeState,
@@ -109,7 +109,7 @@ export function withGraphEditorRuntimeState<
   const selection = normalizeGraphEditorSelection(document, runtimeSelection);
   const coreState = graphEditorSelectionsEqual(selection, runtimeSelection)
     ? state
-    : replaceEditorOperationRuntimeCoreStateCompat(
+    : replaceEditorOperationRuntimeCoreState(
         state,
         setEditorRuntimeSelection(state.runtime, selection),
       );
