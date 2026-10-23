@@ -72,6 +72,8 @@ import { GraphCanvasNode } from "./GraphCanvasNode";
 import { GraphCanvasToolbar } from "./GraphCanvasToolbar";
 
 const graphCanvasConnectionDragThreshold = 4;
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 type GraphCanvasKeyboardCancelProps = {
   isCancelKeyboardEvent?: (event: React.KeyboardEvent<HTMLDivElement>) => boolean;
@@ -154,12 +156,14 @@ export function GraphCanvas({
   const [marqueeState, setMarqueeState] = React.useState<MarqueeState>(null);
   const [panState, setPanState] = React.useState<PanState>(null);
   const [portPoints, setPortPoints] = React.useState<GraphCanvasPortPointMap>({});
-  const [surfaceArea, setSurfaceArea] = React.useState({
+  // Before the surface is measured, the window size bounds the first render so a large document
+  // never mounts every node just to cull them in the next commit.
+  const [surfaceArea, setSurfaceArea] = React.useState(() => ({
     scrollLeft: 0,
     scrollTop: 0,
-    width: 0,
-    height: 0,
-  });
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+  }));
   const [focusedNodeId, setFocusedNodeId] = React.useState<string | null>(null);
   const [keyboardTargetNodeId, setKeyboardTargetNodeId] = React.useState<string | null>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
@@ -410,7 +414,7 @@ export function GraphCanvas({
       : groupBounds;
   }, [groupBounds, renderPlan.queryBounds]);
 
-  React.useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!cullingEligible) {
       return;
     }
