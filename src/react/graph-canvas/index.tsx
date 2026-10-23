@@ -18,6 +18,20 @@ export {
   type GraphCanvasToolbarProps,
   type GraphCanvasViewport,
 } from "./index-core";
+export {
+  getGraphCanvasVisibleGraphBounds,
+  graphCanvasVirtualizationDefaultOverscan,
+  graphCanvasVirtualizationDefaultThreshold,
+  planGraphCanvasNodeRender,
+  resolveGraphCanvasVirtualization,
+  type GraphCanvasRenderPlan,
+  type GraphCanvasRenderPlanInput,
+  type GraphCanvasRenderPlanStats,
+  type GraphCanvasResolvedVirtualization,
+  type GraphCanvasVirtualization,
+  type GraphCanvasVirtualizationOptions,
+  type GraphCanvasVisibleArea,
+} from "./render-plan";
 
 export { GraphCanvas } from "./components/GraphCanvas";
 export { GraphCanvasNode } from "./components/GraphCanvasNode";
