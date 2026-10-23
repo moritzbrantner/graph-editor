@@ -229,6 +229,10 @@ function App() {
     return <ComposedNodeBodyFixture />;
   }
 
+  if (fixture === "large-graph") {
+    return <LargeGraphFixture />;
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
@@ -310,6 +314,60 @@ function CanvasConnectionValidationFixture() {
         showMiniMap={false}
         showToolbar={false}
         surfaceHeight="32rem"
+      />
+    </main>
+  );
+}
+
+/** A 5,000-node grid (chain-connected) for viewport culling checks; `?virtualization=off` renders all. */
+function LargeGraphFixture() {
+  const params = new URLSearchParams(window.location.search);
+  const count = Number(params.get("nodes") ?? 5000);
+  const virtualization = params.get("virtualization") === "off" ? false : undefined;
+  const [nodes, setNodes] = React.useState<GraphCanvasNodeData[]>(() =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `n${index}`,
+      label: `Node ${index}`,
+      x: (index % 100) * 480,
+      y: Math.floor(index / 100) * 360,
+      inputs: [{ id: "in", label: "In", type: "event" }],
+      outputs: [{ id: "out", label: "Out", type: "event" }],
+    })),
+  );
+  const [edges, setEdges] = React.useState<GraphCanvasEdge[]>(() =>
+    Array.from({ length: Math.max(count - 1, 0) }, (_, index) => ({
+      id: `e${index}`,
+      sourceNodeId: `n${index}`,
+      sourcePortId: "out",
+      targetNodeId: `n${index + 1}`,
+      targetPortId: "in",
+    })),
+  );
+  const [viewport, setViewport] = React.useState({ x: 0, y: 0, zoom: 1 });
+  const [selectedNodeIds, setSelectedNodeIds] = React.useState<string[]>([]);
+
+  return (
+    <main className="min-h-screen bg-background p-4 text-foreground">
+      <output aria-label="Large graph state" className="mb-3 block text-sm font-medium">
+        {JSON.stringify({
+          selected: selectedNodeIds.length,
+          n0: nodes[0] ? { x: nodes[0].x, y: nodes[0].y } : null,
+          viewport,
+        })}
+      </output>
+      <GraphCanvas
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={setNodes}
+        onEdgesChange={setEdges}
+        viewport={viewport}
+        onViewportChange={setViewport}
+        selectedNodeIds={selectedNodeIds}
+        onSelectionStateChange={(selection) => setSelectedNodeIds([...selection.nodeIds])}
+        canvasSize={{ width: 1200, height: 640 }}
+        minZoom={0.1}
+        surfaceHeight="40rem"
+        virtualization={virtualization}
       />
     </main>
   );

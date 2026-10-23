@@ -21,6 +21,18 @@ export {
   type GraphCanvasSelection,
   type GraphCanvasToolbarProps,
   type GraphCanvasViewport,
+  getGraphCanvasVisibleGraphBounds,
+  graphCanvasVirtualizationDefaultOverscan,
+  graphCanvasVirtualizationDefaultThreshold,
+  planGraphCanvasNodeRender,
+  resolveGraphCanvasVirtualization,
+  type GraphCanvasRenderPlan,
+  type GraphCanvasRenderPlanInput,
+  type GraphCanvasRenderPlanStats,
+  type GraphCanvasResolvedVirtualization,
+  type GraphCanvasVirtualization,
+  type GraphCanvasVirtualizationOptions,
+  type GraphCanvasVisibleArea,
 } from "./react/graph-canvas";
 export {
   getGraphWorkbenchCommandFromKeyboardEvent,

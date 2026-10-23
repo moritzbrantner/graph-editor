@@ -58,12 +58,22 @@ import {
   type PendingConnection,
 } from "../index-core";
 import { getGraphNodeSize } from "../../nodes";
+import {
+  boundsIntersect,
+  createGraphCanvasNodeIndexTracker,
+  getGraphCanvasVisibleGraphBounds,
+  planGraphCanvasNodeRender,
+  resolveGraphCanvasVirtualization,
+  shouldGraphCanvasCullNodes,
+} from "../render-plan";
 import { GraphCanvasEdgeHandle } from "./GraphCanvasEdgeHandle";
 import { GraphCanvasMiniMap } from "./GraphCanvasMiniMap";
 import { GraphCanvasNode } from "./GraphCanvasNode";
 import { GraphCanvasToolbar } from "./GraphCanvasToolbar";
 
 const graphCanvasConnectionDragThreshold = 4;
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 type GraphCanvasKeyboardCancelProps = {
   isCancelKeyboardEvent?: (event: React.KeyboardEvent<HTMLDivElement>) => boolean;
@@ -120,6 +130,7 @@ export function GraphCanvas({
   enableWheelZoom = true,
   toolbarLabel = "Workflow",
   measurePorts = "auto",
+  virtualization,
   renderNodeBody,
   getNodeBodyHeight,
   renderMinimizedNodeContent,
@@ -145,7 +156,18 @@ export function GraphCanvas({
   const [marqueeState, setMarqueeState] = React.useState<MarqueeState>(null);
   const [panState, setPanState] = React.useState<PanState>(null);
   const [portPoints, setPortPoints] = React.useState<GraphCanvasPortPointMap>({});
+  // Before the surface is measured, the window size bounds the first render so a large document
+  // never mounts every node just to cull them in the next commit.
+  const [surfaceArea, setSurfaceArea] = React.useState(() => ({
+    scrollLeft: 0,
+    scrollTop: 0,
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+  }));
+  const [focusedNodeId, setFocusedNodeId] = React.useState<string | null>(null);
+  const [keyboardTargetNodeId, setKeyboardTargetNodeId] = React.useState<string | null>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
+  const surfaceRef = React.useRef<HTMLDivElement>(null);
   const suppressNextPortClickRef = React.useRef(false);
   const pendingDragNodesRef = React.useRef<GraphCanvasNodeData[] | null>(null);
   const dragFrameRef = React.useRef<number | null>(null);
@@ -300,6 +322,129 @@ export function GraphCanvas({
       ),
     [layoutOptions, nodeById, portPoints, visibleEdges],
   );
+  const requestedVirtualization = resolveGraphCanvasVirtualization(virtualization);
+  const resolvedVirtualization = React.useMemo(
+    () => requestedVirtualization,
+    // Only the resolved values matter, not the identity of an inline options object.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      requestedVirtualization.enabled,
+      requestedVirtualization.threshold,
+      requestedVirtualization.overscan,
+    ],
+  );
+  const cullingEligible = shouldGraphCanvasCullNodes(nodes.length, resolvedVirtualization);
+  const nodeBoundsRef = React.useRef(nodeBounds);
+  nodeBoundsRef.current = nodeBounds;
+  const nodeIndexTracker = React.useMemo(
+    () =>
+      cullingEligible
+        ? createGraphCanvasNodeIndexTracker(
+            (node) =>
+              nodeBoundsRef.current.get(node.id) ?? {
+                x: node.x,
+                y: node.y,
+                ...getGraphNodeSize(node, layoutOptions),
+              },
+            hiddenNodeIds ?? [],
+          )
+        : null,
+    [cullingEligible, hiddenNodeIds, layoutOptions],
+  );
+  const nodeIndex = React.useMemo(
+    () => nodeIndexTracker?.sync(nodes) ?? null,
+    [nodeIndexTracker, nodes],
+  );
+  const visibleGraphBounds = React.useMemo(
+    () =>
+      cullingEligible
+        ? getGraphCanvasVisibleGraphBounds({
+            viewport: { x: currentViewport.x, y: currentViewport.y, zoom: currentZoom },
+            ...surfaceArea,
+          })
+        : null,
+    [cullingEligible, currentViewport.x, currentViewport.y, currentZoom, surfaceArea],
+  );
+  const pinnedNodeIds = React.useMemo(() => {
+    const ids: string[] = [];
+    if (focusedNodeId) ids.push(focusedNodeId);
+    if (keyboardTargetNodeId) ids.push(keyboardTargetNodeId);
+    if (dragState) ids.push(...dragState.nodeIds);
+    if (pendingConnection) ids.push(pendingConnection.sourceNodeId);
+    if (connectionDrag) {
+      if (connectionDrag.type === "new") {
+        ids.push(connectionDrag.sourceNodeId);
+      } else {
+        ids.push(connectionDrag.edge.sourceNodeId, connectionDrag.edge.targetNodeId);
+      }
+      if (connectionDrag.targetNodeId) ids.push(connectionDrag.targetNodeId);
+    }
+    return ids;
+  }, [connectionDrag, dragState, focusedNodeId, keyboardTargetNodeId, pendingConnection]);
+  const renderPlan = React.useMemo(
+    () =>
+      planGraphCanvasNodeRender({
+        nodes,
+        hiddenNodeIds: hiddenNodeIdSet,
+        index: nodeIndex,
+        visibleBounds: visibleGraphBounds,
+        zoom: currentZoom,
+        virtualization: resolvedVirtualization,
+        pinnedNodeIds,
+      }),
+    [
+      currentZoom,
+      hiddenNodeIdSet,
+      nodeIndex,
+      nodes,
+      pinnedNodeIds,
+      resolvedVirtualization,
+      visibleGraphBounds,
+    ],
+  );
+  const renderedNodeIds = renderPlan.renderedNodeIds;
+  const renderedNodes = React.useMemo(
+    () => (renderedNodeIds ? nodes.filter((node) => renderedNodeIds.has(node.id)) : nodes),
+    [nodes, renderedNodeIds],
+  );
+  const renderedGroupBounds = React.useMemo(() => {
+    const queryBounds = renderPlan.queryBounds;
+    return queryBounds
+      ? groupBounds.filter((group) => boundsIntersect(group.bounds, queryBounds))
+      : groupBounds;
+  }, [groupBounds, renderPlan.queryBounds]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!cullingEligible) {
+      return;
+    }
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return;
+    }
+    const measure = () => {
+      setSurfaceArea((current) =>
+        current.width === surface.clientWidth &&
+        current.height === surface.clientHeight &&
+        current.scrollLeft === surface.scrollLeft &&
+        current.scrollTop === surface.scrollTop
+          ? current
+          : {
+              scrollLeft: surface.scrollLeft,
+              scrollTop: surface.scrollTop,
+              width: surface.clientWidth,
+              height: surface.clientHeight,
+            },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [cullingEligible]);
 
   React.useEffect(() => {
     return () => {
@@ -729,6 +874,7 @@ export function GraphCanvas({
       event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>,
       node: GraphCanvasNodeData,
     ) => {
+      setKeyboardTargetNodeId(null);
       selectNodeFromPointer(node, event);
       if (
         readOnly ||
@@ -1067,6 +1213,7 @@ export function GraphCanvas({
       setConnectionDrag(null);
       setMarqueeState(null);
       setPanState(null);
+      setKeyboardTargetNodeId(null);
       commitSelectionState(clearGraphEditorSelection());
       return;
     }
@@ -1108,6 +1255,7 @@ export function GraphCanvas({
 
         if (nextNode) {
           event.preventDefault();
+          setKeyboardTargetNodeId(nextNode.id);
           commitSelectionState({
             nodeIds: [nextNode.id],
             edgeIds: [],
@@ -1208,7 +1356,7 @@ export function GraphCanvas({
         ? currentPortPoints
         : measuredPortPoints,
     );
-  }, [connectionDrag, currentZoom, edges, measurePorts, nodes, pendingConnection]);
+  }, [connectionDrag, currentZoom, edges, measurePorts, nodes, pendingConnection, renderedNodeIds]);
 
   React.useEffect(() => {
     return () => {
@@ -1241,7 +1389,11 @@ export function GraphCanvas({
         />
       ) : null}
       <div
+        ref={surfaceRef}
         data-slot="workflow-builder-surface"
+        data-virtualized={renderPlan.culling ? "true" : undefined}
+        data-nodes-rendered={renderPlan.culling ? renderPlan.stats.nodesRendered : undefined}
+        data-nodes-considered={renderPlan.culling ? renderPlan.stats.nodesConsidered : undefined}
         tabIndex={0}
         className="relative overflow-auto rounded-md border bg-muted/20"
         style={{ height: typeof surfaceHeight === "number" ? `${surfaceHeight}px` : surfaceHeight }}
@@ -1257,6 +1409,19 @@ export function GraphCanvas({
           finishSurfaceGesture();
         }}
         onWheel={handleWheel}
+        onScroll={
+          cullingEligible
+            ? (event) => {
+                const surface = event.currentTarget;
+                setSurfaceArea((current) =>
+                  current.scrollLeft === surface.scrollLeft &&
+                  current.scrollTop === surface.scrollTop
+                    ? current
+                    : { ...current, scrollLeft: surface.scrollLeft, scrollTop: surface.scrollTop },
+                );
+              }
+            : undefined
+        }
         onMouseDown={handleSurfacePointerDown}
         onMouseMove={handlePointerMove}
         onMouseUp={(event) => {
@@ -1272,6 +1437,18 @@ export function GraphCanvas({
         <div
           ref={viewportRef}
           data-slot="workflow-builder-viewport"
+          onFocus={(event) => {
+            const nodeId = (event.target as HTMLElement).closest<HTMLElement>(
+              "[data-slot='workflow-builder-node']",
+            )?.dataset.nodeId;
+            setFocusedNodeId(nodeId ?? null);
+          }}
+          onBlur={(event) => {
+            const next = event.relatedTarget as HTMLElement | null;
+            if (!next || !event.currentTarget.contains(next)) {
+              setFocusedNodeId(null);
+            }
+          }}
           className="relative min-h-[52rem] min-w-[72rem] origin-top-left"
           style={{
             transform: `translate(${currentViewport.x}px, ${currentViewport.y}px) scale(${currentZoom})`,
@@ -1280,7 +1457,7 @@ export function GraphCanvas({
             width: `${100 / currentZoom}%`,
           }}
         >
-          {groupBounds.map((group) => {
+          {renderedGroupBounds.map((group) => {
             const sourceGroup = groups.find((candidate) => candidate.id === group.groupId);
             const selected = currentSelectedGroupIds.includes(group.groupId);
             return (
@@ -1477,7 +1654,7 @@ export function GraphCanvas({
               />
             ) : null}
           </svg>
-          {nodes.map((node) => (
+          {renderedNodes.map((node) => (
             <GraphCanvasNode
               key={node.id}
               node={node}
@@ -1522,6 +1699,16 @@ export function GraphCanvas({
             />
           ) : null}
         </div>
+        {renderPlan.culling ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-slot="workflow-builder-render-status"
+            className="pointer-events-none absolute bottom-3 left-3 rounded bg-background/80 px-2 py-0.5 text-xs text-muted-foreground"
+          >
+            {`Showing ${renderPlan.stats.nodesRendered.toLocaleString("en-US")} of ${renderPlan.stats.totalNodes.toLocaleString("en-US")} nodes`}
+          </div>
+        ) : null}
         {showMiniMap ? (
           <GraphCanvasMiniMap
             nodes={nodes}

@@ -25,6 +25,7 @@ import {
   type GraphNodePort as WorkflowCanvasNodePort,
   type GraphNodeMenuItem,
 } from "../nodes";
+import type { GraphCanvasVirtualization } from "./render-plan";
 
 type GraphCanvasPort<TypeScriptType = unknown> = WorkflowCanvasNodePort<TypeScriptType>;
 
@@ -143,6 +144,13 @@ type GraphCanvasProps = Omit<React.ComponentProps<"div">, "onChange"> & {
   enableWheelZoom?: boolean;
   toolbarLabel?: React.ReactNode;
   measurePorts?: "auto" | "dom" | "deterministic";
+  /**
+   * Viewport node culling. Automatic by default: only when the node count exceeds `threshold`
+   * (default 500) are off-screen nodes left out of the DOM, keeping `overscan` screen pixels
+   * (default 400) around the visible area. Focused, dragged, connection and keyboard-target
+   * nodes always render. `false` always renders every node.
+   */
+  virtualization?: GraphCanvasVirtualization;
   /**
    * Domain content rendered inside expanded nodes between the header and the ports. GraphCanvas
    * keeps owning selection, dragging, connections and geometry; the body never starts a drag.
