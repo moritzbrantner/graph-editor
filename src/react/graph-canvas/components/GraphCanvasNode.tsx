@@ -11,6 +11,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
   node,
   selected,
   hidden,
+  layer,
   readOnly,
   pendingConnection,
   inputsConnectable,
@@ -68,6 +69,7 @@ export const GraphCanvasNode = React.memo(function GraphCanvasNode({
         top: node.y,
         visibility: hidden ? "hidden" : undefined,
         width: nodeSize.width,
+        zIndex: layer,
       }}
       onPointerDown={(event) => onNodePointerDown?.(event, node)}
       onMouseDown={(event) => onNodePointerDown?.(event, node)}
