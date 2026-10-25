@@ -403,6 +403,10 @@ export function GraphCanvas({
     ],
   );
   const renderedNodeIds = renderPlan.renderedNodeIds;
+  const nodeLayerIndex = React.useMemo(
+    () => new Map(nodes.map((node, index) => [node.id, index + 1])),
+    [nodes],
+  );
   const renderedNodes = React.useMemo(
     () => (renderedNodeIds ? nodes.filter((node) => renderedNodeIds.has(node.id)) : nodes),
     [nodes, renderedNodeIds],
@@ -1589,6 +1593,8 @@ export function GraphCanvas({
                     )}
                     strokeWidth={selected ? 3 : 2}
                     stroke={edgeStroke}
+                    // Inline, so a consumer color beats the default and selected stroke classes.
+                    style={edgeStroke ? { stroke: edgeStroke } : undefined}
                   />
                   {showEndpointHandles ? (
                     <>
@@ -1660,6 +1666,7 @@ export function GraphCanvas({
               node={node}
               selected={currentSelectedNodeIds.includes(node.id)}
               hidden={hiddenNodeIdSet.has(node.id)}
+              layer={getGraphCanvasNodeLayer(nodeLayerIndex, node.id, currentSelectedNodeId)}
               readOnly={readOnly}
               pendingConnection={pendingConnection}
               inputsConnectable={
@@ -1690,12 +1697,7 @@ export function GraphCanvas({
             <div
               data-slot="workflow-builder-marquee"
               className="pointer-events-none absolute rounded-sm border border-primary bg-primary/10"
-              style={normalizeGraphEditorBounds({
-                x: marqueeState.startPoint.x,
-                y: marqueeState.startPoint.y,
-                width: marqueeState.pointerPoint.x - marqueeState.startPoint.x,
-                height: marqueeState.pointerPoint.y - marqueeState.startPoint.y,
-              })}
+              style={getGraphCanvasMarqueeStyle(marqueeState, nodeLayerIndex.size + 2)}
             />
           ) : null}
         </div>
@@ -1723,6 +1725,28 @@ export function GraphCanvas({
       </div>
     </div>
   );
+}
+
+function getGraphCanvasMarqueeStyle(
+  marquee: { startPoint: { x: number; y: number }; pointerPoint: { x: number; y: number } },
+  zIndex: number,
+): React.CSSProperties {
+  const bounds = normalizeGraphEditorBounds({
+    x: marquee.startPoint.x,
+    y: marquee.startPoint.y,
+    width: marquee.pointerPoint.x - marquee.startPoint.x,
+    height: marquee.pointerPoint.y - marquee.startPoint.y,
+  });
+  return { left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height, zIndex };
+}
+
+/** Document order, with the primary selected node raised above every other node. */
+function getGraphCanvasNodeLayer(
+  layerIndex: ReadonlyMap<string, number>,
+  nodeId: string,
+  primaryNodeId: string | null | undefined,
+) {
+  return nodeId === primaryNodeId ? layerIndex.size + 1 : (layerIndex.get(nodeId) ?? 0);
 }
 
 function firstNodePosition(node: GraphCanvasNodeData) {

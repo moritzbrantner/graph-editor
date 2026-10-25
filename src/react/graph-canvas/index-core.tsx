@@ -196,6 +196,8 @@ export type GraphCanvasNodeProps = Omit<React.ComponentProps<"div">, "onSelect">
   node: GraphCanvasNodeData;
   selected?: boolean;
   hidden?: boolean;
+  /** Stacking order among rendered nodes; each node is its own stacking context. */
+  layer?: number;
   readOnly?: boolean;
   pendingConnection?: PendingConnection | null;
   inputsConnectable?: boolean;
