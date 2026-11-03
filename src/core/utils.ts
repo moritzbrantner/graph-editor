@@ -59,3 +59,14 @@ export function isRecord(value: unknown): value is Record<string, any> {
 export function clamp(value: number, min: number, max: number, fallback: number) {
   return Number.isFinite(value) ? Math.min(Math.max(value, min), max) : fallback;
 }
+
+const emptyIdSet: ReadonlySet<string> = new Set();
+
+export function toIdSet(
+  ids: ReadonlySet<string> | readonly string[] | undefined,
+): ReadonlySet<string> {
+  if (!ids) {
+    return emptyIdSet;
+  }
+  return ids instanceof Set ? ids : new Set(ids as readonly string[]);
+}

@@ -7,8 +7,9 @@ import { cn } from "@moritzbrantner/ui";
 import {
   clearGraphEditorSelection,
   getGraphEditorGroupBounds,
-  getGraphEditorSelectionFromBounds,
+  getGraphEditorSelectionFromSpatialIndex,
   normalizeGraphEditorBounds,
+  queryGraphEditorNodesNearBounds,
   normalizeGraphEditorSelection,
   replaceGraphEditorSelection,
   updateGraphEditorSelection,
@@ -25,7 +26,9 @@ import {
   getGraphCanvasPointerPoint,
   getGraphCanvasPortElementFromPoint,
   getGraphCanvasSnappedNodePosition,
+  getGraphCanvasSnapQueryBounds,
   getNextGraphCanvasNodeSelection,
+  graphCanvasSnapDistance,
   getWorkflowBounds,
   getWorkflowConnectionDragLine,
   getWorkflowEdgeEndpointPoint,
@@ -336,25 +339,21 @@ export function GraphCanvas({
   const cullingEligible = shouldGraphCanvasCullNodes(nodes.length, resolvedVirtualization);
   const nodeBoundsRef = React.useRef(nodeBounds);
   nodeBoundsRef.current = nodeBounds;
+  // One retained index over every node (hidden ones included) serves render culling, drag
+  // snapping, marquee selection, and keyboard navigation; each consumer filters hidden nodes.
   const nodeIndexTracker = React.useMemo(
     () =>
-      cullingEligible
-        ? createGraphCanvasNodeIndexTracker(
-            (node) =>
-              nodeBoundsRef.current.get(node.id) ?? {
-                x: node.x,
-                y: node.y,
-                ...getGraphNodeSize(node, layoutOptions),
-              },
-            hiddenNodeIds ?? [],
-          )
-        : null,
-    [cullingEligible, hiddenNodeIds, layoutOptions],
+      createGraphCanvasNodeIndexTracker(
+        (node) =>
+          nodeBoundsRef.current.get(node.id) ?? {
+            x: node.x,
+            y: node.y,
+            ...getGraphNodeSize(node, layoutOptions),
+          },
+      ),
+    [layoutOptions],
   );
-  const nodeIndex = React.useMemo(
-    () => nodeIndexTracker?.sync(nodes) ?? null,
-    [nodeIndexTracker, nodes],
-  );
+  const nodeIndex = React.useMemo(() => nodeIndexTracker.sync(nodes), [nodeIndexTracker, nodes]);
   const visibleGraphBounds = React.useMemo(
     () =>
       cullingEligible
@@ -851,10 +850,17 @@ export function GraphCanvas({
       x: Math.round(dragState.originalX + (pointer.x - dragState.startX) / currentZoom),
       y: Math.round(dragState.originalY + (pointer.y - dragState.startY) / currentZoom),
     };
-    const draggedNodeIds = new Set(dragState.nodeIds);
+    const snapCandidates = queryGraphEditorNodesNearBounds(
+      nodeIndex,
+      getGraphCanvasSnapQueryBounds(draggedNode, rawPosition, layoutOptions),
+      { distance: graphCanvasSnapDistance, excludeNodeIds: dragState.nodeIds },
+    ).flatMap((nodeId) => {
+      const candidate = nodeById.get(nodeId);
+      return candidate ? [candidate] : [];
+    });
     const nextPosition = getGraphCanvasSnappedNodePosition(
       draggedNode,
-      nodes.filter((node) => !draggedNodeIds.has(node.id)),
+      snapCandidates,
       rawPosition,
       layoutOptions,
     );
@@ -930,41 +936,6 @@ export function GraphCanvas({
     ],
   );
 
-  const selectableBounds = React.useMemo(() => {
-    const edgeItems = visibleEdges.flatMap((edge) => {
-      const geometry = edgeGeometry.get(edge.id);
-      if (!geometry) {
-        return [];
-      }
-      const minX = Math.min(geometry.sourcePoint.x, geometry.targetPoint.x);
-      const minY = Math.min(geometry.sourcePoint.y, geometry.targetPoint.y);
-      const maxX = Math.max(geometry.sourcePoint.x, geometry.targetPoint.x);
-      const maxY = Math.max(geometry.sourcePoint.y, geometry.targetPoint.y);
-      return [
-        {
-          type: "edge" as const,
-          id: edge.id,
-          bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-        },
-      ];
-    });
-
-    return [
-      ...nodes.flatMap((node) => {
-        const bounds = nodeBounds.get(node.id);
-        return bounds && !hiddenNodeIdSet.has(node.id)
-          ? [{ type: "node" as const, id: node.id, bounds }]
-          : [];
-      }),
-      ...edgeItems,
-      ...groupBounds.map((group) => ({
-        type: "group" as const,
-        id: group.groupId,
-        bounds: group.bounds,
-      })),
-    ];
-  }, [edgeGeometry, groupBounds, hiddenNodeIdSet, nodeBounds, nodes, visibleEdges]);
-
   const commitMarqueeSelection = React.useCallback(() => {
     if (!marqueeState) {
       return;
@@ -976,18 +947,29 @@ export function GraphCanvas({
       width: marqueeState.pointerPoint.x - marqueeState.startPoint.x,
       height: marqueeState.pointerPoint.y - marqueeState.startPoint.y,
     });
-    const nextSelection = getGraphEditorSelectionFromBounds(
+    const nextSelection = getGraphEditorSelectionFromSpatialIndex(
       selectionDocument,
       bounds,
-      selectableBounds,
+      nodeIndex,
       {
         mode: marqueeState.mode,
         selection: marqueeState.selectionBefore,
+        excludeNodeIds: hiddenNodeIdSet,
+        items: getGraphCanvasMarqueeEdgeAndGroupItems(visibleEdges, edgeGeometry, groupBounds),
       },
     );
     commitSelectionState(nextSelection);
     setMarqueeState(null);
-  }, [commitSelectionState, marqueeState, selectableBounds, selectionDocument]);
+  }, [
+    commitSelectionState,
+    edgeGeometry,
+    groupBounds,
+    hiddenNodeIdSet,
+    marqueeState,
+    nodeIndex,
+    selectionDocument,
+    visibleEdges,
+  ]);
 
   const handleSurfacePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>) => {
@@ -1255,6 +1237,8 @@ export function GraphCanvas({
           keyboardDirection,
           layoutOptions,
           hiddenNodeIdSet,
+          nodeIndex,
+          nodeById,
         );
 
         if (nextNode) {
@@ -1725,6 +1709,42 @@ export function GraphCanvas({
       </div>
     </div>
   );
+}
+
+/** Edge and group selectables for marquee selection; nodes come from the spatial index. */
+function getGraphCanvasMarqueeEdgeAndGroupItems(
+  visibleEdges: readonly GraphCanvasEdge[],
+  edgeGeometry: ReadonlyMap<
+    string,
+    { sourcePoint: GraphCanvasPoint; targetPoint: GraphCanvasPoint }
+  >,
+  groupBounds: ReturnType<typeof getGraphEditorGroupBounds>,
+) {
+  const edgeItems = visibleEdges.flatMap((edge) => {
+    const geometry = edgeGeometry.get(edge.id);
+    if (!geometry) {
+      return [];
+    }
+    const minX = Math.min(geometry.sourcePoint.x, geometry.targetPoint.x);
+    const minY = Math.min(geometry.sourcePoint.y, geometry.targetPoint.y);
+    const maxX = Math.max(geometry.sourcePoint.x, geometry.targetPoint.x);
+    const maxY = Math.max(geometry.sourcePoint.y, geometry.targetPoint.y);
+    return [
+      {
+        type: "edge" as const,
+        id: edge.id,
+        bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+      },
+    ];
+  });
+  return [
+    ...edgeItems,
+    ...groupBounds.map((group) => ({
+      type: "group" as const,
+      id: group.groupId,
+      bounds: group.bounds,
+    })),
+  ];
 }
 
 function getGraphCanvasMarqueeStyle(

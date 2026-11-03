@@ -80,6 +80,34 @@ test("panning culls and reveals nodes while dragging and marquee stay correct", 
   expect(await renderedNodeCount(page)).toBeLessThan(200);
 });
 
+test("keyboard navigation and drag snapping stay correct on a large graph", async ({
+  page,
+}, testInfo) => {
+  test.skip(isMobileProject(testInfo.project.name), "Pointer gestures are covered on desktop");
+  await openLargeGraph(page);
+  const selected = (id: string) => page.locator(`[data-node-id="${id}"]`);
+
+  // Directional navigation picks neighbours through the spatial index.
+  const start = (await selected("n0").boundingBox())!;
+  await page.mouse.click(start.x + 40, start.y + 12);
+  await expect(selected("n0")).toHaveAttribute("data-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(selected("n1")).toHaveAttribute("data-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(selected("n101")).toHaveAttribute("data-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(selected("n100")).toHaveAttribute("data-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(selected("n0")).toHaveAttribute("data-selected", "true");
+
+  // Dropping n0 near n1's input snaps its matching output port flush to n1 (x = 480 - 310).
+  await page.mouse.move(start.x + 40, start.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 40 + 165, start.y + 12 + 6, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await readState(page)).n0).toEqual({ x: 170, y: 0 });
+});
+
 test("virtualization off renders every node", async ({ page }) => {
   await page.goto("/?fixture=large-graph&nodes=600&virtualization=off");
   await expect(page.locator('[data-slot="workflow-builder-node"]')).toHaveCount(600);

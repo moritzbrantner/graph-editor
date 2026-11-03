@@ -6,6 +6,8 @@
 
 ## Added
 
+- Index-backed interactions (#37, part of #1): `GraphCanvas` drag snapping, marquee selection, and arrow-key navigation query the retained spatial index instead of scanning every node. Results are unchanged. New headless `/core` helpers: `queryGraphEditorNodesNearBounds`, `getGraphEditorSelectionFromSpatialIndex`, `findGraphEditorNodeInDirection` (with the `GraphEditorSpatialDirection` type), and `GraphEditorSpatialIndex.getIndexedBounds()`. `getGraphEditorSelectionFromBounds` and `normalizeGraphEditorSelection` no longer renormalize once per selected item, so large marquee selections stay linear.
+
 - Category chip control (part of #49): `GraphCanvas` `showNodeCategory={false}` (`GraphNode` `showCategory`) keeps the category/kind chip off node headers. An explicit `eyebrow` still shows. The chip now has `data-slot="graph-node-category"`.
 - Node width and inline minimized layout (part of #44). Layout options `nodeWidth(node)` and `minimizedLayout: "inline"` feed every geometry consumer: size, port offsets, edges, bounds and the minimap. `GraphCanvas` takes them as `getNodeWidth` and `minimizedNodeLayout`, `GraphNode` as `nodeWidth` and `minimizedLayout`. An inline minimized node is one 36px header line with its port dots on the left and right edges (`data-minimized-layout="inline"`). Consumers no longer need CSS overrides for this.
 - Quieter idle nodes (part of #49): `GraphNode` draws its status dot (`data-slot="graph-node-status-dot"`, `data-tone`) only for a non-neutral tone or a running/success/warning/error status. Idle or missing status shows no indicator.

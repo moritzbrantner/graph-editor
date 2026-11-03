@@ -225,4 +225,22 @@ describe("GraphCanvas node culling", () => {
     // With nothing selected, keyboard navigation starts at the first node in reading order.
     expect(renderedNodeIds(fixture.container)).toContain("n0");
   });
+
+  test("directional navigation uses the index and skips hidden nodes", () => {
+    const selections: string[][] = [];
+    const fixture = renderCanvas({
+      nodes: gridNodes(600),
+      selectedNodeIds: ["n0"],
+      hiddenNodeIds: ["n1"],
+      onSelectionStateChange: (selection) => selections.push([...selection.nodeIds]),
+    });
+    const canvas = fixture.container.querySelector<HTMLElement>('[data-slot="workflow-builder"]')!;
+    act(() => {
+      fireEvent.keyDown(canvas, { key: "ArrowRight" });
+    });
+    act(() => {
+      fireEvent.keyDown(canvas, { key: "ArrowDown" });
+    });
+    expect(selections).toEqual([["n2"], ["n100"]]);
+  });
 });

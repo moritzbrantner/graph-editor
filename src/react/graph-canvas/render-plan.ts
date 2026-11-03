@@ -146,7 +146,14 @@ export function planGraphCanvasNodeRender({
 
   const overscan = zoom > 0 ? virtualization.overscan / zoom : 0;
   const before = index.getStats().candidateVisits;
-  const rendered = new Set(index.query(visibleBounds, { overscan }));
+  const rendered = new Set<string>();
+  for (const nodeId of index.query(visibleBounds, { overscan })) {
+    // The canvas index also serves interactions (snapping includes hidden nodes), so it may hold
+    // hidden nodes; they never render.
+    if (!hiddenNodeIds.has(nodeId)) {
+      rendered.add(nodeId);
+    }
+  }
   const nodesConsidered = index.getStats().candidateVisits - before;
   let pinnedOutsideViewport = 0;
   const knownNodeIds = new Set<string>();
@@ -181,10 +188,12 @@ export function planGraphCanvasNodeRender({
 /**
  * Keeps one retained spatial index in sync with successive node arrays. Geometry-only changes
  * (same ids in the same order) update just the changed nodes; anything else rebuilds.
+ * `hiddenNodeIds` defaults to none: GraphCanvas indexes every node and filters hidden ones per
+ * query, because drag snapping also targets hidden nodes.
  */
 export function createGraphCanvasNodeIndexTracker(
   getNodeBounds: (node: GraphCanvasNodeData) => GraphEditorBounds,
-  hiddenNodeIds: readonly string[],
+  hiddenNodeIds: readonly string[] = [],
 ) {
   let index: GraphEditorSpatialIndex | null = null;
   let indexedNodes: readonly GraphCanvasNodeData[] | null = null;

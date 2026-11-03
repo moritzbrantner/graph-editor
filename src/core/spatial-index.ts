@@ -44,6 +44,11 @@ export type GraphEditorSpatialIndex<
   readonly source: GraphEditorDocument<TNodeData, TEdgeData, TPortType>;
   query(bounds: GraphEditorBounds, options?: GraphEditorSpatialQueryOptions): string[];
   getNodeBounds(nodeId: string): GraphEditorBounds | undefined;
+  /**
+   * The smallest bounds containing every indexed node, or `undefined` when nothing is indexed.
+   * Maintained incrementally; recomputed only after a node on the outer edge moved inward.
+   */
+  getIndexedBounds(): GraphEditorBounds | undefined;
   rebuild(document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>): void;
   /**
    * Re-reads bounds for `nodeIds` from `document`. Falls back to a full rebuild when the node
@@ -92,6 +97,40 @@ export function createGraphEditorSpatialIndex<
   };
   let source = document;
   let orderedIds: string[] = [];
+  let extent: Extent | null = null;
+  let extentStale = false;
+
+  function extendExtent(bounds: GraphEditorBounds) {
+    if (extentStale) {
+      return;
+    }
+    const maxX = bounds.x + bounds.width;
+    const maxY = bounds.y + bounds.height;
+    if (!extent) {
+      extent = { minX: bounds.x, minY: bounds.y, maxX, maxY };
+      return;
+    }
+    extent.minX = Math.min(extent.minX, bounds.x);
+    extent.minY = Math.min(extent.minY, bounds.y);
+    extent.maxX = Math.max(extent.maxX, maxX);
+    extent.maxY = Math.max(extent.maxY, maxY);
+  }
+
+  function getIndexedBounds(): GraphEditorBounds | undefined {
+    if (extentStale) {
+      extent = null;
+      extentStale = false;
+      entries.forEach((entry) => extendExtent(entry.bounds));
+    }
+    return extent
+      ? {
+          x: extent.minX,
+          y: extent.minY,
+          width: extent.maxX - extent.minX,
+          height: extent.maxY - extent.minY,
+        }
+      : undefined;
+  }
 
   function readBounds(node: GraphEditorNode<TNodeData, TPortType>) {
     const bounds = options.getNodeBounds(node);
@@ -107,6 +146,7 @@ export function createGraphEditorSpatialIndex<
   }
 
   function insert(nodeId: string, order: number, bounds: GraphEditorBounds) {
+    extendExtent(bounds);
     const range = cellRange(bounds, cellSize);
     if (rangeCellCount(range) > maxCellsPerNode) {
       oversizedNodeIds.add(nodeId);
@@ -130,6 +170,9 @@ export function createGraphEditorSpatialIndex<
     if (!entry) {
       return;
     }
+    if (extent && !extentStale && touchesExtentEdge(extent, entry.bounds)) {
+      extentStale = true;
+    }
     for (const key of entry.cells) {
       const bucket = cells.get(key);
       bucket?.delete(nodeId);
@@ -145,6 +188,8 @@ export function createGraphEditorSpatialIndex<
     entries.clear();
     cells.clear();
     oversizedNodeIds.clear();
+    extent = null;
+    extentStale = false;
     source = next;
     orderedIds = [];
     next.nodes.forEach((node, order) => {
@@ -267,6 +312,7 @@ export function createGraphEditorSpatialIndex<
       const bounds = entries.get(nodeId)?.bounds;
       return bounds ? { ...bounds } : undefined;
     },
+    getIndexedBounds,
     rebuild,
     updateNodes,
     getStats: () => ({ ...stats }),
@@ -311,6 +357,15 @@ function extentIntersects(extent: Extent, bounds: GraphEditorBounds) {
     extent.maxX >= bounds.x &&
     extent.minY <= bounds.y + bounds.height &&
     extent.maxY >= bounds.y
+  );
+}
+
+function touchesExtentEdge(extent: Extent, bounds: GraphEditorBounds) {
+  return (
+    bounds.x <= extent.minX ||
+    bounds.y <= extent.minY ||
+    bounds.x + bounds.width >= extent.maxX ||
+    bounds.y + bounds.height >= extent.maxY
   );
 }
 

@@ -6,7 +6,9 @@ import {
   type EditorSelection,
 } from "@moenarch/editor-core/selection";
 
-import { graphEditorBoundsIntersect } from "./bounds";
+import { graphEditorBoundsIntersect, normalizeGraphEditorBounds } from "./bounds";
+import type { GraphEditorSpatialIndex } from "./spatial-index";
+import type { GraphEditorNodeIdFilter } from "./spatial-queries";
 import type {
   GraphEditorBounds,
   GraphEditorDocument,
@@ -15,7 +17,7 @@ import type {
   GraphEditorSelectionMode,
   GraphEditorSelectionState,
 } from "./types";
-import { orderedUnique } from "./utils";
+import { toIdSet } from "./utils";
 
 export function normalizeGraphEditorSelection<
   TNodeData = Record<string, unknown>,
@@ -25,26 +27,25 @@ export function normalizeGraphEditorSelection<
   document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
   selection: GraphEditorSelectionState,
 ): GraphEditorSelectionState {
-  const editorSelection = normalizeEditorSelection(
-    graphEditorSelectionToEditorSelection(selection),
-    (id) =>
-      document.nodes.some((node) => node.id === id) ||
-      document.edges.some((edge) => edge.id === id) ||
-      (document.groups ?? []).some((group) => group.id === id),
-  );
+  const requested = graphEditorSelectionToEditorSelection(selection);
+  // Resolve which requested ids exist in one pass over the document, so normalization stays
+  // linear in document size for selections of any size.
+  const requestedIds = new Set(getEditorSelectedEntityIds(requested));
+  const existingIds = new Set<string>();
+  if (requestedIds.size > 0) {
+    for (const entities of [document.nodes, document.edges, document.groups ?? []]) {
+      for (const { id } of entities) {
+        if (requestedIds.has(id)) {
+          existingIds.add(id);
+        }
+      }
+    }
+  }
+  const editorSelection = normalizeEditorSelection(requested, (id) => existingIds.has(id));
   const selectedIds = new Set(getEditorSelectedEntityIds(editorSelection));
-  const nodeIds = orderedUnique(
-    document.nodes.map((node) => node.id),
-    document.nodes.map((node) => node.id).filter((id) => selectedIds.has(id)),
-  );
-  const edgeIds = orderedUnique(
-    document.edges.map((edge) => edge.id),
-    document.edges.map((edge) => edge.id).filter((id) => selectedIds.has(id)),
-  );
-  const groupIds = orderedUnique(
-    (document.groups ?? []).map((group) => group.id),
-    (document.groups ?? []).map((group) => group.id).filter((id) => selectedIds.has(id)),
-  );
+  const nodeIds = selectedInDocumentOrder(document.nodes, selectedIds);
+  const edgeIds = selectedInDocumentOrder(document.edges, selectedIds);
+  const groupIds = selectedInDocumentOrder(document.groups ?? [], selectedIds);
   const primaryId = getEditorSelectionPrimaryEntityId(editorSelection);
   const primary =
     primaryId && nodeIds.includes(primaryId)
@@ -66,6 +67,24 @@ export function normalizeGraphEditorSelection<
     ...(groupIds.length > 0 ? { groupIds } : {}),
     ...(primary ? { primary } : {}),
   };
+}
+
+function selectedInDocumentOrder(
+  entities: readonly { id: string }[],
+  selectedIds: ReadonlySet<string>,
+): string[] {
+  const ids: string[] = [];
+  if (selectedIds.size === 0) {
+    return ids;
+  }
+  const seen = new Set<string>();
+  for (const { id } of entities) {
+    if (selectedIds.has(id) && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 export function clearGraphEditorSelection(): GraphEditorSelectionState {
@@ -136,20 +155,84 @@ export function getGraphEditorSelectionFromBounds<
   items: readonly GraphEditorSelectableBounds[],
   options: { mode?: GraphEditorSelectionMode; selection?: GraphEditorSelectionState } = {},
 ): GraphEditorSelectionState {
-  const selectedItems = items.filter((item) => graphEditorBoundsIntersect(bounds, item.bounds));
-  const nextSelection = selectedItems.reduce(
-    (currentSelection, item) =>
-      updateGraphEditorSelection(
-        document,
-        currentSelection,
-        { type: item.type, id: item.id },
-        "extend",
-      ),
+  return selectGraphEditorItemsFromBoundsHits(
+    document,
+    items.filter((item) => graphEditorBoundsIntersect(bounds, item.bounds)),
+    options,
+  );
+}
+
+/**
+ * Applies bounds hits to a selection in one pass. Equivalent to extending the selection with each
+ * hit in turn, without renormalizing the whole selection once per hit.
+ */
+function selectGraphEditorItemsFromBoundsHits<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  hits: readonly GraphEditorSelectionItem[],
+  options: { mode?: GraphEditorSelectionMode; selection?: GraphEditorSelectionState } = {},
+): GraphEditorSelectionState {
+  const base =
     options.mode === "toggle" || options.mode === "extend"
       ? normalizeGraphEditorSelection(document, options.selection ?? clearGraphEditorSelection())
-      : clearGraphEditorSelection(),
-  );
-  return normalizeGraphEditorSelection(document, nextSelection);
+      : clearGraphEditorSelection();
+  if (hits.length === 0) {
+    return normalizeGraphEditorSelection(document, base);
+  }
+  const extended = normalizeGraphEditorSelection(document, {
+    nodeIds: [...base.nodeIds, ...hits.flatMap((hit) => (hit.type === "node" ? [hit.id] : []))],
+    edgeIds: [...base.edgeIds, ...hits.flatMap((hit) => (hit.type === "edge" ? [hit.id] : []))],
+    groupIds: [
+      ...(base.groupIds ?? []),
+      ...hits.flatMap((hit) => (hit.type === "group" ? [hit.id] : [])),
+    ],
+    primary: hits.at(-1),
+  });
+  // A second pass derives the primary item from document order, as incremental extension does.
+  return normalizeGraphEditorSelection(document, extended);
+}
+
+export type GraphEditorSpatialSelectionOptions = {
+  mode?: GraphEditorSelectionMode;
+  selection?: GraphEditorSelectionState;
+  /** Indexed nodes that are not selectable, e.g. hidden nodes. */
+  excludeNodeIds?: GraphEditorNodeIdFilter;
+  /** Additional non-node selectables (edges, group frames) tested against `bounds` directly. */
+  items?: readonly GraphEditorSelectableBounds[];
+};
+
+/**
+ * Marquee selection backed by the spatial index: nodes are queried from `index`, while
+ * `items` (edges, groups) are tested directly. The result equals
+ * `getGraphEditorSelectionFromBounds` over every node's bounds followed by `items`.
+ */
+export function getGraphEditorSelectionFromSpatialIndex<
+  TNodeData = Record<string, unknown>,
+  TEdgeData = Record<string, unknown>,
+  TPortType = unknown,
+>(
+  document: GraphEditorDocument<TNodeData, TEdgeData, TPortType>,
+  bounds: GraphEditorBounds,
+  index: Pick<GraphEditorSpatialIndex, "query">,
+  options: GraphEditorSpatialSelectionOptions = {},
+): GraphEditorSelectionState {
+  const normalized = normalizeGraphEditorBounds(bounds);
+  const excluded = toIdSet(options.excludeNodeIds);
+  const hits: { type: "node" | "edge" | "group"; id: string }[] = [];
+  for (const nodeId of index.query(normalized)) {
+    if (!excluded.has(nodeId)) {
+      hits.push({ type: "node", id: nodeId });
+    }
+  }
+  for (const item of options.items ?? []) {
+    if (graphEditorBoundsIntersect(normalized, item.bounds)) {
+      hits.push({ type: item.type, id: item.id });
+    }
+  }
+  return selectGraphEditorItemsFromBoundsHits(document, hits, options);
 }
 
 export function graphEditorSelectionToEditorSelection(
