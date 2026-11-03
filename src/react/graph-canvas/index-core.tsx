@@ -964,7 +964,8 @@ function isGraphCanvasEditableTarget(target: EventTarget | null) {
 
 function isGraphCanvasInteractiveTarget(target: EventTarget) {
   return (
-    target instanceof HTMLElement &&
+    // `Element`, not `HTMLElement`: edge hit paths and rewire handles are SVG elements.
+    target instanceof Element &&
     Boolean(
       target.closest(
         [

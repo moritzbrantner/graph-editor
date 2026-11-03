@@ -7,6 +7,8 @@ import {
   createGraphEditorSpatialIndex,
   findGraphEditorNodeInDirection,
   getGraphCanvasConnectionValidity,
+  getGraphCanvasEdgeCurveBounds,
+  planGraphCanvasEdgeRender,
   getGraphEditorSelectionFromBounds,
   getGraphEditorSelectionFromSpatialIndex,
   graphEditorBoundsIntersect,
@@ -187,6 +189,42 @@ describe("graph interaction candidate queries", () => {
       for (const direction of ["right", "down"] as const) {
         referenceNodeInDirection(document, getNodeBounds, middle.id, direction);
       }
+    });
+  }
+});
+
+describe("graph canvas edge culling", () => {
+  const fixtures = [
+    ["5k", createBenchmarkDocument(5_000)],
+    ["15k", createBenchmarkDocument(15_000)],
+  ] as const;
+  const queryBounds = { x: 1_000, y: 2_000, width: 2_000, height: 1_600 };
+
+  for (const [name, document] of fixtures) {
+    const nodeById = new Map(document.nodes.map((node) => [node.id, node] as const));
+    const getEdgeBounds = (edge: GraphEditorDocument["edges"][number]) => {
+      const source = nodeById.get(edge.sourceNodeId)!;
+      const target = nodeById.get(edge.targetNodeId)!;
+      const sourceSize = getGraphEditorNodeSize(source);
+      return getGraphCanvasEdgeCurveBounds(
+        { x: source.x + sourceSize.width, y: source.y + sourceSize.height / 2 },
+        { x: target.x, y: target.y + getGraphEditorNodeSize(target).height / 2 },
+      );
+    };
+    const index = createGraphEditorSpatialIndex(
+      { nodes: document.edges, edges: [] } as unknown as GraphEditorDocument,
+      {
+        getNodeBounds: (edge) =>
+          getEdgeBounds(edge as unknown as GraphEditorDocument["edges"][number]),
+      },
+    );
+
+    bench(`plan culled edges in ${name}-node chain`, () => {
+      planGraphCanvasEdgeRender({ edges: document.edges, index, queryBounds, pinnedEdgeIds: [] });
+    });
+
+    bench(`test every edge's curve bounds in ${name}-node chain`, () => {
+      document.edges.filter((edge) => graphEditorBoundsIntersect(queryBounds, getEdgeBounds(edge)));
     });
   }
 });

@@ -6,6 +6,8 @@
 
 ## Added
 
+- Edge culling (#36, part of #1): while node culling is active, `GraphCanvas` renders only edges whose curve bounds intersect the culling bounds, plus selected, hovered, and rewired edges. Cross-viewport edges render their full path, so selection and rewire keep working. New exports from the root and `/react`: `planGraphCanvasEdgeRender`, `getGraphCanvasEdgeCurveBounds`, `graphCanvasEdgeCurveMargin`, and the `GraphCanvasEdgeRenderPlan`, `GraphCanvasEdgeRenderPlanInput`, and `GraphCanvasEdgeRenderPlanStats` types. The surface adds `data-edges-rendered` and `data-edges-considered`.
+
 - Index-backed interactions (#37, part of #1): `GraphCanvas` drag snapping, marquee selection, and arrow-key navigation query the retained spatial index instead of scanning every node. Results are unchanged. New headless `/core` helpers: `queryGraphEditorNodesNearBounds`, `getGraphEditorSelectionFromSpatialIndex`, `findGraphEditorNodeInDirection` (with the `GraphEditorSpatialDirection` type), and `GraphEditorSpatialIndex.getIndexedBounds()`. `getGraphEditorSelectionFromBounds` and `normalizeGraphEditorSelection` no longer renormalize once per selected item, so large marquee selections stay linear.
 
 - Category chip control (part of #49): `GraphCanvas` `showNodeCategory={false}` (`GraphNode` `showCategory`) keeps the category/kind chip off node headers. An explicit `eyebrow` still shows. The chip now has `data-slot="graph-node-category"`.
@@ -29,6 +31,10 @@
 - Public graph-editor APIs now build on the published `@moenarch/editor-core@0.3.0`
   foundation for serialization, runtime, operations, selection, indexes, patches, plugins,
   persistence, interaction, hotkeys, entities, JSON helpers, browser utilities, and viewport state.
+
+## Fixed
+
+- Pressing an edge's hit path or rewire handle no longer also starts a surface pan or marquee. SVG targets were not recognized as interactive, so dragging a rewire handle with a mouse panned the canvas and detached the edge.
 
 ## Hardened
 

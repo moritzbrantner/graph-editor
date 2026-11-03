@@ -27,9 +27,20 @@ While culling:
 - the focused node, dragged node(s), the connection source and hovered target, and the keyboard navigation target always render; off-screen selected nodes do not, because delete, nudge, and inspectors operate by id;
 - group frames render when their bounds intersect the culling bounds;
 - a polite status (`data-slot="workflow-builder-render-status"`) reads "Showing N of M nodes", and the surface exposes `data-virtualized`, `data-nodes-rendered`, and `data-nodes-considered`;
-- edges still render in full; edges to culled nodes use computed port geometry, because `measurePorts="dom"` can only measure rendered nodes. Edge culling is tracked separately.
+- edges are culled with the nodes (see below); rendered edges to culled nodes use computed port geometry, because `measurePorts="dom"` can only measure rendered nodes.
 
 `planGraphCanvasNodeRender` is the pure planner behind this. Its `stats` (`totalNodes`, `nodesConsidered`, `nodesRendered`, `pinnedOutsideViewport`) are deterministic work counters for regression ratchets. Fit view, the minimap, marquee selection, and keyboard navigation read document geometry, not the DOM, so they cover culled nodes too.
+
+## Edge culling
+
+While node culling is active, `GraphCanvas` also skips path generation and SVG elements for edges irrelevant to the viewport. `planGraphCanvasEdgeRender` is the pure planner behind it:
+
+- Relevance comes from authoritative node geometry, never the DOM: each edge's bounds are the convex hull of its cubic curve between the computed port points, expanded by the 8px hit-stroke margin (`getGraphCanvasEdgeCurveBounds`). A retained edge index answers the culling query; moving nodes updates only their incident edges.
+- An edge renders when its curve bounds intersect the node plan's culling bounds (viewport plus overscan). Cross-viewport edges, including ones whose endpoints are both culled, render as their full path; the surface clips it, and the same path is the hit target, so selecting and rewiring them works as usual.
+- Selected edges, the hovered edge, and the edge being rewired always render, so their rewire handles stay available.
+- Culled edges leave the DOM and the tab order, like culled nodes. Marquee selection still tests every visible edge's endpoints, so it selects culled edges too.
+- The minimap does not draw edges and is unaffected.
+- The surface exposes `data-edges-rendered` and `data-edges-considered`; the plan's `stats` (`totalEdges`, `edgesConsidered`, `edgesRendered`, `pinnedOutsideViewport`) are deterministic counters for ratchets.
 
 ## Index-backed interactions
 

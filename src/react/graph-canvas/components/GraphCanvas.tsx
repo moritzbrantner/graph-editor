@@ -63,8 +63,11 @@ import {
 import { getGraphNodeSize } from "../../nodes";
 import {
   boundsIntersect,
+  createGraphCanvasEdgeIndexTracker,
   createGraphCanvasNodeIndexTracker,
+  getGraphCanvasEdgeCurveBounds,
   getGraphCanvasVisibleGraphBounds,
+  planGraphCanvasEdgeRender,
   planGraphCanvasNodeRender,
   resolveGraphCanvasVirtualization,
   shouldGraphCanvasCullNodes,
@@ -299,32 +302,6 @@ export function GraphCanvas({
       ),
     [hiddenNodeIds, nodeBounds, selectionDocument],
   );
-  const edgeGeometry = React.useMemo(
-    () =>
-      new Map(
-        visibleEdges.map((edge) => [
-          edge.id,
-          {
-            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions),
-            sourcePoint: getWorkflowEdgeEndpointPoint(
-              nodeById,
-              edge,
-              "source",
-              portPoints,
-              layoutOptions,
-            ),
-            targetPoint: getWorkflowEdgeEndpointPoint(
-              nodeById,
-              edge,
-              "target",
-              portPoints,
-              layoutOptions,
-            ),
-          },
-        ]),
-      ),
-    [layoutOptions, nodeById, portPoints, visibleEdges],
-  );
   const requestedVirtualization = resolveGraphCanvasVirtualization(virtualization);
   const resolvedVirtualization = React.useMemo(
     () => requestedVirtualization,
@@ -417,6 +394,86 @@ export function GraphCanvas({
       : groupBounds;
   }, [groupBounds, renderPlan.queryBounds]);
 
+  const nodeByIdRef = React.useRef(nodeById);
+  nodeByIdRef.current = nodeById;
+  // Edge relevance comes from computed port geometry of the authoritative node positions, never
+  // from DOM measurements, so culled nodes and unmeasured surfaces give the same answer.
+  const edgeIndexTracker = React.useMemo(
+    () =>
+      cullingEligible
+        ? createGraphCanvasEdgeIndexTracker((edge) =>
+            getGraphCanvasEdgeCurveBounds(
+              getWorkflowEdgeEndpointPoint(
+                nodeByIdRef.current,
+                edge,
+                "source",
+                undefined,
+                layoutOptions,
+              ),
+              getWorkflowEdgeEndpointPoint(
+                nodeByIdRef.current,
+                edge,
+                "target",
+                undefined,
+                layoutOptions,
+              ),
+            ),
+          )
+        : null,
+    [cullingEligible, layoutOptions],
+  );
+  const edgeIndex = React.useMemo(
+    () => edgeIndexTracker?.sync(visibleEdges, nodes) ?? null,
+    [edgeIndexTracker, nodes, visibleEdges],
+  );
+  const pinnedEdgeIds = React.useMemo(() => {
+    const ids = [...currentSelectedEdgeIds];
+    if (hoveredEdgeId) ids.push(hoveredEdgeId);
+    if (connectionDrag && connectionDrag.type !== "new") ids.push(connectionDrag.edge.id);
+    return ids;
+  }, [connectionDrag, currentSelectedEdgeIds, hoveredEdgeId]);
+  const edgeRenderPlan = React.useMemo(
+    () =>
+      planGraphCanvasEdgeRender({
+        edges: visibleEdges,
+        index: edgeIndex,
+        queryBounds: renderPlan.queryBounds,
+        pinnedEdgeIds,
+      }),
+    [edgeIndex, pinnedEdgeIds, renderPlan.queryBounds, visibleEdges],
+  );
+  const renderedEdgeIds = edgeRenderPlan.renderedEdgeIds;
+  const renderedEdges = React.useMemo(
+    () =>
+      renderedEdgeIds ? visibleEdges.filter((edge) => renderedEdgeIds.has(edge.id)) : visibleEdges,
+    [renderedEdgeIds, visibleEdges],
+  );
+  const edgeGeometry = React.useMemo(
+    () =>
+      new Map(
+        renderedEdges.map((edge) => [
+          edge.id,
+          {
+            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions),
+            sourcePoint: getWorkflowEdgeEndpointPoint(
+              nodeById,
+              edge,
+              "source",
+              portPoints,
+              layoutOptions,
+            ),
+            targetPoint: getWorkflowEdgeEndpointPoint(
+              nodeById,
+              edge,
+              "target",
+              portPoints,
+              layoutOptions,
+            ),
+          },
+        ]),
+      ),
+    [layoutOptions, nodeById, portPoints, renderedEdges],
+  );
   useIsomorphicLayoutEffect(() => {
     if (!cullingEligible) {
       return;
@@ -955,7 +1012,15 @@ export function GraphCanvas({
         mode: marqueeState.mode,
         selection: marqueeState.selectionBefore,
         excludeNodeIds: hiddenNodeIdSet,
-        items: getGraphCanvasMarqueeEdgeAndGroupItems(visibleEdges, edgeGeometry, groupBounds),
+        items: getGraphCanvasMarqueeEdgeAndGroupItems(visibleEdges, groupBounds, (edge) => {
+          const geometry = edgeGeometry.get(edge.id);
+          return geometry
+            ? [geometry.sourcePoint, geometry.targetPoint]
+            : [
+                getWorkflowEdgeEndpointPoint(nodeById, edge, "source", portPoints, layoutOptions),
+                getWorkflowEdgeEndpointPoint(nodeById, edge, "target", portPoints, layoutOptions),
+              ];
+        }),
       },
     );
     commitSelectionState(nextSelection);
@@ -965,8 +1030,11 @@ export function GraphCanvas({
     edgeGeometry,
     groupBounds,
     hiddenNodeIdSet,
+    layoutOptions,
     marqueeState,
+    nodeById,
     nodeIndex,
+    portPoints,
     selectionDocument,
     visibleEdges,
   ]);
@@ -1382,6 +1450,12 @@ export function GraphCanvas({
         data-virtualized={renderPlan.culling ? "true" : undefined}
         data-nodes-rendered={renderPlan.culling ? renderPlan.stats.nodesRendered : undefined}
         data-nodes-considered={renderPlan.culling ? renderPlan.stats.nodesConsidered : undefined}
+        data-edges-rendered={
+          edgeRenderPlan.culling ? edgeRenderPlan.stats.edgesRendered : undefined
+        }
+        data-edges-considered={
+          edgeRenderPlan.culling ? edgeRenderPlan.stats.edgesConsidered : undefined
+        }
         tabIndex={0}
         className="relative overflow-auto rounded-md border bg-muted/20"
         style={{ height: typeof surfaceHeight === "number" ? `${surfaceHeight}px` : surfaceHeight }}
@@ -1518,7 +1592,7 @@ export function GraphCanvas({
             aria-label="Workflow connections"
             className="pointer-events-none absolute inset-0 size-full overflow-visible"
           >
-            {visibleEdges.map((edge) => {
+            {renderedEdges.map((edge) => {
               const geometry = edgeGeometry.get(edge.id);
               const line =
                 geometry?.line ?? getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions);
@@ -1714,28 +1788,20 @@ export function GraphCanvas({
 /** Edge and group selectables for marquee selection; nodes come from the spatial index. */
 function getGraphCanvasMarqueeEdgeAndGroupItems(
   visibleEdges: readonly GraphCanvasEdge[],
-  edgeGeometry: ReadonlyMap<
-    string,
-    { sourcePoint: GraphCanvasPoint; targetPoint: GraphCanvasPoint }
-  >,
   groupBounds: ReturnType<typeof getGraphEditorGroupBounds>,
+  getEndpoints: (edge: GraphCanvasEdge) => [GraphCanvasPoint, GraphCanvasPoint],
 ) {
-  const edgeItems = visibleEdges.flatMap((edge) => {
-    const geometry = edgeGeometry.get(edge.id);
-    if (!geometry) {
-      return [];
-    }
-    const minX = Math.min(geometry.sourcePoint.x, geometry.targetPoint.x);
-    const minY = Math.min(geometry.sourcePoint.y, geometry.targetPoint.y);
-    const maxX = Math.max(geometry.sourcePoint.x, geometry.targetPoint.x);
-    const maxY = Math.max(geometry.sourcePoint.y, geometry.targetPoint.y);
-    return [
-      {
-        type: "edge" as const,
-        id: edge.id,
-        bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-      },
-    ];
+  const edgeItems = visibleEdges.map((edge) => {
+    const [sourcePoint, targetPoint] = getEndpoints(edge);
+    const minX = Math.min(sourcePoint.x, targetPoint.x);
+    const minY = Math.min(sourcePoint.y, targetPoint.y);
+    const maxX = Math.max(sourcePoint.x, targetPoint.x);
+    const maxY = Math.max(sourcePoint.y, targetPoint.y);
+    return {
+      type: "edge" as const,
+      id: edge.id,
+      bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    };
   });
   return [
     ...edgeItems,
