@@ -1,4 +1,5 @@
 @import "@moritzbrantner/ui/atlas/styles.css";
+@import "@moritzbrantner/ui/component-sources.css";
 
 @source "../../../src/**/*.{ts,tsx}";
 @source "./**/*.{ts,tsx}";
