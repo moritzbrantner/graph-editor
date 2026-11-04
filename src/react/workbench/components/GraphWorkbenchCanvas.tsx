@@ -31,7 +31,6 @@ import {
 } from "../../graph-canvas";
 import {
   getGraphCanvasKeyboardNudgeDelta,
-  getNextGraphCanvasNodeSelection,
   nudgeGraphCanvasNodes,
   type GraphCanvasKeyboardDirection,
 } from "../../graph-canvas/index-core";
@@ -151,27 +150,9 @@ export function GraphWorkbenchCanvas<
       return;
     }
 
-    const navigationDirection = getConfiguredDirection(nativeEvent, "navigate", hotkeys);
-    if (navigationDirection) {
-      consumeKeyboardEvent(event);
-      const currentNodeId =
-        controller.selection.primary?.type === "node"
-          ? controller.selection.primary.id
-          : (controller.selection.nodeIds.at(-1) ?? null);
-      const nextNode = getNextGraphCanvasNodeSelection(
-        canvasNodes,
-        currentNodeId,
-        navigationDirection,
-        { showPortColumnHeaders: false },
-        new Set(),
-      );
-      if (nextNode) {
-        controller.actions.setSelection({
-          nodeIds: [nextNode.id],
-          edgeIds: [],
-          primary: { type: "node", id: nextNode.id },
-        });
-      }
+    if (getConfiguredDirection(nativeEvent, "navigate", hotkeys)) {
+      // GraphCanvas owns directional navigation through its spatial index; it receives the
+      // configured bindings via `getKeyboardNavigationDirection`.
       return;
     }
 
@@ -215,7 +196,7 @@ export function GraphWorkbenchCanvas<
   return (
     <div
       ref={containerRef}
-      className="relative min-h-0"
+      className="relative h-full min-h-0"
       onKeyDownCapture={handleConfiguredKeyDownCapture}
       onContextMenuCapture={(event) => onCanvasContextMenuCapture?.(event, controller)}
       onDoubleClickCapture={(event) => onCanvasDoubleClickCapture?.(event, controller)}
@@ -250,6 +231,8 @@ export function GraphWorkbenchCanvas<
       }}
     >
       <GraphCanvas
+        className="h-full"
+        surfaceHeight="100%"
         nodes={canvasNodes}
         edges={canvasEdges}
         groups={canvasGroups}
@@ -271,6 +254,9 @@ export function GraphWorkbenchCanvas<
         }}
         isCancelKeyboardEvent={(event) =>
           matchesConfiguredHotkey(event.nativeEvent, "selection.clear", hotkeys)
+        }
+        getKeyboardNavigationDirection={(event) =>
+          getConfiguredDirection(event.nativeEvent, "navigate", hotkeys)
         }
         showMiniMap={showMiniMap}
         showToolbar={false}

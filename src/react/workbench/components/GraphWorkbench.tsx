@@ -7,7 +7,15 @@ import {
   isEditorEditableTarget,
   matchesEditorHotkey,
 } from "@moenarch/editor-core/hotkeys";
-import { cn } from "@moritzbrantner/ui";
+import {
+  EditorPane,
+  EditorPaneContent,
+  EditorPaneHeader,
+  EditorPaneLayout,
+  EditorPaneMain,
+  cn,
+  type EditorPanePresentation,
+} from "@moritzbrantner/ui";
 
 import {
   resolveGraphEditorHotkeys,
@@ -25,7 +33,7 @@ import { GraphWorkbenchCanvas } from "./GraphWorkbenchCanvas";
 import { GraphWorkbenchHotkeySettings } from "./GraphWorkbenchHotkeySettings";
 import { GraphWorkbenchInspector } from "./GraphWorkbenchInspector";
 import { GraphWorkbenchPalette } from "./GraphWorkbenchPalette";
-import { GraphWorkbenchToolbar } from "./GraphWorkbenchToolbar";
+import { GraphWorkbenchPaneIdsContext, GraphWorkbenchToolbar } from "./GraphWorkbenchToolbar";
 
 export type GraphWorkbenchKeyboardProps = {
   hotkeys?: GraphEditorHotkeyOverrides;
@@ -94,11 +102,42 @@ export function GraphWorkbench<
     commitHotkeyOverrides({});
   }, [commitHotkeyOverrides]);
 
+  // Pane chrome is presentation state. Docked panes collapse with the controller's
+  // `showPalette`/`showInspector`; narrow containers present them as drawers that start closed
+  // and keep their own open state, exposed through the same `view` fields while active.
+  const [presentation, setPresentation] = React.useState<EditorPanePresentation>("docked");
+  const [paletteDrawerOpen, setPaletteDrawerOpen] = React.useState(false);
+  const [inspectorDrawerOpen, setInspectorDrawerOpen] = React.useState(false);
+  const overlay = presentation === "overlay";
+  const paneIdPrefix = React.useId().replaceAll(":", "");
+  const paneIds = React.useMemo(
+    () => ({
+      palette: `graph-workbench-${paneIdPrefix}-palette`,
+      inspector: `graph-workbench-${paneIdPrefix}-inspector`,
+      presentation,
+    }),
+    [paneIdPrefix, presentation],
+  );
+  const handlePresentationChange = React.useCallback((next: EditorPanePresentation) => {
+    setPresentation(next);
+    setPaletteDrawerOpen(false);
+    setInspectorDrawerOpen(false);
+  }, []);
+
   const configuredController = React.useMemo<
     GraphWorkbenchController<TNodeData, TEdgeData, TPortType>
   >(
     () => ({
       ...controller,
+      view: overlay
+        ? {
+            ...controller.view,
+            showPalette: paletteDrawerOpen,
+            showInspector: inspectorDrawerOpen,
+            setShowPalette: setPaletteDrawerOpen,
+            setShowInspector: setInspectorDrawerOpen,
+          }
+        : controller.view,
       commands: controller.commands.map((command) => {
         const bindings = resolvedHotkeys[command.id as GraphEditorHotkeyId];
         return bindings
@@ -109,7 +148,26 @@ export function GraphWorkbench<
           : command;
       }),
     }),
-    [controller, resolvedHotkeys],
+    [controller, inspectorDrawerOpen, overlay, paletteDrawerOpen, resolvedHotkeys],
+  );
+  // A drawer covers the canvas, so adding a node from it closes it to reveal the result.
+  const paletteController = React.useMemo<
+    GraphWorkbenchController<TNodeData, TEdgeData, TPortType>
+  >(
+    () =>
+      overlay
+        ? {
+            ...configuredController,
+            actions: {
+              ...configuredController.actions,
+              addTemplateNode: (template, position) => {
+                configuredController.actions.addTemplateNode(template, position);
+                setPaletteDrawerOpen(false);
+              },
+            },
+          }
+        : configuredController,
+    [configuredController, overlay],
   );
   const hotkeyCommands = React.useMemo(
     () =>
@@ -145,68 +203,102 @@ export function GraphWorkbench<
     [configuredController.actions, resolvedHotkeys],
   );
 
+  const view = configuredController.view;
+
   return (
     <div
       ref={workbenchRef}
       data-slot="graph-workbench"
-      className={cn(
-        "grid min-h-0 grid-cols-[16rem_minmax(0,1fr)_20rem] gap-3 outline-none max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:grid-cols-1",
-        !configuredController.view.showPalette &&
-          "grid-cols-[minmax(0,1fr)_20rem] max-xl:grid-cols-[minmax(0,1fr)]",
-        !configuredController.view.showInspector &&
-          "grid-cols-[16rem_minmax(0,1fr)] max-xl:grid-cols-[14rem_minmax(0,1fr)]",
-        !configuredController.view.showPalette &&
-          !configuredController.view.showInspector &&
-          "grid-cols-1",
-        className,
-      )}
+      data-presentation={presentation}
+      className={cn("flex min-h-[36rem] min-w-0 flex-col outline-none", className)}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      {configuredController.view.showPalette ? (
-        renderPalette ? (
-          renderPalette(configuredController)
-        ) : (
-          <GraphWorkbenchPalette controller={configuredController} />
-        )
-      ) : null}
-      <div className="min-h-0">
-        {renderToolbar ? (
-          renderToolbar(configuredController)
-        ) : (
-          <GraphWorkbenchToolbar controller={configuredController} />
-        )}
-        <GraphWorkbenchHotkeySettings
-          hotkeys={resolvedHotkeys}
-          overrides={hotkeyOverrides}
-          onHotkeysChange={setHotkeyBindings}
-          onResetHotkey={resetHotkey}
-          onResetAll={resetAllHotkeys}
-        />
-        <GraphWorkbenchCanvas
-          controller={configuredController}
-          hotkeys={resolvedHotkeys}
-          showMiniMap={configuredController.view.showMiniMap ?? showMiniMap}
-          onViewportChange={onViewportChange}
-          connectionValidationOptions={connectionValidationOptions}
-          createEdge={createEdge}
-          connectDocument={connectDocument}
-          renderContextPad={renderContextPad}
-          renderCanvasOverlay={renderCanvasOverlay}
-          onCanvasContextMenuCapture={onCanvasContextMenuCapture}
-          onCanvasDoubleClickCapture={onCanvasDoubleClickCapture}
-        />
-      </div>
-      {configuredController.view.showInspector ? (
-        renderInspector ? (
-          renderInspector(configuredController)
-        ) : (
-          <GraphWorkbenchInspector
-            controller={configuredController}
-            inspectorSchema={inspectorSchema}
-          />
-        )
-      ) : null}
+      <GraphWorkbenchPaneIdsContext.Provider value={paneIds}>
+        <EditorPaneLayout
+          data-slot="graph-workbench-panes"
+          className="min-h-0 flex-1 rounded-md border bg-background"
+          onPresentationChange={handlePresentationChange}
+        >
+          <EditorPane
+            id={paneIds.palette}
+            side="start"
+            label="Palette"
+            defaultSize={256}
+            minSize={192}
+            maxSize={420}
+            collapsed={!controller.view.showPalette}
+            onCollapsedChange={(collapsed) => controller.view.setShowPalette(!collapsed)}
+            overlayOpen={paletteDrawerOpen}
+            onOverlayOpenChange={setPaletteDrawerOpen}
+          >
+            <EditorPaneHeader title="Nodes" />
+            <EditorPaneContent>
+              {renderPalette ? (
+                renderPalette(paletteController)
+              ) : (
+                <GraphWorkbenchPalette controller={paletteController} />
+              )}
+            </EditorPaneContent>
+          </EditorPane>
+          <EditorPaneMain
+            data-slot="graph-workbench-main"
+            className="flex flex-col gap-2 overflow-hidden p-2"
+          >
+            {renderToolbar ? (
+              renderToolbar(configuredController)
+            ) : (
+              <GraphWorkbenchToolbar controller={configuredController} />
+            )}
+            <GraphWorkbenchHotkeySettings
+              hotkeys={resolvedHotkeys}
+              overrides={hotkeyOverrides}
+              onHotkeysChange={setHotkeyBindings}
+              onResetHotkey={resetHotkey}
+              onResetAll={resetAllHotkeys}
+            />
+            <div className="min-h-0 flex-1">
+              <GraphWorkbenchCanvas
+                controller={configuredController}
+                hotkeys={resolvedHotkeys}
+                showMiniMap={view.showMiniMap ?? showMiniMap}
+                onViewportChange={onViewportChange}
+                connectionValidationOptions={connectionValidationOptions}
+                createEdge={createEdge}
+                connectDocument={connectDocument}
+                renderContextPad={renderContextPad}
+                renderCanvasOverlay={renderCanvasOverlay}
+                onCanvasContextMenuCapture={onCanvasContextMenuCapture}
+                onCanvasDoubleClickCapture={onCanvasDoubleClickCapture}
+              />
+            </div>
+          </EditorPaneMain>
+          <EditorPane
+            id={paneIds.inspector}
+            side="end"
+            label="Inspector"
+            defaultSize={320}
+            minSize={240}
+            maxSize={560}
+            collapsed={!controller.view.showInspector}
+            onCollapsedChange={(collapsed) => controller.view.setShowInspector(!collapsed)}
+            overlayOpen={inspectorDrawerOpen}
+            onOverlayOpenChange={setInspectorDrawerOpen}
+          >
+            <EditorPaneHeader title="Inspector" />
+            <div className="flex min-h-0 flex-1 flex-col">
+              {renderInspector ? (
+                renderInspector(configuredController)
+              ) : (
+                <GraphWorkbenchInspector
+                  controller={configuredController}
+                  inspectorSchema={inspectorSchema}
+                />
+              )}
+            </div>
+          </EditorPane>
+        </EditorPaneLayout>
+      </GraphWorkbenchPaneIdsContext.Provider>
     </div>
   );
 }

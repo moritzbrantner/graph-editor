@@ -13,7 +13,16 @@ async function expectNoHorizontalPageOverflow(page: Page) {
     .toBeLessThanOrEqual(1);
 }
 
-test("switches example graphs and resets edited labels", async ({ page }) => {
+/** Narrow workbenches present the palette and inspector as drawers that start closed. */
+async function openPaneOnMobile(page: Page, projectName: string, pane: "Palette" | "Inspector") {
+  if (!isMobileProject(projectName)) {
+    return;
+  }
+  await page.getByRole("button", { name: `Show ${pane}`, exact: true }).click();
+  await expect(page.getByRole("region", { name: pane, exact: true })).toBeVisible();
+}
+
+test("switches example graphs and resets edited labels", async ({ page }, testInfo) => {
   await page.goto("/");
 
   await expect(page.getByLabel("Graph")).toHaveValue("lead-routing");
@@ -23,6 +32,7 @@ test("switches example graphs and resets edited labels", async ({ page }) => {
   await expect(page.getByText("7 nodes").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Events ingested", exact: true }).click();
+  await openPaneOnMobile(page, testInfo.project.name, "Inspector");
   await page.locator("#inspector-label").fill("Warehouse intake");
   await page.getByRole("button", { name: "Apply" }).click({ force: true });
   await expect(page.getByRole("button", { name: "Warehouse intake", exact: true })).toBeVisible();
@@ -37,14 +47,20 @@ test("creates nodes from the palette and edits custom node fields", async ({ pag
   await expect(page.getByText("6 nodes").first()).toBeVisible();
 
   if (isMobileProject(testInfo.project.name)) {
+    await openPaneOnMobile(page, testInfo.project.name, "Palette");
     await page.getByPlaceholder("Search nodes").fill("Retry");
     await page.getByRole("button", { name: "Retry/backoff" }).click();
+    // Adding from the drawer closes it so the new node is visible.
+    await expect(page.getByRole("region", { name: "Palette", exact: true })).toBeHidden();
   } else {
-    await page
-      .getByRole("button", { name: "Retry/backoff" })
-      .dragTo(page.locator("[data-slot='workflow-builder-surface']"), {
-        targetPosition: { x: 520, y: 360 },
-      });
+    const surface = page.locator("[data-slot='workflow-builder-surface']");
+    const surfaceBox = (await surface.boundingBox())!;
+    await page.getByRole("button", { name: "Retry/backoff" }).dragTo(surface, {
+      targetPosition: {
+        x: Math.round(surfaceBox.width * 0.75),
+        y: Math.round(surfaceBox.height * 0.75),
+      },
+    });
   }
   await expect(page.getByText("7 nodes").first()).toBeVisible();
 
@@ -52,6 +68,7 @@ test("creates nodes from the palette and edits custom node fields", async ({ pag
   if (isMobileProject(testInfo.project.name)) {
     await expectNoHorizontalPageOverflow(page);
   }
+  await openPaneOnMobile(page, testInfo.project.name, "Inspector");
   await page.locator("#inspector-owner").fill("Lifecycle Ops");
   await page.locator("#inspector-setting").fill("source == crm");
   await page.getByRole("button", { name: "Apply" }).click({ force: true });
@@ -142,7 +159,7 @@ test("appends from the context pad and exports JSON", async ({ page }, testInfo)
   expect((await download).suggestedFilename()).toBe("graph-editor-document.json");
 });
 
-test("filters the palette and toggles the minimap", async ({ page }) => {
+test("filters the palette and toggles the minimap", async ({ page }, testInfo) => {
   await page.goto("/");
 
   await expect(page.getByLabel("Workflow minimap")).toBeVisible();
@@ -151,6 +168,7 @@ test("filters the palette and toggles the minimap", async ({ page }) => {
   await page.getByRole("button", { name: "Show minimap" }).click();
   await expect(page.getByLabel("Workflow minimap")).toBeVisible();
 
+  await openPaneOnMobile(page, testInfo.project.name, "Palette");
   await page.getByPlaceholder("Search nodes").fill("Retry");
   await expect(page.getByRole("button", { name: "Retry/backoff" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Event trigger" })).toBeHidden();
@@ -212,7 +230,7 @@ test("supports keyboard duplicate and group commands", async ({ page }) => {
   await page.getByRole("button", { name: "Ungroup selection" }).first().click();
 });
 
-test("imports JSON and honors read-only mode", async ({ page }) => {
+test("imports JSON and honors read-only mode", async ({ page }, testInfo) => {
   await page.goto("/");
 
   await page.locator("input[type='file']").setInputFiles({
@@ -230,6 +248,7 @@ test("imports JSON and honors read-only mode", async ({ page }) => {
   await page.getByRole("button", { name: "Read only" }).click();
   await page.getByRole("button", { name: "Imported node", exact: true }).click();
   await expect(page.getByRole("button", { name: "Delete" }).first()).toBeDisabled();
+  await openPaneOnMobile(page, testInfo.project.name, "Palette");
   await expect(page.getByRole("button", { name: "Retry/backoff" })).toBeDisabled();
 });
 
@@ -364,4 +383,29 @@ test("composes an interactive node body without breaking drag, select, connect o
   await inline.press("Delete");
   expect((await state()).values.threshold).toBe("0.9");
   expect(await threshold()).toMatchObject({ x: before.x, y: before.y });
+});
+
+test("collapses and restores docked panes without leaving the canvas", async ({
+  page,
+}, testInfo) => {
+  test.skip(isMobileProject(testInfo.project.name), "Narrow containers use drawers");
+  await page.goto("/");
+
+  const palette = page.getByRole("region", { name: "Palette", exact: true });
+  const canvas = page.locator("[data-slot='workflow-builder-surface']");
+  await expect(palette).toBeVisible();
+  const dockedWidth = (await canvas.boundingBox())!.width;
+
+  await page.getByRole("button", { name: "Hide palette", exact: true }).click();
+  await expect(palette).toBeHidden();
+  await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThan(dockedWidth);
+
+  await page.getByRole("button", { name: "Show Palette", exact: true }).click();
+  await expect(palette).toBeVisible();
+
+  const splitter = page.getByRole("separator", { name: /Palette/ });
+  const before = (await palette.boundingBox())!.width;
+  await splitter.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await palette.boundingBox())!.width).toBeGreaterThan(before);
 });

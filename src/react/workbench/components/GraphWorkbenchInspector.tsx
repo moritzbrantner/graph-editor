@@ -49,46 +49,45 @@ export function GraphWorkbenchInspector<
         : [];
 
   return (
-    <aside className="min-h-0 overflow-auto border-l pl-3 max-xl:border-l-0 max-xl:border-t max-xl:pt-3">
-      <InspectorPanel
-        key={selection ? `${node ? "node" : edge ? "edge" : "group"}:${selection.id}` : "empty"}
-        title={title}
-        description={description}
-        sections={sections}
-        readOnly={controller.readOnly || !selection}
-        validationMessages={Object.fromEntries(
-          controller.selectedDiagnostics.map((diagnostic, index) => [
-            index === 0 ? "label" : `diagnostic-${index}`,
-            diagnostic.message,
-          ]),
-        )}
-        onApply={(values) => {
-          if (node) {
-            const patch =
-              inspectorSchema?.applyNodeValues?.(node, values) ??
-              getDefaultNodeInspectorPatch(values);
-            controller.actions.updateDocument(
-              updateGraphEditorNode(controller.document, node.id, patch),
-            );
-          }
-          if (edge) {
-            const patch =
-              inspectorSchema?.applyEdgeValues?.(edge, values) ??
-              getDefaultEdgeInspectorPatch(values);
-            controller.actions.updateDocument(
-              updateGraphEditorEdge(controller.document, edge.id, patch),
-            );
-          }
-          if (group) {
-            const patch =
-              inspectorSchema?.applyGroupValues?.(group, values) ??
-              getDefaultGroupInspectorPatch(values);
-            controller.actions.updateDocument(
-              updateGraphEditorGroup(controller.document, group.id, patch),
-            );
-          }
-        }}
-      />
-    </aside>
+    <InspectorPanel
+      key={selection ? `${node ? "node" : edge ? "edge" : "group"}:${selection.id}` : "empty"}
+      className="min-h-0 flex-1 rounded-none border-0 bg-transparent"
+      title={title}
+      description={description}
+      sections={sections}
+      readOnly={controller.readOnly || !selection}
+      validationMessages={Object.fromEntries(
+        controller.selectedDiagnostics.map((diagnostic, index) => [
+          index === 0 ? "label" : `diagnostic-${index}`,
+          diagnostic.message,
+        ]),
+      )}
+      onApply={(values) => {
+        if (node) {
+          const patch =
+            inspectorSchema?.applyNodeValues?.(node, values) ??
+            getDefaultNodeInspectorPatch(values);
+          controller.actions.updateDocument(
+            updateGraphEditorNode(controller.document, node.id, patch),
+          );
+        }
+        if (edge) {
+          const patch =
+            inspectorSchema?.applyEdgeValues?.(edge, values) ??
+            getDefaultEdgeInspectorPatch(values);
+          controller.actions.updateDocument(
+            updateGraphEditorEdge(controller.document, edge.id, patch),
+          );
+        }
+        if (group) {
+          const patch =
+            inspectorSchema?.applyGroupValues?.(group, values) ??
+            getDefaultGroupInspectorPatch(values);
+          controller.actions.updateDocument(
+            updateGraphEditorGroup(controller.document, group.id, patch),
+          );
+        }
+      }}
+    />
   );
 }

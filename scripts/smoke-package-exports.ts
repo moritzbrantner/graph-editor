@@ -216,23 +216,33 @@ async function smokePackedTarball(failures: string[]) {
       }
     }
 
+    // Bun 1.4.4 requires non-registry lifecycle dependencies in the consumer manifest.
+    const gitDependencies = Object.fromEntries(
+      Object.entries(packedPackageJson.dependencies ?? {}).filter(
+        ([, range]) => typeof range === "string" && range.startsWith("git+"),
+      ),
+    );
+    const gitDependencyNames = Object.keys(gitDependencies);
+    const localDependencies = await packLocalSmokeDependencies(tempDir);
+    const localDependencyTarballs = localDependencies.map((dependency) => dependency.tarballPath);
+    // Local tarballs also replace the packed package's own git pins.
+    const localOverrides = Object.fromEntries(
+      localDependencies.map((dependency) => [dependency.name, `file:${dependency.tarballPath}`]),
+    );
     await writeFile(
       path.join(tempDir, "package.json"),
       JSON.stringify(
         {
           private: true,
           type: "module",
-          // Bun 1.4.4 requires non-registry lifecycle dependencies in the consumer manifest.
-          dependencies: {
-            "@moenarch/editor-core": packedPackageJson.dependencies["@moenarch/editor-core"],
-          },
-          trustedDependencies: ["@moenarch/editor-core"],
+          dependencies: { ...gitDependencies, ...localOverrides },
+          trustedDependencies: gitDependencyNames,
+          ...(localDependencies.length > 0 ? { overrides: localOverrides } : {}),
         },
         null,
         2,
       ),
     );
-    const localDependencyTarballs = await packLocalSmokeDependencies(tempDir);
     await execFileAsync(
       "bun",
       ["add", "--linker", "hoisted", ...localDependencyTarballs, tarballPath],
@@ -242,8 +252,15 @@ async function smokePackedTarball(failures: string[]) {
     );
     // Bun can initially block a transitive git prepare even when the consumer lists it.
     const untrusted = await execFileAsync("bun", ["pm", "untrusted"], { cwd: tempDir });
-    if (untrusted.stdout.includes("@moenarch/editor-core @")) {
-      await execFileAsync("bun", ["pm", "trust", "@moenarch/editor-core"], { cwd: tempDir });
+    for (const name of gitDependencyNames) {
+      if (localDependencies.some((dependency) => dependency.name === name)) {
+        continue;
+      }
+      if (untrusted.stdout.includes(`${name} @`)) {
+        // Trust runs one Bun process per dependency, in order.
+        // oxlint-disable-next-line no-await-in-loop
+        await execFileAsync("bun", ["pm", "trust", name], { cwd: tempDir });
+      }
     }
     await writeFile(
       path.join(tempDir, "smoke.mjs"),
@@ -270,21 +287,33 @@ async function smokePackedTarball(failures: string[]) {
   }
 }
 
+/**
+ * Opt-in sibling checkouts replace git-pinned dependencies whose `prepare` build cannot run (for
+ * example without access to their private build tooling): `GRAPH_EDITOR_SMOKE_LOCAL_EDITOR_CORE=1`
+ * packs the sibling editor-core checkout, and `GRAPH_EDITOR_SMOKE_LOCAL_UI=1` a built sibling ui.
+ */
 async function packLocalSmokeDependencies(tempDir: string) {
-  if (process.env.GRAPH_EDITOR_SMOKE_LOCAL_EDITOR_CORE !== "1") {
-    return [];
-  }
-
-  const editorCoreDir = path.resolve(rootDir, "..", "editor-core");
-  try {
-    await access(path.join(editorCoreDir, "package.json"));
-  } catch {
-    return [];
-  }
-
-  const tarballPath = path.join(tempDir, "editor-core.tgz");
-  await execFileAsync("bun", ["pm", "pack", "--filename", tarballPath, "--ignore-scripts"], {
-    cwd: editorCoreDir,
-  });
-  return [tarballPath];
+  const candidates = [
+    ["GRAPH_EDITOR_SMOKE_LOCAL_EDITOR_CORE", "editor-core", "@moenarch/editor-core"],
+    ["GRAPH_EDITOR_SMOKE_LOCAL_UI", "ui", "@moritzbrantner/ui"],
+  ] as const;
+  const packed = await Promise.all(
+    candidates.map(async ([flag, directoryName, name]) => {
+      if (process.env[flag] !== "1") {
+        return null;
+      }
+      const dependencyDir = path.resolve(rootDir, "..", directoryName);
+      try {
+        await access(path.join(dependencyDir, "package.json"));
+      } catch {
+        return null;
+      }
+      const tarballPath = path.join(tempDir, `${directoryName}.tgz`);
+      await execFileAsync("bun", ["pm", "pack", "--filename", tarballPath, "--ignore-scripts"], {
+        cwd: dependencyDir,
+      });
+      return { name, tarballPath };
+    }),
+  );
+  return packed.filter((dependency) => dependency !== null);
 }
