@@ -11,9 +11,10 @@ export function GraphWorkbenchPalette<
   TPortType = unknown,
 >({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   return (
-    <aside className="min-h-0 overflow-auto border-r pr-3 max-lg:border-r-0 max-lg:border-b max-lg:pb-3">
+    <div data-slot="graph-workbench-palette" className="min-h-0">
       <Input
         value={controller.palette.searchValue}
+        aria-label="Search nodes"
         placeholder="Search nodes"
         onChange={(event) => controller.palette.setSearchValue(event.target.value)}
       />
@@ -28,6 +29,6 @@ export function GraphWorkbenchPalette<
           </div>
         )}
       </div>
-    </aside>
+    </div>
   );
 }

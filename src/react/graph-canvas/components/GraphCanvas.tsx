@@ -51,6 +51,7 @@ import {
   type GraphCanvasGroup,
   type GraphCanvasNodeData,
   type GraphCanvasPoint,
+  type GraphCanvasKeyboardDirection,
   type GraphCanvasPortDirection,
   type GraphCanvasPortPointMap,
   type GraphCanvasProps,
@@ -83,6 +84,13 @@ const useIsomorphicLayoutEffect =
 
 type GraphCanvasKeyboardCancelProps = {
   isCancelKeyboardEvent?: (event: React.KeyboardEvent<HTMLDivElement>) => boolean;
+  /**
+   * Internal: replaces the built-in bare-arrow key matching for directional node navigation, so a
+   * host with configurable hotkeys reuses this canvas's spatial index instead of scanning nodes.
+   */
+  getKeyboardNavigationDirection?: (
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => GraphCanvasKeyboardDirection | null;
 };
 
 export function GraphCanvas({
@@ -121,6 +129,7 @@ export function GraphCanvas({
   onConnectionRewire,
   onConnectionDelete,
   isCancelKeyboardEvent,
+  getKeyboardNavigationDirection,
   minZoom = 0.5,
   maxZoom = 1.75,
   surfaceHeight = "32rem",
@@ -1250,6 +1259,29 @@ export function GraphCanvas({
     });
   };
 
+  /** Selects the nearest node in `direction` through the retained spatial index. */
+  const navigateKeyboardSelection = (direction: GraphCanvasKeyboardDirection) => {
+    const nextNode = getNextGraphCanvasNodeSelection(
+      nodes,
+      currentSelectedNodeId,
+      direction,
+      layoutOptions,
+      hiddenNodeIdSet,
+      nodeIndex,
+      nodeById,
+    );
+    if (!nextNode) {
+      return false;
+    }
+    setKeyboardTargetNodeId(nextNode.id);
+    commitSelectionState({
+      nodeIds: [nextNode.id],
+      edgeIds: [],
+      primary: { type: "node", id: nextNode.id },
+    });
+    return true;
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (isGraphCanvasEditableTarget(event.target)) {
       return;
@@ -1269,6 +1301,13 @@ export function GraphCanvas({
       setPanState(null);
       setKeyboardTargetNodeId(null);
       commitSelectionState(clearGraphEditorSelection());
+      return;
+    }
+
+    const configuredNavigationDirection = getKeyboardNavigationDirection?.(event) ?? null;
+    if (configuredNavigationDirection) {
+      event.preventDefault();
+      navigateKeyboardSelection(configuredNavigationDirection);
       return;
     }
 
@@ -1298,25 +1337,15 @@ export function GraphCanvas({
         return;
       }
 
-      if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-        const nextNode = getNextGraphCanvasNodeSelection(
-          nodes,
-          currentSelectedNodeId,
-          keyboardDirection,
-          layoutOptions,
-          hiddenNodeIdSet,
-          nodeIndex,
-          nodeById,
-        );
-
-        if (nextNode) {
+      if (
+        !getKeyboardNavigationDirection &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        if (navigateKeyboardSelection(keyboardDirection)) {
           event.preventDefault();
-          setKeyboardTargetNodeId(nextNode.id);
-          commitSelectionState({
-            nodeIds: [nextNode.id],
-            edgeIds: [],
-            primary: { type: "node", id: nextNode.id },
-          });
         }
         return;
       }

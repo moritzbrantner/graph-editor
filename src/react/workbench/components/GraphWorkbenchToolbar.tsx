@@ -22,11 +22,26 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { Badge, Separator } from "@moritzbrantner/ui";
+import {
+  Badge,
+  EditorToolbar,
+  EditorToolbarButton,
+  EditorToolbarGroup,
+  Separator,
+  cn,
+} from "@moritzbrantner/ui";
 
+import type { GraphWorkbenchCommandId } from "../../workbench-commands";
 import type { GraphWorkbenchController } from "../index-core";
-import { GraphWorkbenchCommandButton } from "./GraphWorkbenchCommandButton";
 import { GraphWorkbenchIconButton } from "./GraphWorkbenchIconButton";
+
+/** Pane element ids supplied by `GraphWorkbench`, so pane toggles can name what they control. */
+export const GraphWorkbenchPaneIdsContext = React.createContext<{
+  palette: string;
+  inspector: string;
+  /** `overlay` while panes are drawers in a narrow container. */
+  presentation: "docked" | "overlay";
+} | null>(null);
 
 export function GraphWorkbenchToolbar<
   TNodeData = Record<string, unknown>,
@@ -34,14 +49,27 @@ export function GraphWorkbenchToolbar<
   TPortType = unknown,
 >({ controller }: { controller: GraphWorkbenchController<TNodeData, TEdgeData, TPortType> }) {
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const paneIds = React.useContext(GraphWorkbenchPaneIdsContext);
   const zoom = controller.document.viewport?.zoom ?? 1;
   const actionError = controller.status.actionError;
+  const commandButton = (commandId: GraphWorkbenchCommandId, icon: React.ReactNode) => {
+    const command = controller.commands.find((candidate) => candidate.id === commandId);
+    return (
+      <EditorToolbarButton
+        label={String(command?.label ?? commandId)}
+        icon={icon}
+        shortcut={command?.shortcut}
+        disabled={command?.disabled}
+        onClick={() => void command?.run()}
+      />
+    );
+  };
 
   return (
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-        <WorkflowIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-        Graph
+    <div data-slot="graph-workbench-toolbar" className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+        <WorkflowIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span>Graph</span>
         <Badge variant="secondary">{controller.document.nodes.length} nodes</Badge>
         {controller.diagnostics.length > 0 ? (
           <Badge variant="destructive">{controller.diagnostics.length} issues</Badge>
@@ -49,7 +77,7 @@ export function GraphWorkbenchToolbar<
         {actionError ? (
           <div
             role="alert"
-            className="flex max-w-[18rem] items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+            className="flex min-w-0 max-w-[18rem] items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
           >
             <span className="truncate" title={actionError.detail}>
               {actionError.message}
@@ -63,94 +91,94 @@ export function GraphWorkbenchToolbar<
           </div>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-1">
-        <input
-          ref={importInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            void controller.actions.importJson(file);
-            event.currentTarget.value = "";
-          }}
-        />
-        <GraphWorkbenchIconButton
-          label="Import JSON"
-          disabled={controller.readOnly}
-          onClick={() => importInputRef.current?.click()}
-        >
-          <FileUpIcon />
-        </GraphWorkbenchIconButton>
-        <GraphWorkbenchIconButton label="Export JSON" onClick={controller.actions.exportJson}>
-          <DownloadIcon />
-        </GraphWorkbenchIconButton>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          void controller.actions.importJson(file);
+          event.currentTarget.value = "";
+        }}
+      />
+      <EditorToolbar
+        aria-label="Workbench commands"
+        density="compact"
+        // Narrow containers keep one scrollable command row so the canvas keeps its height.
+        overflow={paneIds?.presentation === "overlay" ? "scroll" : "wrap"}
+        className={cn(
+          "min-w-0 border-0 bg-transparent p-0 shadow-none",
+          paneIds?.presentation === "overlay" ? "w-full" : "w-auto",
+        )}
+      >
+        <EditorToolbarGroup aria-label="File">
+          <EditorToolbarButton
+            label="Import JSON"
+            icon={<FileUpIcon />}
+            disabled={controller.readOnly}
+            onClick={() => importInputRef.current?.click()}
+          />
+          <EditorToolbarButton
+            label="Export JSON"
+            icon={<DownloadIcon />}
+            onClick={controller.actions.exportJson}
+          />
+        </EditorToolbarGroup>
         <Separator orientation="vertical" className="h-6" />
-        <GraphWorkbenchCommandButton controller={controller} commandId="undo">
-          <Undo2Icon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="redo">
-          <Redo2Icon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="copy">
-          <CopyIcon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="paste">
-          <ClipboardPasteIcon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="delete">
-          <Trash2Icon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="group-selection">
-          <GroupIcon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="ungroup-selection">
-          <Rows3Icon />
-        </GraphWorkbenchCommandButton>
+        <EditorToolbarGroup aria-label="Edit">
+          {commandButton("undo", <Undo2Icon />)}
+          {commandButton("redo", <Redo2Icon />)}
+          {commandButton("copy", <CopyIcon />)}
+          {commandButton("paste", <ClipboardPasteIcon />)}
+          {commandButton("delete", <Trash2Icon />)}
+          {commandButton("group-selection", <GroupIcon />)}
+          {commandButton("ungroup-selection", <Rows3Icon />)}
+        </EditorToolbarGroup>
         <Separator orientation="vertical" className="h-6" />
-        <GraphWorkbenchCommandButton controller={controller} commandId="auto-layout">
-          <NetworkIcon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchCommandButton controller={controller} commandId="fit-view">
-          <Maximize2Icon />
-        </GraphWorkbenchCommandButton>
-        <GraphWorkbenchIconButton
-          label="Zoom out"
-          disabled={zoom <= 0.5}
-          onClick={() => controller.view.setZoom(zoom - 0.1)}
-        >
-          <MinusIcon />
-        </GraphWorkbenchIconButton>
-        <span className="min-w-10 text-center text-xs text-muted-foreground">
-          {Math.round(zoom * 100)}%
-        </span>
-        <GraphWorkbenchIconButton
-          label="Zoom in"
-          disabled={zoom >= 1.75}
-          onClick={() => controller.view.setZoom(zoom + 0.1)}
-        >
-          <PlusIcon />
-        </GraphWorkbenchIconButton>
+        <EditorToolbarGroup aria-label="View">
+          {commandButton("auto-layout", <NetworkIcon />)}
+          {commandButton("fit-view", <Maximize2Icon />)}
+          <EditorToolbarButton
+            label="Zoom out"
+            icon={<MinusIcon />}
+            disabled={zoom <= 0.5}
+            onClick={() => controller.view.setZoom(zoom - 0.1)}
+          />
+          <span className="min-w-10 text-center text-xs text-muted-foreground [font-variant-numeric:tabular-nums]">
+            {Math.round(zoom * 100)}%
+          </span>
+          <EditorToolbarButton
+            label="Zoom in"
+            icon={<PlusIcon />}
+            disabled={zoom >= 1.75}
+            onClick={() => controller.view.setZoom(zoom + 0.1)}
+          />
+        </EditorToolbarGroup>
         <Separator orientation="vertical" className="h-6" />
-        <GraphWorkbenchIconButton
-          label={controller.view.showPalette ? "Hide palette" : "Show palette"}
-          onClick={() => controller.view.setShowPalette(!controller.view.showPalette)}
-        >
-          <PanelLeftIcon />
-        </GraphWorkbenchIconButton>
-        <GraphWorkbenchIconButton
-          label={controller.view.showInspector ? "Hide inspector" : "Show inspector"}
-          onClick={() => controller.view.setShowInspector(!controller.view.showInspector)}
-        >
-          <PanelRightIcon />
-        </GraphWorkbenchIconButton>
-        <GraphWorkbenchIconButton
-          label={controller.view.showMiniMap ? "Hide minimap" : "Show minimap"}
-          onClick={() => controller.view.setShowMiniMap(!controller.view.showMiniMap)}
-        >
-          <MapIcon />
-        </GraphWorkbenchIconButton>
-      </div>
+        <EditorToolbarGroup aria-label="Panels">
+          <EditorToolbarButton
+            label={controller.view.showPalette ? "Hide palette" : "Show palette"}
+            icon={<PanelLeftIcon />}
+            aria-controls={paneIds?.palette}
+            aria-expanded={paneIds ? controller.view.showPalette : undefined}
+            onClick={() => controller.view.setShowPalette(!controller.view.showPalette)}
+          />
+          <EditorToolbarButton
+            label={controller.view.showInspector ? "Hide inspector" : "Show inspector"}
+            icon={<PanelRightIcon />}
+            aria-controls={paneIds?.inspector}
+            aria-expanded={paneIds ? controller.view.showInspector : undefined}
+            onClick={() => controller.view.setShowInspector(!controller.view.showInspector)}
+          />
+          <EditorToolbarButton
+            label={controller.view.showMiniMap ? "Hide minimap" : "Show minimap"}
+            icon={<MapIcon />}
+            onClick={() => controller.view.setShowMiniMap(!controller.view.showMiniMap)}
+          />
+        </EditorToolbarGroup>
+      </EditorToolbar>
     </div>
   );
 }

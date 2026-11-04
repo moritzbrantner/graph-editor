@@ -7,8 +7,11 @@ import {
   Badge,
   Button,
   Checkbox,
+  EditorInspector,
+  EditorInspectorContent,
+  EditorInspectorFooter,
+  EditorInspectorHeader,
   Input,
-  ScrollArea,
   SelectDropdown,
   Separator,
   Slider,
@@ -163,48 +166,50 @@ function InspectorPanel({
   };
 
   return (
-    <aside
+    <EditorInspector
       data-slot="inspector-panel"
       data-read-only={readOnly ? "true" : undefined}
-      className={cn(
-        "flex h-full min-h-[32rem] flex-col rounded-md border bg-card text-card-foreground",
-        className,
-      )}
+      className={cn("min-h-[32rem] rounded-md border bg-card", className)}
       {...props}
     >
-      <InspectorPanelHeader title={title} description={description} dirty={dirty} />
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 p-3">
-          {normalizedSections.map((section) => (
-            <InspectorPanelSection
-              key={section.id}
-              title={section.title}
-              description={section.description}
-              defaultOpen={section.defaultOpen ?? true}
-            >
-              <InspectorFieldGroup>
-                {section.fields.map((field) => (
-                  <InspectorField
-                    key={field.id}
-                    field={field}
-                    value={currentValues[field.id]}
-                    readOnly={readOnly}
-                    validationMessage={validationMessages?.[field.id]}
-                    onValueChange={(value) => commitValue(field.id, value)}
-                  />
-                ))}
-              </InspectorFieldGroup>
-            </InspectorPanelSection>
-          ))}
-        </div>
-      </ScrollArea>
-      <InspectorActions
-        dirty={dirty}
-        readOnly={readOnly}
-        onApply={() => onApply?.(currentValues)}
-        onReset={resetValues}
+      <EditorInspectorHeader
+        title={title}
+        description={description}
+        actions={dirty ? <Badge variant="secondary">Unsaved</Badge> : null}
       />
-    </aside>
+      <EditorInspectorContent className="gap-3 py-3">
+        {normalizedSections.map((section) => (
+          <InspectorPanelSection
+            key={section.id}
+            title={section.title}
+            description={section.description}
+            defaultOpen={section.defaultOpen ?? true}
+          >
+            <InspectorFieldGroup>
+              {section.fields.map((field) => (
+                <InspectorField
+                  key={field.id}
+                  field={field}
+                  value={currentValues[field.id]}
+                  readOnly={readOnly}
+                  validationMessage={validationMessages?.[field.id]}
+                  onValueChange={(value) => commitValue(field.id, value)}
+                />
+              ))}
+            </InspectorFieldGroup>
+          </InspectorPanelSection>
+        ))}
+      </EditorInspectorContent>
+      <EditorInspectorFooter className="p-0">
+        <InspectorActions
+          className="border-t-0 px-[var(--ui-surface-padding-sm)] py-2"
+          dirty={dirty}
+          readOnly={readOnly}
+          onApply={() => onApply?.(currentValues)}
+          onReset={resetValues}
+        />
+      </EditorInspectorFooter>
+    </EditorInspector>
   );
 }
 

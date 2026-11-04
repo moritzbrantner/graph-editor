@@ -3,6 +3,15 @@
 ## Unreleased
 
 - `@moenarch/editor-core` is now a commit-pinned git dependency on editor-core `main` (`51463ab`, listed in `trustedDependencies`) instead of the npm `^0.4.1` release. The `src/runtime/core-compat.ts` fallback is gone; the runtime uses editor-core's `replaceEditorOperationRuntimeCoreState` and `recordHistory: false` directly. `verify:registry` is renamed `verify:pinned`.
+- `@moritzbrantner/ui` is now the git pin `git+https://github.com/moritzbrantner/ui.git#2f8da60` (listed in `trustedDependencies` and `overrides`) instead of the npm `^1.1.0` release, because npm publishing of `ui` is retired. Apps that render the workbench must also import `@moritzbrantner/ui/component-sources.css` next to their theme stylesheet so Tailwind generates the classes of ui's components; the examples and e2e app now do.
+- `GraphWorkbench` chrome uses ui's shared editor primitives instead of a fixed CSS grid. Public props and import paths are unchanged; the visible and DOM-level differences are:
+  - The palette and inspector are `EditorPane`s in an `EditorPaneLayout` (labelled regions "Palette" and "Inspector"). They resize in pixels by pointer or keyboard splitter, and collapse to a rail with a "Show …" button. `view.showPalette`/`view.showInspector` map to the docked collapsed state, and hidden panes stay mounted instead of unmounting.
+  - When the workbench container is narrower than 768px, the panes become overlay drawers that start closed, replacing the old stacked single-column layout. While drawers are active, the `view.showPalette`/`view.showInspector` values that `renderToolbar`, `renderPalette`, and `renderInspector` receive show and hide the drawers. Adding a node from the palette drawer closes it.
+  - The toolbar is an `EditorToolbar` with one Tab stop and arrow-key navigation, with tooltips and shortcut hints on its commands. In narrow containers it keeps one horizontally scrolling row.
+  - `renderPalette`/`renderInspector` output now renders inside the pane body instead of as a grid column. The built-in `GraphWorkbenchPalette` root is a `div` instead of an `aside`, and its search field has an accessible name.
+  - The canvas fills the remaining height of the workbench. Give the `GraphWorkbench` a height through `className`; it defaults to `min-h-[36rem]`. Grid-column classes passed through `className` no longer have any effect.
+- `InspectorPanel` renders its header, scrolling body, and footer with `EditorInspector`, `EditorInspectorHeader`, `EditorInspectorContent`, and `EditorInspectorFooter`. Its root is a labelled `section` instead of an `aside`, and it keeps `data-slot="inspector-panel"`.
+- `GraphWorkbench` arrow-key navigation (`navigate.*` hotkeys, including rebound keys) is now handled by `GraphCanvas` through its retained spatial index (`findGraphEditorNodeInDirection`). It no longer scans every node, and it skips hidden nodes the same way canvas navigation does.
 
 ## Added
 

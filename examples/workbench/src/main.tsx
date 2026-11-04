@@ -597,7 +597,7 @@ function WorkflowExample() {
         nodeTemplates={selectedExample.nodeTemplates}
         inspectorSchema={workflowInspectorSchema}
         readOnly={readOnly}
-        className="h-[calc(100vh-12rem)] min-h-[38rem] grid-cols-[15rem_minmax(0,1fr)_18rem] max-xl:grid-cols-[14rem_minmax(0,1fr)] max-lg:h-auto max-lg:grid-cols-1"
+        className="h-[calc(100dvh-13rem)] min-h-[34rem]"
         onRuntimeChange={commitWorkbenchRuntime}
       />
     </section>
