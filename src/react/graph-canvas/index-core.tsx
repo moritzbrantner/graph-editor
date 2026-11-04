@@ -3,6 +3,7 @@
 import type * as React from "react";
 import {
   clearGraphEditorSelection,
+  findGraphEditorNodeInDirection,
   getGraphEditorGroupBounds,
   getGraphEditorSelectionFromBounds,
   normalizeGraphEditorBounds,
@@ -16,6 +17,7 @@ import {
   type GraphEditorSelectionItem,
   type GraphEditorSelectionMode,
   type GraphEditorSelectionState,
+  type GraphEditorSpatialIndex,
 } from "../../core";
 import {
   getGraphNodePortCenterOffset,
@@ -564,7 +566,60 @@ function getGraphCanvasNodeCenter(
   };
 }
 
+/**
+ * Directional keyboard navigation. With a spatial `index` over the same nodes and node sizes, the
+ * candidate search is a bounded index query (`findGraphEditorNodeInDirection`) with the same
+ * deterministic outcome as the whole-document reference scan used without one.
+ */
 function getNextGraphCanvasNodeSelection(
+  nodes: GraphCanvasNodeData[],
+  currentNodeId: string | null,
+  direction: GraphCanvasKeyboardDirection,
+  layoutOptions: GraphNodeLayoutOptions,
+  hiddenNodeIdSet: ReadonlySet<string>,
+  index?: Pick<GraphEditorSpatialIndex, "query" | "getNodeBounds" | "getIndexedBounds"> | null,
+  nodeById?: ReadonlyMap<string, GraphCanvasNodeData>,
+): GraphCanvasNodeData | null {
+  if (!index) {
+    return getNextGraphCanvasNodeSelectionByScan(
+      nodes,
+      currentNodeId,
+      direction,
+      layoutOptions,
+      hiddenNodeIdSet,
+    );
+  }
+  const lookup = nodeById ?? new Map(nodes.map((node) => [node.id, node] as const));
+  const currentNode =
+    currentNodeId && !hiddenNodeIdSet.has(currentNodeId) ? lookup.get(currentNodeId) : undefined;
+  if (!currentNode) {
+    return getFirstGraphCanvasNode(nodes, hiddenNodeIdSet);
+  }
+  const nextNodeId = findGraphEditorNodeInDirection(index, currentNode.id, direction, {
+    excludeNodeIds: hiddenNodeIdSet,
+  });
+  return nextNodeId ? (lookup.get(nextNodeId) ?? null) : null;
+}
+
+/** Top-most, then left-most, then first-by-id visible node; the reference scan's fallback. */
+function getFirstGraphCanvasNode(
+  nodes: readonly GraphCanvasNodeData[],
+  hiddenNodeIdSet: ReadonlySet<string>,
+) {
+  let first: GraphCanvasNodeData | null = null;
+  for (const node of nodes) {
+    if (hiddenNodeIdSet.has(node.id)) {
+      continue;
+    }
+    if (!first || (node.y - first.y || node.x - first.x || node.id.localeCompare(first.id)) < 0) {
+      first = node;
+    }
+  }
+  return first;
+}
+
+/** Whole-document reference implementation of directional keyboard navigation. */
+function getNextGraphCanvasNodeSelectionByScan(
   nodes: GraphCanvasNodeData[],
   currentNodeId: string | null,
   direction: GraphCanvasKeyboardDirection,
@@ -666,6 +721,25 @@ function getGraphNodePortDotXOffset(
   return direction === "input" ? 0 : size.width;
 }
 
+/**
+ * Graph-space bounds the dragged node would occupy at `position`. Every node that can produce a
+ * port snap within `graphCanvasSnapDistance` intersects these bounds expanded by that distance,
+ * because port centers lie within node bounds.
+ */
+function getGraphCanvasSnapQueryBounds(
+  node: GraphCanvasNodeData,
+  position: GraphCanvasPoint,
+  layoutOptions: GraphNodeLayoutOptions = {},
+) {
+  const size = getGraphNodeSize(node, layoutOptions);
+  return { x: position.x, y: position.y, width: size.width, height: size.height };
+}
+
+/**
+ * Snaps a dragged node to matching ports of `nodes`. GraphCanvas passes only spatial-index
+ * candidates near the drag position (see `getGraphCanvasSnapQueryBounds`); passing every other
+ * node is the reference scan with the same result.
+ */
 function getGraphCanvasSnappedNodePosition(
   node: GraphCanvasNodeData,
   nodes: GraphCanvasNodeData[],
@@ -890,7 +964,8 @@ function isGraphCanvasEditableTarget(target: EventTarget | null) {
 
 function isGraphCanvasInteractiveTarget(target: EventTarget) {
   return (
-    target instanceof HTMLElement &&
+    // `Element`, not `HTMLElement`: edge hit paths and rewire handles are SVG elements.
+    target instanceof Element &&
     Boolean(
       target.closest(
         [
@@ -977,10 +1052,13 @@ export {
   getWorkflowEdgeEndpointPoint,
   getWorkflowBounds,
   getNextGraphCanvasNodeSelection,
+  getNextGraphCanvasNodeSelectionByScan,
   getGraphCanvasKeyboardDirection,
   getGraphCanvasKeyboardNudgeDelta,
   nudgeGraphCanvasNodes,
   getGraphCanvasSnappedNodePosition,
+  getGraphCanvasSnapQueryBounds,
+  graphCanvasSnapDistance,
   orderedGraphCanvasNodeIds,
   getGraphCanvasPortTypeSource,
   measureGraphCanvasPortPoints,

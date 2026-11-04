@@ -7,8 +7,9 @@ import { cn } from "@moritzbrantner/ui";
 import {
   clearGraphEditorSelection,
   getGraphEditorGroupBounds,
-  getGraphEditorSelectionFromBounds,
+  getGraphEditorSelectionFromSpatialIndex,
   normalizeGraphEditorBounds,
+  queryGraphEditorNodesNearBounds,
   normalizeGraphEditorSelection,
   replaceGraphEditorSelection,
   updateGraphEditorSelection,
@@ -25,7 +26,9 @@ import {
   getGraphCanvasPointerPoint,
   getGraphCanvasPortElementFromPoint,
   getGraphCanvasSnappedNodePosition,
+  getGraphCanvasSnapQueryBounds,
   getNextGraphCanvasNodeSelection,
+  graphCanvasSnapDistance,
   getWorkflowBounds,
   getWorkflowConnectionDragLine,
   getWorkflowEdgeEndpointPoint,
@@ -60,8 +63,11 @@ import {
 import { getGraphNodeSize } from "../../nodes";
 import {
   boundsIntersect,
+  createGraphCanvasEdgeIndexTracker,
   createGraphCanvasNodeIndexTracker,
+  getGraphCanvasEdgeCurveBounds,
   getGraphCanvasVisibleGraphBounds,
+  planGraphCanvasEdgeRender,
   planGraphCanvasNodeRender,
   resolveGraphCanvasVirtualization,
   shouldGraphCanvasCullNodes,
@@ -296,32 +302,6 @@ export function GraphCanvas({
       ),
     [hiddenNodeIds, nodeBounds, selectionDocument],
   );
-  const edgeGeometry = React.useMemo(
-    () =>
-      new Map(
-        visibleEdges.map((edge) => [
-          edge.id,
-          {
-            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions),
-            sourcePoint: getWorkflowEdgeEndpointPoint(
-              nodeById,
-              edge,
-              "source",
-              portPoints,
-              layoutOptions,
-            ),
-            targetPoint: getWorkflowEdgeEndpointPoint(
-              nodeById,
-              edge,
-              "target",
-              portPoints,
-              layoutOptions,
-            ),
-          },
-        ]),
-      ),
-    [layoutOptions, nodeById, portPoints, visibleEdges],
-  );
   const requestedVirtualization = resolveGraphCanvasVirtualization(virtualization);
   const resolvedVirtualization = React.useMemo(
     () => requestedVirtualization,
@@ -336,25 +316,21 @@ export function GraphCanvas({
   const cullingEligible = shouldGraphCanvasCullNodes(nodes.length, resolvedVirtualization);
   const nodeBoundsRef = React.useRef(nodeBounds);
   nodeBoundsRef.current = nodeBounds;
+  // One retained index over every node (hidden ones included) serves render culling, drag
+  // snapping, marquee selection, and keyboard navigation; each consumer filters hidden nodes.
   const nodeIndexTracker = React.useMemo(
     () =>
-      cullingEligible
-        ? createGraphCanvasNodeIndexTracker(
-            (node) =>
-              nodeBoundsRef.current.get(node.id) ?? {
-                x: node.x,
-                y: node.y,
-                ...getGraphNodeSize(node, layoutOptions),
-              },
-            hiddenNodeIds ?? [],
-          )
-        : null,
-    [cullingEligible, hiddenNodeIds, layoutOptions],
+      createGraphCanvasNodeIndexTracker(
+        (node) =>
+          nodeBoundsRef.current.get(node.id) ?? {
+            x: node.x,
+            y: node.y,
+            ...getGraphNodeSize(node, layoutOptions),
+          },
+      ),
+    [layoutOptions],
   );
-  const nodeIndex = React.useMemo(
-    () => nodeIndexTracker?.sync(nodes) ?? null,
-    [nodeIndexTracker, nodes],
-  );
+  const nodeIndex = React.useMemo(() => nodeIndexTracker.sync(nodes), [nodeIndexTracker, nodes]);
   const visibleGraphBounds = React.useMemo(
     () =>
       cullingEligible
@@ -418,6 +394,86 @@ export function GraphCanvas({
       : groupBounds;
   }, [groupBounds, renderPlan.queryBounds]);
 
+  const nodeByIdRef = React.useRef(nodeById);
+  nodeByIdRef.current = nodeById;
+  // Edge relevance comes from computed port geometry of the authoritative node positions, never
+  // from DOM measurements, so culled nodes and unmeasured surfaces give the same answer.
+  const edgeIndexTracker = React.useMemo(
+    () =>
+      cullingEligible
+        ? createGraphCanvasEdgeIndexTracker((edge) =>
+            getGraphCanvasEdgeCurveBounds(
+              getWorkflowEdgeEndpointPoint(
+                nodeByIdRef.current,
+                edge,
+                "source",
+                undefined,
+                layoutOptions,
+              ),
+              getWorkflowEdgeEndpointPoint(
+                nodeByIdRef.current,
+                edge,
+                "target",
+                undefined,
+                layoutOptions,
+              ),
+            ),
+          )
+        : null,
+    [cullingEligible, layoutOptions],
+  );
+  const edgeIndex = React.useMemo(
+    () => edgeIndexTracker?.sync(visibleEdges, nodes) ?? null,
+    [edgeIndexTracker, nodes, visibleEdges],
+  );
+  const pinnedEdgeIds = React.useMemo(() => {
+    const ids = [...currentSelectedEdgeIds];
+    if (hoveredEdgeId) ids.push(hoveredEdgeId);
+    if (connectionDrag && connectionDrag.type !== "new") ids.push(connectionDrag.edge.id);
+    return ids;
+  }, [connectionDrag, currentSelectedEdgeIds, hoveredEdgeId]);
+  const edgeRenderPlan = React.useMemo(
+    () =>
+      planGraphCanvasEdgeRender({
+        edges: visibleEdges,
+        index: edgeIndex,
+        queryBounds: renderPlan.queryBounds,
+        pinnedEdgeIds,
+      }),
+    [edgeIndex, pinnedEdgeIds, renderPlan.queryBounds, visibleEdges],
+  );
+  const renderedEdgeIds = edgeRenderPlan.renderedEdgeIds;
+  const renderedEdges = React.useMemo(
+    () =>
+      renderedEdgeIds ? visibleEdges.filter((edge) => renderedEdgeIds.has(edge.id)) : visibleEdges,
+    [renderedEdgeIds, visibleEdges],
+  );
+  const edgeGeometry = React.useMemo(
+    () =>
+      new Map(
+        renderedEdges.map((edge) => [
+          edge.id,
+          {
+            line: getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions),
+            sourcePoint: getWorkflowEdgeEndpointPoint(
+              nodeById,
+              edge,
+              "source",
+              portPoints,
+              layoutOptions,
+            ),
+            targetPoint: getWorkflowEdgeEndpointPoint(
+              nodeById,
+              edge,
+              "target",
+              portPoints,
+              layoutOptions,
+            ),
+          },
+        ]),
+      ),
+    [layoutOptions, nodeById, portPoints, renderedEdges],
+  );
   useIsomorphicLayoutEffect(() => {
     if (!cullingEligible) {
       return;
@@ -851,10 +907,17 @@ export function GraphCanvas({
       x: Math.round(dragState.originalX + (pointer.x - dragState.startX) / currentZoom),
       y: Math.round(dragState.originalY + (pointer.y - dragState.startY) / currentZoom),
     };
-    const draggedNodeIds = new Set(dragState.nodeIds);
+    const snapCandidates = queryGraphEditorNodesNearBounds(
+      nodeIndex,
+      getGraphCanvasSnapQueryBounds(draggedNode, rawPosition, layoutOptions),
+      { distance: graphCanvasSnapDistance, excludeNodeIds: dragState.nodeIds },
+    ).flatMap((nodeId) => {
+      const candidate = nodeById.get(nodeId);
+      return candidate ? [candidate] : [];
+    });
     const nextPosition = getGraphCanvasSnappedNodePosition(
       draggedNode,
-      nodes.filter((node) => !draggedNodeIds.has(node.id)),
+      snapCandidates,
       rawPosition,
       layoutOptions,
     );
@@ -930,41 +993,6 @@ export function GraphCanvas({
     ],
   );
 
-  const selectableBounds = React.useMemo(() => {
-    const edgeItems = visibleEdges.flatMap((edge) => {
-      const geometry = edgeGeometry.get(edge.id);
-      if (!geometry) {
-        return [];
-      }
-      const minX = Math.min(geometry.sourcePoint.x, geometry.targetPoint.x);
-      const minY = Math.min(geometry.sourcePoint.y, geometry.targetPoint.y);
-      const maxX = Math.max(geometry.sourcePoint.x, geometry.targetPoint.x);
-      const maxY = Math.max(geometry.sourcePoint.y, geometry.targetPoint.y);
-      return [
-        {
-          type: "edge" as const,
-          id: edge.id,
-          bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-        },
-      ];
-    });
-
-    return [
-      ...nodes.flatMap((node) => {
-        const bounds = nodeBounds.get(node.id);
-        return bounds && !hiddenNodeIdSet.has(node.id)
-          ? [{ type: "node" as const, id: node.id, bounds }]
-          : [];
-      }),
-      ...edgeItems,
-      ...groupBounds.map((group) => ({
-        type: "group" as const,
-        id: group.groupId,
-        bounds: group.bounds,
-      })),
-    ];
-  }, [edgeGeometry, groupBounds, hiddenNodeIdSet, nodeBounds, nodes, visibleEdges]);
-
   const commitMarqueeSelection = React.useCallback(() => {
     if (!marqueeState) {
       return;
@@ -976,18 +1004,40 @@ export function GraphCanvas({
       width: marqueeState.pointerPoint.x - marqueeState.startPoint.x,
       height: marqueeState.pointerPoint.y - marqueeState.startPoint.y,
     });
-    const nextSelection = getGraphEditorSelectionFromBounds(
+    const nextSelection = getGraphEditorSelectionFromSpatialIndex(
       selectionDocument,
       bounds,
-      selectableBounds,
+      nodeIndex,
       {
         mode: marqueeState.mode,
         selection: marqueeState.selectionBefore,
+        excludeNodeIds: hiddenNodeIdSet,
+        items: getGraphCanvasMarqueeEdgeAndGroupItems(visibleEdges, groupBounds, (edge) => {
+          const geometry = edgeGeometry.get(edge.id);
+          return geometry
+            ? [geometry.sourcePoint, geometry.targetPoint]
+            : [
+                getWorkflowEdgeEndpointPoint(nodeById, edge, "source", portPoints, layoutOptions),
+                getWorkflowEdgeEndpointPoint(nodeById, edge, "target", portPoints, layoutOptions),
+              ];
+        }),
       },
     );
     commitSelectionState(nextSelection);
     setMarqueeState(null);
-  }, [commitSelectionState, marqueeState, selectableBounds, selectionDocument]);
+  }, [
+    commitSelectionState,
+    edgeGeometry,
+    groupBounds,
+    hiddenNodeIdSet,
+    layoutOptions,
+    marqueeState,
+    nodeById,
+    nodeIndex,
+    portPoints,
+    selectionDocument,
+    visibleEdges,
+  ]);
 
   const handleSurfacePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>) => {
@@ -1255,6 +1305,8 @@ export function GraphCanvas({
           keyboardDirection,
           layoutOptions,
           hiddenNodeIdSet,
+          nodeIndex,
+          nodeById,
         );
 
         if (nextNode) {
@@ -1398,6 +1450,12 @@ export function GraphCanvas({
         data-virtualized={renderPlan.culling ? "true" : undefined}
         data-nodes-rendered={renderPlan.culling ? renderPlan.stats.nodesRendered : undefined}
         data-nodes-considered={renderPlan.culling ? renderPlan.stats.nodesConsidered : undefined}
+        data-edges-rendered={
+          edgeRenderPlan.culling ? edgeRenderPlan.stats.edgesRendered : undefined
+        }
+        data-edges-considered={
+          edgeRenderPlan.culling ? edgeRenderPlan.stats.edgesConsidered : undefined
+        }
         tabIndex={0}
         className="relative overflow-auto rounded-md border bg-muted/20"
         style={{ height: typeof surfaceHeight === "number" ? `${surfaceHeight}px` : surfaceHeight }}
@@ -1534,7 +1592,7 @@ export function GraphCanvas({
             aria-label="Workflow connections"
             className="pointer-events-none absolute inset-0 size-full overflow-visible"
           >
-            {visibleEdges.map((edge) => {
+            {renderedEdges.map((edge) => {
               const geometry = edgeGeometry.get(edge.id);
               const line =
                 geometry?.line ?? getWorkflowEdgeLine(nodeById, edge, portPoints, layoutOptions);
@@ -1725,6 +1783,34 @@ export function GraphCanvas({
       </div>
     </div>
   );
+}
+
+/** Edge and group selectables for marquee selection; nodes come from the spatial index. */
+function getGraphCanvasMarqueeEdgeAndGroupItems(
+  visibleEdges: readonly GraphCanvasEdge[],
+  groupBounds: ReturnType<typeof getGraphEditorGroupBounds>,
+  getEndpoints: (edge: GraphCanvasEdge) => [GraphCanvasPoint, GraphCanvasPoint],
+) {
+  const edgeItems = visibleEdges.map((edge) => {
+    const [sourcePoint, targetPoint] = getEndpoints(edge);
+    const minX = Math.min(sourcePoint.x, targetPoint.x);
+    const minY = Math.min(sourcePoint.y, targetPoint.y);
+    const maxX = Math.max(sourcePoint.x, targetPoint.x);
+    const maxY = Math.max(sourcePoint.y, targetPoint.y);
+    return {
+      type: "edge" as const,
+      id: edge.id,
+      bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    };
+  });
+  return [
+    ...edgeItems,
+    ...groupBounds.map((group) => ({
+      type: "group" as const,
+      id: group.groupId,
+      bounds: group.bounds,
+    })),
+  ];
 }
 
 function getGraphCanvasMarqueeStyle(

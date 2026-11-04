@@ -348,6 +348,7 @@ function LargeGraphFixture() {
       outputs: [{ id: "out", label: "Out", type: "event" }],
     })),
   );
+  const omittedEdgeId = params.get("omitEdge");
   const [edges, setEdges] = React.useState<GraphCanvasEdge[]>(() =>
     Array.from({ length: Math.max(count - 1, 0) }, (_, index) => ({
       id: `e${index}`,
@@ -355,17 +356,27 @@ function LargeGraphFixture() {
       sourcePortId: "out",
       targetNodeId: `n${index + 1}`,
       targetPortId: "in",
-    })),
+    })).filter((edge) => edge.id !== omittedEdgeId),
   );
-  const [viewport, setViewport] = React.useState({ x: 0, y: 0, zoom: 1 });
+  const [viewport, setViewport] = React.useState({
+    x: Number(params.get("x") ?? 0),
+    y: Number(params.get("y") ?? 0),
+    zoom: 1,
+  });
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<string[]>([]);
+  const [selectedEdgeIds, setSelectedEdgeIds] = React.useState<string[]>(() => {
+    const edgeId = params.get("selectEdge");
+    return edgeId ? [edgeId] : [];
+  });
 
   return (
     <main className="min-h-screen bg-background p-4 text-foreground">
       <output aria-label="Large graph state" className="mb-3 block text-sm font-medium">
         {JSON.stringify({
           selected: selectedNodeIds.length,
+          selectedEdges: selectedEdgeIds,
           n0: nodes[0] ? { x: nodes[0].x, y: nodes[0].y } : null,
+          e99: edges.find((edge) => edge.id === "e99") ?? null,
           viewport,
         })}
       </output>
@@ -377,7 +388,11 @@ function LargeGraphFixture() {
         viewport={viewport}
         onViewportChange={setViewport}
         selectedNodeIds={selectedNodeIds}
-        onSelectionStateChange={(selection) => setSelectedNodeIds([...selection.nodeIds])}
+        selectedEdgeIds={selectedEdgeIds}
+        onSelectionStateChange={(selection) => {
+          setSelectedNodeIds([...selection.nodeIds]);
+          setSelectedEdgeIds([...selection.edgeIds]);
+        }}
         canvasSize={{ width: 1200, height: 640 }}
         minZoom={0.1}
         surfaceHeight="40rem"
