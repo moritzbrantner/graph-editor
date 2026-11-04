@@ -2,6 +2,22 @@
 
 Generic graph document utilities and React primitives for node graph editors.
 
+## Hosted playground
+
+The [Graph Editor playground](https://moritzbrantner.github.io/graph-editor/)
+offers an interactive workflow-graph workbench and diagram builders. Its existing
+test fixtures can also be explored directly: `?fixture=large-graph` exercises a
+5,000-node graph (add `&virtualization=off` for comparison),
+`?fixture=canvas-connection-validation` exercises connection validation, and
+`?fixture=composed-node-body` exercises custom controls in graph nodes.
+
+It is deployed through the shared GitHub Pages workflow. The generic graph
+canvas retains authority over selection, dragging, panning and connections.
+For related hosted editors, see [Workflow Editor](https://moritzbrantner.github.io/workflow-editor/)
+and [Timeline Editor](https://moritzbrantner.github.io/timeline-editor/).
+
+Locally, run `bun run dev:examples`; the deployment build is `bun run build:pages`.
+
 Built on `@moenarch/editor-core` for shared document serialization, history, hotkeys,
 viewport math, indexing, and entity selection primitives. Graph adapters and graph semantics
 remain owned by this package.
