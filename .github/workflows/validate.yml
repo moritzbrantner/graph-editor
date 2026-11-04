@@ -66,7 +66,7 @@ jobs:
       format_command: bun run format:check
       lint_command: bun run lint
       typecheck_command: bun run check:editor-core && bun run check-types && bun run check-types:tests
-      build_command: bun run build
+      build_command: bun run build && bun run build:pages
       test_command: bun run test && bun run smoke:package && bun run pack:check && bun run verify:git-install
       timeout_minutes: 45
 
