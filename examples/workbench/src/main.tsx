@@ -241,6 +241,20 @@ function App() {
           <p className="text-xs leading-5 text-muted-foreground">
             Workflow workbench and diagram builder examples
           </p>
+          <nav aria-label="Related editors" className="mt-1 flex flex-wrap gap-3 text-xs">
+            <a
+              className="underline underline-offset-2"
+              href="https://moritzbrantner.github.io/workflow-editor/"
+            >
+              Workflow Editor
+            </a>
+            <a
+              className="underline underline-offset-2"
+              href="https://moritzbrantner.github.io/timeline-editor/"
+            >
+              Timeline Editor
+            </a>
+          </nav>
         </div>
         <div
           className="inline-flex rounded-md border bg-card p-1"
