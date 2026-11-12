@@ -114,7 +114,7 @@
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
     "@moenarch/editor-core": "git+https://github.com/moritzbrantner/editor-core.git#a539abfda7a9cc7bd4633e7e415189551930d95d",
-    "@moritzbrantner/ui": "git+https://github.com/moritzbrantner/ui.git#2f0cc4e470307b017fb06aae4a03b9abce47cc8c",
+    "@moritzbrantner/ui": "git+https://github.com/moritzbrantner/ui.git#2ea30631e0928bbdf41123e0f9abb89865f8e033",
     "lucide-react": "^1.21.0"
   },
   "devDependencies": {
@@ -142,7 +142,7 @@
     "react-dom": "^19.0.0"
   },
   "overrides": {
-    "@moritzbrantner/ui": "git+https://github.com/moritzbrantner/ui.git#2f0cc4e470307b017fb06aae4a03b9abce47cc8c"
+    "@moritzbrantner/ui": "git+https://github.com/moritzbrantner/ui.git#2ea30631e0928bbdf41123e0f9abb89865f8e033"
   },
   "packageManager": "bun@1.4.4",
   "trustedDependencies": [
