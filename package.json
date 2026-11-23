@@ -144,7 +144,6 @@
   "overrides": {
     "@moritzbrantner/ui": "git+https://github.com/moritzbrantner/ui.git#ab72fec473643398a75223dda0956a96cc95a9d8"
   },
-  "packageManager": "bun@1.4.5",
   "trustedDependencies": [
     "@moenarch/editor-core",
     "@moritzbrantner/ui"
